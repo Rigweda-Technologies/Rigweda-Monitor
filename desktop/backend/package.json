@@ -1,0 +1,14 @@
+{
+  "name": "rigweda-monitor-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sample Fastify API for Rigweda Monitor",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1"
+  }
+}
