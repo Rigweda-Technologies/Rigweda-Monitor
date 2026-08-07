@@ -1,0 +1,19 @@
+import {fireEvent,render,screen} from "@testing-library/react";
+import {QueryClient,QueryClientProvider} from "@tanstack/react-query";
+import {beforeEach,describe,expect,it,vi} from "vitest";
+import {StructurePage} from "./StructurePage";
+
+const mocks=vi.hoisted(()=>({summary:vi.fn(),metadata:vi.fn(),departments:vi.fn(),departmentTree:vi.fn(),jobTitles:vi.fn(),workLocations:vi.fn(),create:vi.fn(),update:vi.fn(),history:vi.fn()}));
+vi.mock("../features/structure/structure.api",()=>({structureApi:mocks}));
+const department={id:"department-1",code:"GENERAL",name:"General",description:"Default department",parentDepartmentId:null,parentDepartmentName:null,headEmployeeId:"employee-1",headEmployeeName:"Rigweda Administrator",costCenter:null,status:"active",version:1,employeeCount:1,childCount:0,createdAt:"2026-08-07",updatedAt:"2026-08-07"};
+const title={id:"title-1",code:"TEAM_MEMBER",name:"Team Member",description:null,jobLevel:"L1",grade:"G1",careerTrack:"individual",status:"active",version:1,employeeCount:1,createdAt:"2026-08-07",updatedAt:"2026-08-07"};
+const location={id:"location-1",code:"MAIN",name:"Main Office",description:null,locationType:"office",timezone:"Asia/Kolkata",address:{city:"Hyderabad",country:"IN"},email:null,phone:null,capacity:100,status:"active",version:1,employeeCount:1,createdAt:"2026-08-07",updatedAt:"2026-08-07"};
+const page=<T,>(items:T[])=>({items,total:items.length,page:1,pageSize:100,totalPages:1});
+const renderPage=()=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><StructurePage onMenu={()=>{}} onTheme={()=>{}}/></QueryClientProvider>);
+
+describe("Organization structure",()=>{
+  beforeEach(()=>{mocks.summary.mockResolvedValue({departments:1,activeDepartments:1,jobTitles:1,activeJobTitles:1,locations:1,activeLocations:1,unassignedDepartments:0,unassignedJobTitles:0,unassignedLocations:0});mocks.metadata.mockResolvedValue({headCandidates:[{id:"employee-1",employeeNumber:"RW-0001",name:"Rigweda Administrator"}]});mocks.departments.mockResolvedValue(page([department]));mocks.departmentTree.mockResolvedValue([{...department,children:[]}]);mocks.jobTitles.mockResolvedValue(page([title]));mocks.workLocations.mockResolvedValue(page([location]));mocks.history.mockResolvedValue([{id:"history-1",eventType:"created",before:null,after:department,actorName:"Rigweda Administrator",occurredAt:"2026-08-07T00:00:00Z"}]);});
+  it("shows structure totals and switches all assignment workspaces",async()=>{renderPage();expect(await screen.findByText("General")).toBeInTheDocument();expect(screen.getByRole("button",{name:"Departments"})).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:/Designations/}));expect(await screen.findByText("Team Member")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:/Work locations/}));expect(await screen.findByText("Main Office")).toBeInTheDocument();});
+  it("opens a complete department editor",async()=>{renderPage();await screen.findByText("General");fireEvent.click(screen.getByRole("button",{name:/New department/}));expect(screen.getByRole("heading",{name:"New department"})).toBeInTheDocument();expect(screen.getByLabelText("Parent department")).toBeInTheDocument();expect(screen.getByLabelText("Department head")).toBeInTheDocument();expect(screen.getByLabelText("Status")).toBeInTheDocument();});
+  it("renders hierarchy and immutable history",async()=>{renderPage();await screen.findByText("General");fireEvent.click(screen.getByRole("button",{name:/Tree view/}));expect((await screen.findAllByText(/GENERAL · 1 employees/)).length).toBeGreaterThan(0);fireEvent.click(screen.getByRole("button",{name:"List view"}));fireEvent.click(await screen.findByTitle("View history"));expect(await screen.findByRole("heading",{name:"General"})).toBeInTheDocument();expect(await screen.findByText(/Rigweda Administrator/)).toBeInTheDocument();});
+});

@@ -1,0 +1,34 @@
+const express=require("express");
+const {asyncHandler}=require("../../middleware/async-handler");
+const {validate}=require("../../middleware/validate");
+const schemas=require("./worklogs.validation");
+
+const createWorklogsRouter=(service,permissions)=>{
+  const router=express.Router();
+  const ok=(req,res,data,status=200)=>res.status(status).json({success:true,data,requestId:req.id});
+  router.get("/metadata",validate(schemas.metadataSchema),asyncHandler(async(req,res)=>ok(req,res,await service.metadata(req.auth.organizationId,req.auth.userId,req.validated.query.search))));
+  router.get("/me/entries",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.myEntries(req.auth.organizationId,req.auth.userId,req.validated.query))));
+  router.post("/me/entries",permissions.self,validate(schemas.createEntrySchema),asyncHandler(async(req,res)=>ok(req,res,await service.createEntry(req.auth.organizationId,req.auth.userId,req.validated.body),201)));
+  router.patch("/me/entries/:entryId",permissions.self,validate(schemas.updateEntrySchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateEntry(req.auth.organizationId,req.auth.userId,req.validated.params.entryId,req.validated.body))));
+  router.post("/me/entries/:entryId/void",permissions.self,validate(schemas.voidEntrySchema),asyncHandler(async(req,res)=>ok(req,res,await service.voidEntry(req.auth.organizationId,req.auth.userId,req.validated.params.entryId,req.validated.body))));
+  router.get("/me/timesheets",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.myTimesheets(req.auth.organizationId,req.auth.userId,req.validated.query))));
+  router.post("/me/timesheets/submit",permissions.self,validate(schemas.submitSchema),asyncHandler(async(req,res)=>ok(req,res,await service.submit(req.auth.organizationId,req.auth.userId,req.validated.body),201)));
+  router.get("/clients",permissions.manage,validate(schemas.listProjectsSchema),asyncHandler(async(req,res)=>ok(req,res,await service.clients(req.auth.organizationId,req.validated.query))));
+  router.post("/clients",permissions.manage,validate(schemas.createClientSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createClient(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/clients/:clientId",permissions.manage,validate(schemas.updateClientSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateClient(req.auth.organizationId,req.validated.params.clientId,req.validated.body,req.auth.userId))));
+  router.get("/projects",validate(schemas.listProjectsSchema),asyncHandler(async(req,res)=>ok(req,res,await service.projects(req.auth.organizationId,req.validated.query))));
+  router.post("/projects",permissions.manage,validate(schemas.createProjectSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createProject(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/projects/:projectId",permissions.manage,validate(schemas.updateProjectSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateProject(req.auth.organizationId,req.validated.params.projectId,req.validated.body,req.auth.userId))));
+  router.get("/assignments",permissions.manage,validate(schemas.listAssignmentsSchema),asyncHandler(async(req,res)=>ok(req,res,await service.assignments(req.auth.organizationId,req.validated.query))));
+  router.post("/assignments",permissions.manage,validate(schemas.createAssignmentSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createAssignment(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/assignments/:assignmentId",permissions.manage,validate(schemas.updateAssignmentSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateAssignment(req.auth.organizationId,req.validated.params.assignmentId,req.validated.body,req.auth.userId))));
+  router.get("/entries/export",permissions.export,validate(schemas.rangeSchema),asyncHandler(async(req,res)=>{const csv=await service.export(req.auth.organizationId,req.validated.query);res.set({"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="work-logs-${req.validated.query.dateFrom}-${req.validated.query.dateTo}.csv"`});res.send(`\uFEFF${csv}`);}));
+  router.get("/entries/report",permissions.approve,validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.report(req.auth.organizationId,req.validated.query))));
+  router.get("/entries",permissions.approve,validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.entries(req.auth.organizationId,req.validated.query))));
+  router.get("/timesheets",permissions.approve,validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.timesheets(req.auth.organizationId,req.validated.query))));
+  router.get("/timesheets/:timesheetId",permissions.approve,validate(schemas.timesheetIdSchema),asyncHandler(async(req,res)=>ok(req,res,await service.timesheet(req.auth.organizationId,req.validated.params.timesheetId))));
+  router.post("/timesheets/:timesheetId/review",permissions.approve,validate(schemas.reviewSchema),asyncHandler(async(req,res)=>ok(req,res,await service.review(req.auth.organizationId,req.validated.params.timesheetId,req.validated.body,req.auth.userId))));
+  router.post("/timesheets/:timesheetId/reopen",permissions.approve,validate(schemas.reopenSchema),asyncHandler(async(req,res)=>ok(req,res,await service.reopen(req.auth.organizationId,req.validated.params.timesheetId,req.validated.body,req.auth.userId))));
+  return router;
+};
+module.exports={createWorklogsRouter};

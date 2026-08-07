@@ -1,0 +1,30 @@
+const express=require("express");
+const {asyncHandler}=require("../../middleware/async-handler");
+const {validate}=require("../../middleware/validate");
+const schemas=require("./recruitment.validation");
+
+const createRecruitmentRouter=(service,permissions)=>{
+  const router=express.Router();
+  const ok=(req,res,data,status=200)=>res.status(status).json({success:true,data,requestId:req.id});
+  router.get("/metadata",validate(schemas.metadataSchema),asyncHandler(async(req,res)=>ok(req,res,await service.metadata(req.auth.organizationId,req.validated.query.search))));
+  router.get("/jobs",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.jobs(req.auth.organizationId,req.validated.query))));
+  router.post("/jobs",permissions.manage,validate(schemas.createJobSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createJob(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/jobs/:jobId",permissions.manage,validate(schemas.updateJobSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateJob(req.auth.organizationId,req.validated.params.jobId,req.validated.body,req.auth.userId))));
+  router.get("/candidates",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.candidates(req.auth.organizationId,req.validated.query))));
+  router.post("/candidates",permissions.manage,validate(schemas.createCandidateSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createCandidate(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/candidates/:candidateId",permissions.manage,validate(schemas.updateCandidateSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateCandidate(req.auth.organizationId,req.validated.params.candidateId,req.validated.body,req.auth.userId))));
+  router.get("/applications/export",permissions.export,validate(schemas.rangeSchema),asyncHandler(async(req,res)=>{const csv=await service.export(req.auth.organizationId,req.validated.query);res.set({"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="recruitment-applications.csv"`});res.send(`\uFEFF${csv}`);}));
+  router.get("/applications/report",permissions.export,validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.report(req.auth.organizationId,req.validated.query))));
+  router.get("/applications",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.applications(req.auth.organizationId,req.validated.query))));
+  router.post("/applications",permissions.manage,validate(schemas.createApplicationSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createApplication(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/applications/:applicationId",permissions.manage,validate(schemas.updateApplicationSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateApplication(req.auth.organizationId,req.validated.params.applicationId,req.validated.body,req.auth.userId))));
+  router.get("/interviews",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.interviews(req.auth.organizationId,req.validated.query))));
+  router.post("/interviews",permissions.manage,validate(schemas.createInterviewSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createInterview(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/interviews/:interviewId",permissions.manage,validate(schemas.updateInterviewSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateInterview(req.auth.organizationId,req.validated.params.interviewId,req.validated.body,req.auth.userId))));
+  router.get("/offers",validate(schemas.rangeSchema),asyncHandler(async(req,res)=>ok(req,res,await service.offers(req.auth.organizationId,req.validated.query))));
+  router.post("/offers",permissions.manage,validate(schemas.createOfferSchema),asyncHandler(async(req,res)=>ok(req,res,await service.createOffer(req.auth.organizationId,req.validated.body,req.auth.userId),201)));
+  router.patch("/offers/:offerId",permissions.manage,validate(schemas.updateOfferSchema),asyncHandler(async(req,res)=>ok(req,res,await service.updateOffer(req.auth.organizationId,req.validated.params.offerId,req.validated.body,req.auth.userId))));
+  router.post("/offers/:offerId/review",permissions.approve,validate(schemas.reviewOfferSchema),asyncHandler(async(req,res)=>ok(req,res,await service.reviewOffer(req.auth.organizationId,req.validated.params.offerId,req.validated.body,req.auth.userId))));
+  return router;
+};
+module.exports={createRecruitmentRouter};

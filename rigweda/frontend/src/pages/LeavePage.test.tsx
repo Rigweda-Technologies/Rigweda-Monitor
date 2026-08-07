@@ -1,0 +1,31 @@
+import {fireEvent,render,screen} from "@testing-library/react";
+import {QueryClient,QueryClientProvider} from "@tanstack/react-query";
+import {beforeEach,describe,expect,it,vi} from "vitest";
+import {LeavePage} from "./LeavePage";
+
+const mocks=vi.hoisted(()=>({metadata:vi.fn(),mySummary:vi.fn(),myBalances:vi.fn(),myRequests:vi.fn(),createRequest:vi.fn(),cancelRequest:vi.fn(),requests:vi.fn(),request:vi.fn(),review:vi.fn(),reviewCancellation:vi.fn(),teamCalendar:vi.fn(),exportCsv:vi.fn(),types:vi.fn(),createType:vi.fn(),updateType:vi.fn(),balances:vi.fn(),adjustBalance:vi.fn(),calendars:vi.fn(),createCalendar:vi.fn(),updateCalendar:vi.fn(),holidays:vi.fn(),createHoliday:vi.fn(),updateHoliday:vi.fn()}));
+vi.mock("../features/leave/leave.api",()=>({leaveApi:mocks}));
+vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({user:{roleKey:"system_admin"}})}));
+
+const type={id:"type-1",code:"ANNUAL",name:"Annual Leave",description:"Paid planned leave",color:"#2f8f74",annualEntitlementDays:18,isPaid:true,requiresApproval:true,allowHalfDay:true,allowNegativeBalance:false,maximumNegativeDays:0,minimumNoticeDays:0,maximumConsecutiveDays:null,attachmentRequiredAfterDays:null,carryForwardAllowed:true,maximumCarryForwardDays:5,encashmentAllowed:false,status:"active",version:1};
+const balance={accountId:"account-1",employeeId:"employee-1",employeeNumber:"RW-0001",employeeName:"Rigweda Administrator",leaveTypeId:"type-1",leaveTypeCode:"ANNUAL",leaveTypeName:"Annual Leave",leaveTypeColor:"#2f8f74",openingDays:18,accruedDays:0,adjustedDays:0,carriedForwardDays:0,usedDays:2,pendingDays:1,encashedDays:0,available:15,version:1};
+const request={id:"request-1",employeeId:"employee-1",employeeNumber:"RW-0001",employeeName:"Rigweda Administrator",leaveTypeId:"type-1",leaveTypeCode:"ANNUAL",leaveTypeName:"Annual Leave",leaveTypeColor:"#2f8f74",startDate:"2026-08-17",endDate:"2026-08-18",startSession:"full_day",endSession:"full_day",requestedDays:2,reason:"Family event",emergencyContact:null,handoverEmployeeId:null,handoverEmployeeName:null,attachmentName:null,attachmentUrl:null,status:"pending",submittedAt:"2026-08-07T00:00:00Z",reviewerName:null,reviewerComment:null,reviewedAt:null,cancellationReason:null,cancellationReviewerName:null,cancellationComment:null,cancellationReviewedAt:null,version:1,createdAt:"2026-08-07T00:00:00Z"};
+const calendar={id:"calendar-1",name:"Default Calendar",description:"Company holidays",timezone:"Asia/Kolkata",isDefault:true,status:"active",version:1,holidayCount:1,locations:[]};
+const holiday={id:"holiday-1",calendarId:"calendar-1",calendarName:"Default Calendar",name:"Independence Day",holidayDate:"2026-08-15",isOptional:false,description:null,version:1};
+const page=<T,>(items:T[])=>({items,total:items.length,page:1,pageSize:100,totalPages:1});
+const renderPage=()=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><LeavePage onMenu={()=>{}} onTheme={()=>{}}/></QueryClientProvider>);
+
+describe("Leave and time off",()=>{
+  beforeEach(()=>{
+    mocks.metadata.mockResolvedValue({employee:{id:"employee-1",employeeNumber:"RW-0001",name:"Rigweda Administrator"},types:[{id:"type-1",code:"ANNUAL",name:"Annual Leave",color:"#2f8f74",allowHalfDay:true,attachmentRequiredAfterDays:null}],employees:[{id:"employee-1",employeeNumber:"RW-0001",name:"Rigweda Administrator"}],locations:[]});
+    mocks.mySummary.mockResolvedValue({employee:{id:"employee-1",employeeNumber:"RW-0001",name:"Rigweda Administrator"},balances:[balance],pending:1,approved:0,approvedDays:0,upcoming:[]});
+    mocks.myRequests.mockResolvedValue(page([request]));mocks.requests.mockResolvedValue(page([request]));mocks.teamCalendar.mockResolvedValue(page([{requestId:"request-2",date:"2026-08-17",fraction:1,session:"full_day",employeeId:"employee-2",employeeNumber:"RW-0002",employeeName:"Asha Rao",departmentName:"Engineering",leaveTypeId:"type-1",leaveTypeName:"Annual Leave",color:"#2f8f74"}]));
+    mocks.types.mockResolvedValue(page([type]));mocks.balances.mockResolvedValue(page([balance]));mocks.calendars.mockResolvedValue(page([calendar]));mocks.holidays.mockResolvedValue(page([holiday]));
+  });
+
+  it("shows balances, request history and the request form",async()=>{renderPage();expect(await screen.findByText("15 days")).toBeInTheDocument();expect(screen.getByText("Family event")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:/Request time off/}));expect(await screen.findByRole("heading",{name:"Plan time away"})).toBeInTheDocument();expect(screen.getByLabelText("Reason")).toBeRequired();});
+  it("provides the approval and cancellation-review queue",async()=>{renderPage();fireEvent.click(screen.getByRole("button",{name:"Approvals"}));expect(await screen.findByText("Approval queue")).toBeInTheDocument();expect(await screen.findByRole("button",{name:"Approve"})).toBeInTheDocument();expect(screen.getByLabelText("Review comment for Rigweda Administrator")).toBeInTheDocument();});
+  it("renders team availability by date",async()=>{renderPage();fireEvent.click(screen.getByRole("button",{name:"Team calendar"}));expect(await screen.findByText("Asha Rao")).toBeInTheDocument();expect(screen.getByText(/Full day/)).toBeInTheDocument();});
+  it("opens leave-type, calendar and holiday configuration",async()=>{renderPage();fireEvent.click(screen.getByRole("button",{name:"Leave setup"}));expect(await screen.findByText("Leave types and policies")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:/New leave type/}));expect(screen.getByRole("heading",{name:"New leave type"})).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"Cancel"}));fireEvent.click(screen.getByRole("button",{name:"Calendar"}));expect(screen.getByRole("heading",{name:"New calendar"})).toBeInTheDocument();});
+  it("opens an auditable employee balance adjustment",async()=>{renderPage();fireEvent.click(screen.getByRole("button",{name:"Balances"}));fireEvent.click(await screen.findByTitle("Adjust Rigweda Administrator Annual Leave"));expect(screen.getByRole("heading",{name:"Rigweda Administrator"})).toBeInTheDocument();expect(screen.getByLabelText("Audit reason")).toBeRequired();});
+});

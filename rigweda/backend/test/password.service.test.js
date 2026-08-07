@@ -1,0 +1,3 @@
+const test=require("node:test");const assert=require("node:assert/strict");
+const {createPasswordService}=require("../src/modules/auth/password.service");
+test("Argon2id creates independently salted hashes",async()=>{const service=createPasswordService("a-secure-test-pepper-that-is-long-enough");const first=await service.hash("CorrectHorseBatteryStaple!9");const second=await service.hash("CorrectHorseBatteryStaple!9");assert.notEqual(first,second);assert.match(first,/^\$argon2id\$/);assert.equal(await service.verify(first,"CorrectHorseBatteryStaple!9"),true);assert.equal(await service.verify(first,"wrong-password"),false);});
