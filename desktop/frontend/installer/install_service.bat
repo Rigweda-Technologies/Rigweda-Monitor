@@ -4,7 +4,7 @@ setlocal
 REM Install and start the MyApp backend Windows Service.
 REM Run this from an elevated Command Prompt.
 
-set "SERVICE_SCRIPT=%~dp0..\backend\backend_service.py"
+set "SERVICE_SCRIPT=%~dp0..\services\background_service.py"
 set "REQUIREMENTS=%~dp0..\requirements.txt"
 
 net session >nul 2>&1

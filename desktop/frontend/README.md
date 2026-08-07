@@ -10,8 +10,8 @@ myapp/
 │   ├── main.py
 │   ├── login_view.py
 │   └── auth.py
-├── backend/
-│   └── backend_service.py
+├── services/
+│   └── background_service.py
 ├── installer/
 │   └── install_service.bat
 ├── requirements.txt
@@ -45,6 +45,6 @@ python -m app.main
 
 - The login screen authenticates with hardcoded credentials for now.
 - On success, the app runs `sc start MyAppBackendService`.
-- The backend service template in `backend/backend_service.py` expects `pywin32`.
+- The backend service template in `services/background_service.py` expects `pywin32`.
 - Use `installer/install_service.bat` from an elevated Command Prompt to install the service.
 

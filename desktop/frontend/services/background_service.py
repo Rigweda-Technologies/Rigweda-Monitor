@@ -16,14 +16,14 @@ try:
     import win32serviceutil  # type: ignore
 except ImportError as exc:  # pragma: no cover - Windows service runtime only
     raise ImportError(
-        "pywin32 is required to run backend_service.py as a Windows Service."
+        "pywin32 is required to run background_service.py as a Windows Service."
     ) from exc
 
 
 SERVICE_NAME = "MyAppBackendService"
 SERVICE_DISPLAY_NAME = "MyApp Backend Service"
 SERVICE_DESCRIPTION = "Backend service for MyApp desktop authentication."
-LOG_FILE = Path(__file__).resolve().with_name("backend_service.log")
+LOG_FILE = Path(__file__).resolve().with_name("background_service.log")
 
 
 class MyAppBackendService(win32serviceutil.ServiceFramework):  # type: ignore[misc]
