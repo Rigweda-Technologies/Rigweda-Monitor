@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrganizationsPage } from "./OrganizationsPage";
+
+vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({hasPermission:()=>true})}));
 
 const renderPage = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions:{ queries:{ retry:false } } })}><OrganizationsPage onMenu={()=>{}} onTheme={()=>{}} /></QueryClientProvider>);
 

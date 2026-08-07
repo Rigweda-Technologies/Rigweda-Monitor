@@ -2,6 +2,7 @@ import {fireEvent,render,screen,waitFor} from "@testing-library/react";
 import {QueryClient,QueryClientProvider} from "@tanstack/react-query";
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {AttendancePage} from "./AttendancePage";
+vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({hasPermission:()=>true})}));
 const mocks=vi.hoisted(()=>({metadata:vi.fn(),myToday:vi.fn(),punch:vi.fn(),daily:vi.fn(),dailySummary:vi.fn(),records:vi.fn(),record:vi.fn(),manual:vi.fn(),exportCsv:vi.fn(),shifts:vi.fn(),createShift:vi.fn(),updateShift:vi.fn(),assignments:vi.fn(),createAssignment:vi.fn(),updateAssignment:vi.fn(),policy:vi.fn(),updatePolicy:vi.fn(),regularizations:vi.fn(),myRegularizations:vi.fn(),createRegularization:vi.fn(),cancelRegularization:vi.fn(),reviewRegularization:vi.fn()}));
 vi.mock("../features/attendance/attendance.api",()=>({attendanceApi:mocks}));
 const shift={id:"shift-1",code:"GENERAL",name:"General Shift",description:"Weekday shift",startTime:"09:00",endTime:"18:00",unpaidBreakMinutes:60,workingDays:[1,2,3,4,5],color:"#2f8f74",isDefault:true,status:"active",version:1,assignmentCount:0};

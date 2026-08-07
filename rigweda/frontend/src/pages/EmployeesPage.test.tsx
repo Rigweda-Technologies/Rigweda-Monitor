@@ -9,6 +9,7 @@ const employeeMocks=vi.hoisted(()=>({
   reopenProfile:vi.fn(),updateSensitiveRecords:vi.fn(),addIdentifier:vi.fn(),removeIdentifier:vi.fn(),addDocument:vi.fn(),removeDocument:vi.fn(),exportCsv:vi.fn()
 }));
 vi.mock("../features/employees/employee.api",()=>({employeeApi:employeeMocks}));
+vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({hasPermission:()=>true})}));
 
 const directoryEmployee={
   id:"employee-1",employeeNumber:"RW-0001",firstName:"Rigweda",lastName:"Administrator",preferredName:"Admin",

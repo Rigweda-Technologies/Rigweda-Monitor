@@ -5,7 +5,7 @@ import {LeavePage} from "./LeavePage";
 
 const mocks=vi.hoisted(()=>({metadata:vi.fn(),mySummary:vi.fn(),myBalances:vi.fn(),myRequests:vi.fn(),createRequest:vi.fn(),cancelRequest:vi.fn(),requests:vi.fn(),request:vi.fn(),review:vi.fn(),reviewCancellation:vi.fn(),teamCalendar:vi.fn(),exportCsv:vi.fn(),types:vi.fn(),createType:vi.fn(),updateType:vi.fn(),balances:vi.fn(),adjustBalance:vi.fn(),calendars:vi.fn(),createCalendar:vi.fn(),updateCalendar:vi.fn(),holidays:vi.fn(),createHoliday:vi.fn(),updateHoliday:vi.fn()}));
 vi.mock("../features/leave/leave.api",()=>({leaveApi:mocks}));
-vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({user:{roleKey:"system_admin"}})}));
+vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({hasPermission:()=>true})}));
 
 const type={id:"type-1",code:"ANNUAL",name:"Annual Leave",description:"Paid planned leave",color:"#2f8f74",annualEntitlementDays:18,isPaid:true,requiresApproval:true,allowHalfDay:true,allowNegativeBalance:false,maximumNegativeDays:0,minimumNoticeDays:0,maximumConsecutiveDays:null,attachmentRequiredAfterDays:null,carryForwardAllowed:true,maximumCarryForwardDays:5,encashmentAllowed:false,status:"active",version:1};
 const balance={accountId:"account-1",employeeId:"employee-1",employeeNumber:"RW-0001",employeeName:"Rigweda Administrator",leaveTypeId:"type-1",leaveTypeCode:"ANNUAL",leaveTypeName:"Annual Leave",leaveTypeColor:"#2f8f74",openingDays:18,accruedDays:0,adjustedDays:0,carriedForwardDays:0,usedDays:2,pendingDays:1,encashedDays:0,available:15,version:1};

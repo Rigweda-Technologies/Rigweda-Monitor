@@ -5,6 +5,7 @@ import {StructurePage} from "./StructurePage";
 
 const mocks=vi.hoisted(()=>({summary:vi.fn(),metadata:vi.fn(),departments:vi.fn(),departmentTree:vi.fn(),jobTitles:vi.fn(),workLocations:vi.fn(),create:vi.fn(),update:vi.fn(),history:vi.fn()}));
 vi.mock("../features/structure/structure.api",()=>({structureApi:mocks}));
+vi.mock("../features/auth/AuthProvider",()=>({useAuth:()=>({hasPermission:()=>true})}));
 const department={id:"department-1",code:"GENERAL",name:"General",description:"Default department",parentDepartmentId:null,parentDepartmentName:null,headEmployeeId:"employee-1",headEmployeeName:"Rigweda Administrator",costCenter:null,status:"active",version:1,employeeCount:1,childCount:0,createdAt:"2026-08-07",updatedAt:"2026-08-07"};
 const title={id:"title-1",code:"TEAM_MEMBER",name:"Team Member",description:null,jobLevel:"L1",grade:"G1",careerTrack:"individual",status:"active",version:1,employeeCount:1,createdAt:"2026-08-07",updatedAt:"2026-08-07"};
 const location={id:"location-1",code:"MAIN",name:"Main Office",description:null,locationType:"office",timezone:"Asia/Kolkata",address:{city:"Hyderabad",country:"IN"},email:null,phone:null,capacity:100,status:"active",version:1,employeeCount:1,createdAt:"2026-08-07",updatedAt:"2026-08-07"};

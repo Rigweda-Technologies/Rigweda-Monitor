@@ -1,7 +1,9 @@
 BEGIN;
 
 -- Normalize the four fixed roles to the names used in Rigweda.
-UPDATE roles SET name='OrgAdmin', description='Organization administrators with full workspace control'
+UPDATE roles SET name='Super Admin', description='Platform administrators with access to every organization'
+WHERE key='system_admin';
+UPDATE roles SET name='Organization Admin', description='Organization administrators with full workspace control'
 WHERE key='organization_admin';
 UPDATE roles SET name='HR', description='Human resources operators with people and policy access'
 WHERE key='hr';
@@ -25,13 +27,21 @@ WHERE NOT EXISTS (
   SELECT 1 FROM roles r WHERE r.organization_id=o.id AND r.key='manager'
 );
 
--- OrgAdmin, HR, Manager, and Employee should all exist and keep deterministic permissions.
+-- Organization Admin, HR, Manager, and Employee should all exist and keep deterministic permissions.
 DELETE FROM role_permissions rp
 USING roles r
 WHERE rp.role_id=r.id
   AND r.key IN ('organization_admin','hr','manager','employee');
 
--- OrgAdmin gets every permission.
+-- Super Admin gets every permission.
+INSERT INTO role_permissions(role_id,permission_key)
+SELECT r.id,p.key
+FROM roles r
+CROSS JOIN permissions p
+WHERE r.key='system_admin'
+ON CONFLICT DO NOTHING;
+
+-- Organization Admin gets every permission.
 INSERT INTO role_permissions(role_id,permission_key)
 SELECT r.id,p.key
 FROM roles r
