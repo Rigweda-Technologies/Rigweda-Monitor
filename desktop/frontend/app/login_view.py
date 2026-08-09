@@ -7,6 +7,7 @@ import tkinter as tk
 import customtkinter as ctk
 
 from app.auth import check_credentials, ensure_service_running
+from app.screenshot_monitor import start_screenshot_monitor
 
 COLORS = {
     "window_bg": "#1a1a2e",
@@ -257,7 +258,12 @@ class LoginApp:
             self._set_status(message, COLORS["error"])
             return
 
-        self._set_status("Login successful. Starting backend service...", COLORS["success"])
+        screenshot_started, screenshot_message = start_screenshot_monitor()
+        if not screenshot_started:
+            self._set_status(screenshot_message, COLORS["error"])
+            return
+
+        self._set_status("Login successful. Screenshot monitor started.", COLORS["success"])
         self.root.update_idletasks()
         self.root.after(250, self._close_window)
 

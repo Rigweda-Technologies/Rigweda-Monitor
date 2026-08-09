@@ -49,6 +49,7 @@ class MyAppBackendService(win32serviceutil.ServiceFramework):  # type: ignore[mi
         )
         servicemanager.LogInfoMsg(f"{SERVICE_NAME} started")
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
+        logging.info("%s started", SERVICE_NAME)
         self.main()
 
     def main(self):
