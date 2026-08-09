@@ -20,8 +20,11 @@ export const getEmployeeProfileFromRigweda = async ({ token }) => {
     return null;
   }
 
+  const employeeId = data._id || data.id || data.employeeId || data.userId;
+
   return {
-    id: data._id || data.id || data.employeeId || data.userId,
+    employeeId,
+    userId: data.userId || null,
     raw: data,
   };
 };

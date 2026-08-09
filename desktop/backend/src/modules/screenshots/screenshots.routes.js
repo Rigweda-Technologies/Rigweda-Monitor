@@ -18,16 +18,11 @@ export const registerScreenshotRoutes = async (fastify) => {
         consumes: ["multipart/form-data"],
         body: {
           type: "object",
-          required: ["capturedAt", "screenshot"],
+          required: ["capturedAt"],
           properties: {
             capturedAt: {
               type: "string",
               format: "date-time",
-            },
-            screenshot: {
-              // type: "string",
-              format: "binary",
-              description: "The screenshot image file to upload.",
             },
           },
         },
@@ -44,6 +39,19 @@ export const registerScreenshotRoutes = async (fastify) => {
             properties: {
               success: { type: "boolean" },
               message: { type: "string" },
+              errorCode: { type: "string" },
+              errors: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    field: { type: "string" },
+                    message: { type: "string" },
+                    type: { type: "string" },
+                    keyword: { type: "string" },
+                  },
+                },
+              },
             },
           },
         },

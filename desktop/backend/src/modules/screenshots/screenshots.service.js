@@ -13,6 +13,9 @@ const buildCloudinaryPublicId = ({ employeeId, dateFolder, originalFileName }) =
   return `${employeeId}/${dateFolder}/screenshots/${safeFileName}`;
 };
 
+const resolveDateFolder = (capturedAt) =>
+  new Date(capturedAt).toISOString().slice(0, 10).replaceAll("-", "_");
+
 export const screenshotService = {
   async resolveEmployeeProfile(token) {
     return getEmployeeProfileFromRigweda({ token });
@@ -23,14 +26,16 @@ export const screenshotService = {
   },
 
   async createScreenshot(payload) {
+    const dateFolder = payload.dateFolder || resolveDateFolder(payload.capturedAt);
     const originalFileName = payload.screenshot.filename;
     const publicId = buildCloudinaryPublicId({
-      dateFolder: payload.dateFolder,
+      dateFolder,
       originalFileName,
       employeeId: payload.employeeId,
     });
-    const folder = `${payload.employeeId}/${payload.dateFolder}/screenshots`;
+    const folder = `${payload.employeeId}/${dateFolder}/screenshots`;
 
+    console.log("Uploading screenshot to Cloudinary with publicId:", publicId, "and folder:", folder);
     const cloudinaryResult = await uploadBufferToCloudinary({
       buffer: payload.screenshot.buffer,
       folder,
@@ -42,6 +47,7 @@ export const screenshotService = {
       id: crypto.randomUUID(),
       employeeId: payload.employeeId,
       capturedAt: payload.capturedAt,
+      dateFolder,
       originalFileName,
       mimeType: payload.screenshot.mimetype,
       cloudinaryFolder: folder,
