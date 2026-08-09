@@ -40,3 +40,30 @@ export const uploadBufferToCloudinary = ({ buffer, folder, publicId, resourceTyp
 
     uploadStream.end(buffer);
   });
+
+export const createSignedUploadPayload = ({ folder, publicId, context = {} }) => {
+  ensureConfigured();
+  const env = getEnv();
+  const timestamp = Math.floor(Date.now() / 1000);
+  const params = {
+    folder,
+    public_id: publicId,
+    timestamp,
+  };
+
+  if (Object.keys(context).length > 0) {
+    params.context = Object.entries(context)
+      .map(([key, value]) => `${key}=${String(value).replaceAll("|", " ")}`)
+      .join("|");
+  }
+
+  return {
+    cloudName: env.cloudinaryCloudName,
+    apiKey: env.cloudinaryApiKey,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${env.cloudinaryCloudName}/image/upload`,
+    params: {
+      ...params,
+      signature: cloudinary.utils.api_sign_request(params, env.cloudinaryApiSecret),
+    },
+  };
+};

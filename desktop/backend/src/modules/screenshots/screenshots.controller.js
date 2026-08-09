@@ -1,5 +1,9 @@
 import { screenshotService } from "./screenshots.service.js";
-import { createScreenshotSchema } from "./screenshots.validation.js";
+import {
+  completeUploadSessionSchema,
+  createScreenshotSchema,
+  createUploadSessionSchema,
+} from "./screenshots.validation.js";
 
 const formatJoiErrors = (error) =>
   error.details.map((item) => ({
@@ -72,6 +76,58 @@ export const createScreenshotHandler = async (request, reply) => {
   const result = await screenshotService.createScreenshot(payload);
 
   return reply.code(201).send({
+    success: true,
+    data: result,
+  });
+};
+
+export const createUploadSessionHandler = async (request, reply) => {
+  const { error, value } = createUploadSessionSchema.validate(request.body ?? {}, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    return reply.code(400).send({
+      success: false,
+      message: "Validation failed",
+      errorCode: "VALIDATION_ERROR",
+      errors: formatJoiErrors(error),
+    });
+  }
+
+  const result = await screenshotService.createUploadSession({
+    auth: request.auth,
+    ...value,
+  });
+
+  return reply.code(201).send({
+    success: true,
+    data: result,
+  });
+};
+
+export const completeUploadSessionHandler = async (request, reply) => {
+  const { error, value } = completeUploadSessionSchema.validate(request.body ?? {}, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    return reply.code(400).send({
+      success: false,
+      message: "Validation failed",
+      errorCode: "VALIDATION_ERROR",
+      errors: formatJoiErrors(error),
+    });
+  }
+
+  const result = await screenshotService.completeUploadSession({
+    batchId: request.params.batchId,
+    ...value,
+  });
+
+  return reply.send({
     success: true,
     data: result,
   });
