@@ -1,14 +1,16 @@
-import "dotenv/config";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { validateEnv, getEnv } from "./config/env.js";
+import { loadEnvFiles, validateEnv, getEnv } from "./config/env.js";
+import { initializeDatabase } from "./database/schema.js";
 import { registerRoutes } from "./routes.js";
 import { authenticateRequest } from "./middleware/auth.js";
 
+loadEnvFiles();
 validateEnv();
 const env = getEnv();
+await initializeDatabase();
 
 const fastify = Fastify({
   logger: true,

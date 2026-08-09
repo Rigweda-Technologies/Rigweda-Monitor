@@ -6,7 +6,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from app.auth import check_credentials, ensure_service_running
+from app.auth import ensure_service_running, login_to_hrms
 from app.screenshot_monitor import start_screenshot_monitor
 
 COLORS = {
@@ -114,7 +114,7 @@ class LoginApp:
 
         self.username_label = ctk.CTkLabel(
             content,
-            text="Username",
+            text="Email",
             text_color=COLORS["text_muted"],
             font=FONTS["label"],
             anchor="w",
@@ -129,10 +129,11 @@ class LoginApp:
             border_width=1,
             border_color=COLORS["entry_border"],
             text_color=COLORS["text"],
-            placeholder_text="admin",
+            placeholder_text="name@company.com",
             font=FONTS["entry"],
         )
         self.username_entry.pack(fill="x", pady=(8, 16))
+        self.username_entry.insert(0, "shivaramakrishna@luvetha.com")
         self._bind_entry_state(self.username_entry)
 
         self.password_label = ctk.CTkLabel(
@@ -249,17 +250,24 @@ class LoginApp:
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
 
-        if not check_credentials(username, password):
-            self._set_status("Invalid username or password", COLORS["error"])
+        self.signin_button.configure(state="disabled", text="Signing in...")
+        self.root.update_idletasks()
+
+        logged_in, login_message, _token = login_to_hrms(username, password)
+        if not logged_in:
+            self.signin_button.configure(state="normal", text="Sign In")
+            self._set_status(login_message, COLORS["error"])
             return
 
         started, message = ensure_service_running()
         if not started:
+            self.signin_button.configure(state="normal", text="Sign In")
             self._set_status(message, COLORS["error"])
             return
 
         screenshot_started, screenshot_message = start_screenshot_monitor()
         if not screenshot_started:
+            self.signin_button.configure(state="normal", text="Sign In")
             self._set_status(screenshot_message, COLORS["error"])
             return
 

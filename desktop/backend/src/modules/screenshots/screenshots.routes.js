@@ -1,6 +1,24 @@
-import { createScreenshotHandler, listScreenshotsHandler } from "./screenshots.controller.js";
+import {
+  completeUploadSessionHandler,
+  createScreenshotHandler,
+  createUploadSessionHandler,
+  listScreenshotsHandler,
+} from "./screenshots.controller.js";
 
 export const registerScreenshotRoutes = async (fastify) => {
+  fastify.get(
+    "/screenshots",
+    {
+      preHandler: fastify.authenticateRequest,
+      schema: {
+        tags: ["Screenshots"],
+        summary: "List recent uploaded screenshots",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    listScreenshotsHandler
+  );
+
   fastify.post(
     "/screenshots",
     {
@@ -58,5 +76,35 @@ export const registerScreenshotRoutes = async (fastify) => {
       },
     },
     createScreenshotHandler
+  );
+
+  fastify.post(
+    "/screenshot-batches/uploads",
+    {
+      preHandler: fastify.authenticateRequest,
+      schema: {
+        tags: ["Screenshots"],
+        summary: "Create a signed Cloudinary batch upload session",
+        description:
+          "Creates durable screenshot metadata rows and returns signed Cloudinary upload parameters so the desktop agent uploads images directly to Cloudinary.",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    createUploadSessionHandler
+  );
+
+  fastify.post(
+    "/screenshot-batches/:batchId/complete",
+    {
+      preHandler: fastify.authenticateRequest,
+      schema: {
+        tags: ["Screenshots"],
+        summary: "Commit a completed screenshot upload batch",
+        description:
+          "Marks uploaded or deduplicated screenshots as complete after direct Cloudinary upload succeeds.",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    completeUploadSessionHandler
   );
 };

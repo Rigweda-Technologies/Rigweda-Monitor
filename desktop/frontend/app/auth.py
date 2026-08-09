@@ -1,15 +1,24 @@
-"""Static credential and backend service helpers for the login UI."""
+"""HRMS authentication and backend service helpers for the login UI."""
 
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from ctypes import wintypes
+from pathlib import Path
 
-USERNAME = "admin@gmail.com"
-PASSWORD = "changeme123"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DEFAULT_LOGIN_URL = "https://www.upanayahr.com/api/users/login"
+DATA_ROOT = Path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"))
+AUTH_FILE = DATA_ROOT / "auth.json"
 SERVICE_NAME = "MyAppBackendService"
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 SW_HIDE = 0
@@ -83,9 +92,81 @@ def _start_service_as_admin() -> tuple[bool, str]:
     return False, "Administrator permission was granted, but the backend service did not start."
 
 
-def check_credentials(username: str, password: str) -> bool:
-    """Return True when the provided credentials match the static pair."""
-    return username == USERNAME and password == PASSWORD
+def _extract_token(headers: object, payload: dict) -> str | None:
+    header_token = headers.get("Authorization") or headers.get("authorization")
+    candidates = [
+        header_token,
+        payload.get("token"),
+        payload.get("accessToken"),
+        payload.get("access_token"),
+        payload.get("data", {}).get("token") if isinstance(payload.get("data"), dict) else None,
+        payload.get("data", {}).get("accessToken") if isinstance(payload.get("data"), dict) else None,
+        payload.get("data", {}).get("access_token") if isinstance(payload.get("data"), dict) else None,
+    ]
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        token = str(candidate).strip()
+        if token.lower().startswith("bearer "):
+            token = token.split(" ", 1)[1].strip()
+        if token:
+            return token
+
+    return None
+
+
+def _store_auth_session(*, email: str, token: str, payload: dict) -> None:
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    session = {
+        "email": email,
+        "token": token,
+        "userId": payload.get("data", {}).get("userId") if isinstance(payload.get("data"), dict) else None,
+        "organizationId": (
+            payload.get("data", {}).get("organization", {}).get("_id")
+            if isinstance(payload.get("data"), dict) and isinstance(payload.get("data", {}).get("organization"), dict)
+            else None
+        ),
+        "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    AUTH_FILE.write_text(json.dumps(session, indent=2), encoding="utf-8")
+
+
+def login_to_hrms(email: str, password: str) -> tuple[bool, str, str | None]:
+    """Authenticate against HRMS and persist the returned access token."""
+    login_url = os.getenv("HRMS_LOGIN_URL", DEFAULT_LOGIN_URL)
+
+    request_body = json.dumps({"email": email, "password": password}).encode("utf-8")
+    request = urllib.request.Request(
+        login_url,
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            response_text = response.read().decode("utf-8")
+            payload = json.loads(response_text) if response_text else {}
+            token = _extract_token(response.headers, payload)
+    except urllib.error.HTTPError as error:
+        try:
+            payload = json.loads(error.read().decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            payload = {}
+        message = payload.get("message") or payload.get("error") or f"Login failed with HTTP {error.code}"
+        return False, str(message), None
+    except (urllib.error.URLError, TimeoutError) as error:
+        return False, f"Could not reach login API: {error}", None
+    except ValueError:
+        return False, "Login API returned an invalid response.", None
+
+    if not token:
+        return False, "Login succeeded but no access token was returned.", None
+
+    _store_auth_session(email=email, token=token, payload=payload)
+    os.environ["MONITOR_ACCESS_TOKEN"] = token
+    return True, "Login successful.", token
 
 
 def ensure_service_running() -> tuple[bool, str]:

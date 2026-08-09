@@ -12,44 +12,79 @@ const getBearerToken = (request) => {
   return token;
 };
 
-export const authenticateRequest = (request, reply, done) => {
+const verifyRemoteToken = async (token) => {
+  const response = await fetch(`${getEnv().rigwedaApiBaseUrl}/api/users/me/profile`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await response.json();
+  return payload?.data ?? null;
+};
+
+export const authenticateRequest = async (request, reply) => {
   const token = getBearerToken(request);
 
   if (!token) {
-    reply.code(401).send({
+    return reply.code(401).send({
       success: false,
       message: "Sign in to continue.",
     });
-    return;
   }
 
   const secret = getEnv().jwtAccessSecret;
 
   if (!secret) {
-    reply.code(500).send({
+    return reply.code(500).send({
       success: false,
       message: "JWT_ACCESS_SECRET is not configured.",
     });
-    return;
   }
 
   try {
     const payload = jwt.verify(token, secret);
 
-    console.log("Authentication successful for token:", payload);
     request.auth = {
       token,
-      userId: payload.sub,
-      organizationId: payload.org,
+      userId: payload.userId || payload._id || payload.sub,
+      organizationId: payload.organizationId || payload.org,
       roleKey: payload.role,
+      roleIds: payload.roleIds,
+      activeRoleId: payload.activeRoleId,
       sessionId: payload.sid,
     };
-
-    
-    done();
+    return;
   } catch {
-    console.log("Authentication failed for token:", token);
-    reply.code(401).send({
+    const decoded = jwt.decode(token);
+    if (decoded && typeof decoded === "object") {
+      const remoteProfile = await verifyRemoteToken(token);
+
+      if (!remoteProfile) {
+        return reply.code(401).send({
+          success: false,
+          message: "Your access token is invalid or expired.",
+        });
+      }
+
+      request.auth = {
+        token,
+        userId: decoded.userId || decoded._id || decoded.sub,
+        organizationId: decoded.organizationId || decoded.org || remoteProfile.organizationId,
+        roleKey: decoded.role,
+        roleIds: decoded.roleIds,
+        activeRoleId: decoded.activeRoleId,
+        sessionId: decoded.sid,
+        remoteToken: true,
+      };
+      return;
+    }
+
+    return reply.code(401).send({
       success: false,
       message: "Your access token is invalid or expired.",
     });
