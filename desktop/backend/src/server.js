@@ -15,7 +15,7 @@ const fastify = Fastify({
 });
 
 await fastify.register(multipart, {
-  attachFieldsToBody: false,
+  attachFieldsToBody: "keyValues",
   limits: {
     fileSize: 25 * 1024 * 1024,
   },
@@ -61,6 +61,28 @@ await fastify.register(swaggerUi, {
 });
 
 fastify.decorate("authenticateRequest", authenticateRequest);
+
+fastify.setErrorHandler((error, request, reply) => {
+  if (error.validation) {
+    return reply.code(400).send({
+      success: false,
+      message: "Validation failed",
+      errorCode: "VALIDATION_ERROR",
+      errors: error.validation.map((item) => ({
+        field: item.instancePath ? item.instancePath.replace(/^\//, "").replaceAll("/", ".") : "body",
+        message: item.message,
+        keyword: item.keyword,
+      })),
+    });
+  }
+
+  request.log.error(error);
+  return reply.code(error.statusCode || 500).send({
+    success: false,
+    message: error.message || "Internal Server Error",
+    errorCode: error.code || "INTERNAL_SERVER_ERROR",
+  });
+});
 
 await registerRoutes(fastify);
 
