@@ -1,0 +1,14 @@
+Application Update
+
+Dear {{candidateName}},
+
+Thank you for your interest in {{jobTitle}} at {{companyName}}.
+
+After careful review, we are moving forward with other candidates for this role.
+
+We appreciate the time you invested and will keep your profile in consideration for suitable opportunities in the future.
+
+For any query, you can reach us at {{hrEmail}}.
+
+We wish you all the best.
+{{companyName}} Talent Acquisition Team

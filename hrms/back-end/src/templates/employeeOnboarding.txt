@@ -1,0 +1,19 @@
+Welcome to {{orgName}}
+
+Hello {{employeeName}},
+
+Your employee account has been created in the {{orgName}} HRMS portal.
+
+Login details:
+Login URL: {{loginUrl}}
+Email: {{email}}
+Temporary Password: {{password}}
+
+For security reasons, you will be required to change your password on first login.
+
+After logging in, please complete your profile details.
+
+Regards,
+{{orgName}} HR Team
+
+(This is an automated email, please do not reply.)

@@ -1,0 +1,17 @@
+Offer Letter
+
+Dear {{candidateName}},
+
+We are pleased to offer you the position of {{jobTitle}} at {{companyName}}.
+
+Role: {{jobTitle}}
+Employment Type: {{employmentType}}
+Location: {{location}}
+Compensation: {{expectedCTC}}
+
+Our HR team will contact you for next steps including documentation and onboarding.
+
+For any queries, write to {{hrEmail}}.
+
+Regards,
+{{companyName}} Talent Acquisition Team

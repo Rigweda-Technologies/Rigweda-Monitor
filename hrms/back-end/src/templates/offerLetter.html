@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offer Letter</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
+    <div style="max-width: 680px; margin: 0 auto; padding: 24px;">
+      <h2 style="margin: 0 0 12px;">Offer Letter</h2>
+      <p>Dear {{candidateName}},</p>
+      <p>
+        We are pleased to offer you the position of <strong>{{jobTitle}}</strong> at
+        <strong>{{companyName}}</strong>.
+      </p>
+      <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px;">
+        <p style="margin: 0 0 6px;"><strong>Role:</strong> {{jobTitle}}</p>
+        <p style="margin: 0 0 6px;"><strong>Employment Type:</strong> {{employmentType}}</p>
+        <p style="margin: 0 0 6px;"><strong>Location:</strong> {{location}}</p>
+        <p style="margin: 0;"><strong>Compensation:</strong> {{expectedCTC}}</p>
+      </div>
+      <p style="margin-top: 16px;">
+        Our HR team will contact you for next steps including documentation and onboarding.
+      </p>
+      <p>
+        For any queries, write to <a href="mailto:{{hrEmail}}">{{hrEmail}}</a>.
+      </p>
+      <p>
+        Regards,<br />
+        {{companyName}} Talent Acquisition Team
+      </p>
+    </div>
+  </body>
+  </html>
