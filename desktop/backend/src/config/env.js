@@ -35,6 +35,9 @@ export const getEnv = () => ({
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
   databaseUrl: process.env.DATABASE_URL,
   databaseSsl: ["1", "true", "yes"].includes(String(process.env.DATABASE_SSL || "").toLowerCase()),
+  databaseSslRejectUnauthorized: ["1", "true", "yes"].includes(
+    String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || "").toLowerCase()
+  ),
   databasePoolMax: Number(process.env.DATABASE_POOL_MAX || 10),
   databaseStatementTimeoutMs: Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS || 30000),
   databaseQueryTimeoutMs: Number(process.env.DATABASE_QUERY_TIMEOUT_MS || 35000),
