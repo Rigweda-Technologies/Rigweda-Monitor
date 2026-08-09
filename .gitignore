@@ -29,6 +29,7 @@ Thumbs.db
 
 # Node and tool caches from older experiments
 node_modules/
+hrms/back-end/node_modules/
 coverage/
 .nyc_output/
 .cache/
@@ -46,3 +47,140 @@ coverage/
 .vite/
 .vscode-test/
 *.tsbuildinfo
+
+
+# ==========================
+# Dependencies
+# ==========================
+node_modules/
+
+# ==========================
+# Environment Variables
+# ==========================
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# ==========================
+# Logs
+# ==========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================
+# Runtime Files
+# ==========================
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ==========================
+# Build Output
+# ==========================
+dist/
+build/
+coverage/
+.nyc_output/
+
+# ==========================
+# Temporary Files
+# ==========================
+tmp/
+temp/
+.cache/
+
+# ==========================
+# Uploads
+# ==========================
+uploads/
+public/uploads/
+
+# ==========================
+# Database
+# ==========================
+*.sqlite
+*.sqlite3
+*.db
+
+# ==========================
+# IDE
+# ==========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==========================
+# OS Files
+# ==========================
+.DS_Store
+Thumbs.db
+
+# ==========================
+# Fastify
+# ==========================
+.fastify/
+
+# ==========================
+# Test Reports
+# ==========================
+coverage/
+reports/
+
+# ==========================
+# Package Managers
+# ==========================
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Uncomment ONE of the above lock files only if you don't want to commit it.
+# Normally, you SHOULD commit the lock file.
+
+# ==========================
+# Docker
+# ==========================
+.dockerignore
+docker-compose.override.yml
+
+# ==========================
+# PM2
+# ==========================
+.pm2/
+ecosystem.config.local.js
+
+# ==========================
+# SSL Certificates
+# ==========================
+*.pem
+*.key
+*.crt
+
+# ==========================
+# Secrets
+# ==========================
+secrets/
+config/secrets.js
+
+# ==========================
+# Cloud Credentials
+# ==========================
+*.json
+service-account.json
+firebase-adminsdk*.json
+gcp-key.json
+aws-credentials.json
+
+# ==========================
+# Misc
+# ==========================
+*.tgz
+*.zip
+*.tar.gz

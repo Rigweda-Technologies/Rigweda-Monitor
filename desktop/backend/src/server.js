@@ -1,41 +1,97 @@
+import "dotenv/config";
 import Fastify from "fastify";
+import multipart from "@fastify/multipart";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
+import { validateEnv, getEnv } from "./config/env.js";
+import { registerRoutes } from "./routes.js";
+import { authenticateRequest } from "./middleware/auth.js";
+
+validateEnv();
+const env = getEnv();
 
 const fastify = Fastify({
   logger: true,
 });
 
-fastify.get("/health", async () => {
-  return {
-    ok: true,
-    service: "rigweda-monitor-backend",
-    timestamp: new Date().toISOString(),
-  };
+await fastify.register(multipart, {
+  attachFieldsToBody: "keyValues",
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+  },
 });
 
-fastify.post("/echo", async (request, reply) => {
-  const body = request.body ?? {};
+await fastify.register(swagger, {
+  openapi: {
+    info: {
+      title: "Rigweda Monitor API",
+      description: "Employee monitoring backend APIs",
+      version: "1.0.0",
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
+    servers: [
+      {
+        url: "http://localhost:3000",
+      },
+    ],
+  },
+});
 
-  return reply.code(200).send({
-    received: body,
+await fastify.register(swaggerUi, {
+  routePrefix: "/docs",
+  uiConfig: {
+    docExpansion: "list",
+    deepLinking: false,
+  },
+  staticCSP: true,
+  transformSpecificationClone: true,
+});
+
+fastify.decorate("authenticateRequest", authenticateRequest);
+
+fastify.setErrorHandler((error, request, reply) => {
+  if (error.validation) {
+    return reply.code(400).send({
+      success: false,
+      message: "Validation failed",
+      errorCode: "VALIDATION_ERROR",
+      errors: error.validation.map((item) => ({
+        field: item.instancePath ? item.instancePath.replace(/^\//, "").replaceAll("/", ".") : "body",
+        message: item.message,
+        keyword: item.keyword,
+      })),
+    });
+  }
+
+  request.log.error(error);
+  return reply.code(error.statusCode || 500).send({
+    success: false,
+    message: error.message || "Internal Server Error",
+    errorCode: error.code || "INTERNAL_SERVER_ERROR",
   });
 });
 
-fastify.setNotFoundHandler(async (request, reply) => {
-  return reply.code(404).send({
-    error: "Not Found",
-    path: request.url,
-  });
-});
+await registerRoutes(fastify);
 
 const start = async () => {
-  const port = Number(process.env.PORT || 3000);
-  const host = process.env.HOST || "0.0.0.0";
-
   try {
-    await fastify.listen({ port, host });
-    fastify.log.info(`Server listening on http://${host}:${port}`);
-  } catch (err) {
-    fastify.log.error(err);
+    await fastify.listen({ port: env.port, host: env.host });
+    fastify.log.info(`Server listening on http://${env.host}:${env.port}`);
+  } catch (error) {
+    fastify.log.error(error);
     process.exit(1);
   }
 };
