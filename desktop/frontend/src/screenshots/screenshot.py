@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import signal
 import sqlite3
 import sys
 import threading
+import traceback
 import urllib.error
 import urllib.request
 import uuid
@@ -20,6 +22,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mss import MSS
 from mss.tools import to_png
+from PIL import ImageGrab
 
 try:
     from app.env import load_app_env
@@ -37,10 +40,30 @@ QUEUE_DB = DATA_ROOT / "screenshot_queue.db"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 AUTH_FILE = DATA_ROOT / "auth.json"
 LEGACY_SCREENSHOT_ROOT = Path(r"C:\Rigweda_monitor\screenshots")
+LEGACY_DATA_ROOT = Path(r"C:\Rigweda_monitor\data")
+MONITOR_LOCK_FILE = DATA_ROOT / "screenshot_monitor.lock"
 
 stop_event = threading.Event()
 capture_lock = threading.Lock()
 upload_lock = threading.Lock()
+process_lock_handle = None
+
+
+def _decode_jwt_payload(token: str) -> dict:
+    try:
+        payload_part = token.split(".")[1]
+        payload_part += "=" * (-len(payload_part) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload_part.encode("ascii")).decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def _token_expiry(token: str) -> int:
+    payload = _decode_jwt_payload(token)
+    try:
+        return int(payload.get("exp") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def get_interval_ms() -> int:
@@ -101,17 +124,100 @@ def get_access_token() -> str | None:
         if value:
             return value
 
-    try:
-        payload = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    auth_files = [
+        AUTH_FILE,
+        LEGACY_DATA_ROOT / "auth.json",
+        DATA_ROOT / "auth.json",
+    ]
+    candidates: list[tuple[int, float, str, Path]] = []
+
+    for auth_file in dict.fromkeys(auth_files):
+        try:
+            payload = json.loads(auth_file.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            continue
+
+        token = str(payload.get("token") or "").strip()
+        if token.lower().startswith("bearer "):
+            token = token.split(" ", 1)[1].strip()
+        if not token:
+            continue
+
+        try:
+            modified_at = auth_file.stat().st_mtime
+        except OSError:
+            modified_at = 0
+        candidates.append((_token_expiry(token), modified_at, token, auth_file))
+
+    if not candidates:
+        print(
+            f"No auth token found. Checked: {', '.join(str(path) for path in dict.fromkeys(auth_files))}",
+            file=sys.stderr,
+            flush=True,
+        )
         return None
 
-    token = str(payload.get("token") or "").strip()
-    if token.lower().startswith("bearer "):
-        token = token.split(" ", 1)[1].strip()
-    if token:
-        return token
-    return None
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    expiry, _modified_at, token, auth_file = candidates[0]
+    now = int(datetime.now(UTC).timestamp())
+    if expiry and expiry <= now:
+        print(f"Saved auth token is expired in {auth_file}. Please log in again.", file=sys.stderr, flush=True)
+        return None
+
+    return token
+
+
+def acquire_process_lock() -> bool:
+    global process_lock_handle
+
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    try:
+        process_lock_handle = MONITOR_LOCK_FILE.open("x", encoding="utf-8")
+        process_lock_handle.write(str(os.getpid()))
+        process_lock_handle.flush()
+        return True
+    except FileExistsError:
+        try:
+            pid = int(MONITOR_LOCK_FILE.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            pid = 0
+
+        if pid:
+            result = subprocess_run_process_exists(pid)
+            if result:
+                print(f"Screenshot monitor is already running with PID {pid}.", flush=True)
+                return False
+
+        MONITOR_LOCK_FILE.unlink(missing_ok=True)
+        process_lock_handle = MONITOR_LOCK_FILE.open("x", encoding="utf-8")
+        process_lock_handle.write(str(os.getpid()))
+        process_lock_handle.flush()
+        return True
+
+
+def subprocess_run_process_exists(pid: int) -> bool:
+    import subprocess
+
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p) {{ 'yes' }}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return "yes" in result.stdout.lower()
+
+
+def release_process_lock() -> None:
+    global process_lock_handle
+    if process_lock_handle:
+        process_lock_handle.close()
+        process_lock_handle = None
+    MONITOR_LOCK_FILE.unlink(missing_ok=True)
 
 
 def get_device_id() -> str:
@@ -298,18 +404,27 @@ def capture_screenshot() -> Path | None:
 
         folder_path.mkdir(parents=True, exist_ok=True)
 
-        with MSS() as screen_capture:
-            monitor = screen_capture.monitors[0]
-            raw_image = screen_capture.grab(monitor)
-            to_png(raw_image.rgb, raw_image.size, output=str(file_path))
+        try:
+            with MSS() as screen_capture:
+                monitor = screen_capture.monitors[0]
+                raw_image = screen_capture.grab(monitor)
+                to_png(raw_image.rgb, raw_image.size, output=str(file_path))
+                width = raw_image.width
+                height = raw_image.height
+        except Exception:
+            print("MSS screenshot capture failed; retrying with Pillow ImageGrab.", file=sys.stderr, flush=True)
+            traceback.print_exc()
+            image = ImageGrab.grab(all_screens=True)
+            image.save(file_path)
+            width, height = image.size
 
         sha256 = hash_file(file_path)
         insert_queue_record(
             screenshot_id=screenshot_id,
             captured_at=now.isoformat().replace("+00:00", "Z"),
             file_path=file_path,
-            width=raw_image.width,
-            height=raw_image.height,
+            width=width,
+            height=height,
             sha256=sha256,
             size_bytes=file_path.stat().st_size,
         )
@@ -319,6 +434,7 @@ def capture_screenshot() -> Path | None:
     except Exception as error:
         print("Failed to capture screenshot:", file=sys.stderr, flush=True)
         print(error, file=sys.stderr, flush=True)
+        traceback.print_exc()
         return None
     finally:
         capture_lock.release()
@@ -672,6 +788,9 @@ def upload_pending_screenshots() -> None:
 def start_screenshot_monitor() -> None:
     interval_seconds = get_interval_ms() / 1000
     print("Screenshot monitor started", flush=True)
+    print(f"Data root: {DATA_ROOT}", flush=True)
+    print(f"Screenshot root: {SCREENSHOT_ROOT}", flush=True)
+    print(f"Backend URL: {get_backend_base_url()}", flush=True)
 
     queue_existing_screenshots()
     upload_pending_screenshots()
@@ -701,13 +820,26 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.once:
-        upload_pending_screenshots()
-        captured = capture_screenshot()
-        upload_pending_screenshots()
-        return 0 if captured else 1
+        if not acquire_process_lock():
+            return 0
+        try:
+            upload_pending_screenshots()
+            captured = capture_screenshot()
+            upload_pending_screenshots()
+            return 0 if captured else 1
+        finally:
+            release_process_lock()
 
     if args.upload_once:
-        upload_pending_screenshots()
+        if not acquire_process_lock():
+            return 0
+        try:
+            upload_pending_screenshots()
+            return 0
+        finally:
+            release_process_lock()
+
+    if not acquire_process_lock():
         return 0
 
     signal.signal(signal.SIGINT, stop_screenshot_monitor)
@@ -716,8 +848,11 @@ def main() -> int:
     stdin_thread = threading.Thread(target=listen_for_stop_command, daemon=True)
     stdin_thread.start()
 
-    start_screenshot_monitor()
-    return 0
+    try:
+        start_screenshot_monitor()
+        return 0
+    finally:
+        release_process_lock()
 
 
 if __name__ == "__main__":
