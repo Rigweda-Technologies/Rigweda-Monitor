@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 import tkinter as tk
+import urllib.error
+import urllib.request
 
 import customtkinter as ctk
+from PIL import Image
 
 from app.auth import ensure_service_running, login_to_hrms, register_startup
 from app.screenshot_monitor import start_screenshot_monitor
@@ -47,6 +51,8 @@ class LoginApp:
 
         self.saved_session = saved_session
         self.hide_after_resume = hide_after_resume
+        self.profile_photo_image: ctk.CTkImage | None = None
+        self.login_widgets: list[tk.Widget] = []
 
         self.root = ctk.CTk()
         self.root.title("MyApp Sign In")
@@ -125,6 +131,7 @@ class LoginApp:
             anchor="w",
         )
         self.username_label.pack(fill="x")
+        self.login_widgets.append(self.username_label)
 
         self.username_entry = ctk.CTkEntry(
             content,
@@ -140,6 +147,7 @@ class LoginApp:
         self.username_entry.pack(fill="x", pady=(8, 16))
         self.username_entry.insert(0, "shivaramakrishna@luvetha.com")
         self._bind_entry_state(self.username_entry)
+        self.login_widgets.append(self.username_entry)
 
         self.password_label = ctk.CTkLabel(
             content,
@@ -149,9 +157,11 @@ class LoginApp:
             anchor="w",
         )
         self.password_label.pack(fill="x")
+        self.login_widgets.append(self.password_label)
 
         password_row = ctk.CTkFrame(content, fg_color="transparent")
         password_row.pack(fill="x", pady=(8, 10))
+        self.login_widgets.append(password_row)
 
         self.password_entry = ctk.CTkEntry(
             password_row,
@@ -185,6 +195,7 @@ class LoginApp:
 
         options_row = ctk.CTkFrame(content, fg_color="transparent")
         options_row.pack(fill="x", pady=(4, 16))
+        self.login_widgets.append(options_row)
 
         self.remember_var = tk.BooleanVar(value=True)
         self.remember_checkbox = ctk.CTkCheckBox(
@@ -220,14 +231,41 @@ class LoginApp:
             border_color=COLORS["entry_border"],
         )
 
+        self.profile_header = ctk.CTkFrame(self.employee_frame, fg_color="transparent")
+        self.profile_header.pack(fill="x", padx=16, pady=(14, 8))
+
+        self.profile_avatar_label = ctk.CTkLabel(
+            self.profile_header,
+            text="",
+            width=64,
+            height=64,
+            corner_radius=32,
+            fg_color="#2c2940",
+            text_color=COLORS["gold"],
+            font=("Segoe UI", 18, "bold"),
+        )
+        self.profile_avatar_label.pack(side="left")
+
+        profile_title_frame = ctk.CTkFrame(self.profile_header, fg_color="transparent")
+        profile_title_frame.pack(side="left", fill="x", expand=True, padx=(14, 0))
+
         self.employee_name_label = ctk.CTkLabel(
-            self.employee_frame,
+            profile_title_frame,
             text="",
             text_color=COLORS["text"],
             font=("Segoe UI", 15, "bold"),
             anchor="w",
         )
-        self.employee_name_label.pack(fill="x", padx=16, pady=(12, 2))
+        self.employee_name_label.pack(fill="x")
+
+        self.employee_role_label = ctk.CTkLabel(
+            profile_title_frame,
+            text="",
+            text_color=COLORS["text_muted"],
+            font=("Segoe UI", 10),
+            anchor="w",
+        )
+        self.employee_role_label.pack(fill="x", pady=(3, 0))
 
         self.employee_details_label = ctk.CTkLabel(
             self.employee_frame,
@@ -237,7 +275,7 @@ class LoginApp:
             justify="left",
             anchor="w",
         )
-        self.employee_details_label.pack(fill="x", padx=16, pady=(0, 12))
+        self.employee_details_label.pack(fill="x", padx=16, pady=(0, 14))
 
         self.signin_button = ctk.CTkButton(
             content,
@@ -278,21 +316,79 @@ class LoginApp:
     def _set_status(self, message: str, color: str) -> None:
         self.status_label.configure(text=message, text_color=color)
 
+    def _hide_login_controls(self) -> None:
+        for widget in self.login_widgets:
+            widget.pack_forget()
+
+    def _initials_for_employee(self, employee: dict) -> str:
+        name = str(employee.get("name") or employee.get("email") or "Employee")
+        parts = [part for part in name.replace("@", " ").replace(".", " ").split() if part]
+        initials = "".join(part[0].upper() for part in parts[:2])
+        return initials or "E"
+
+    def _load_profile_photo(self, image_url: str | None) -> ctk.CTkImage | None:
+        if not image_url:
+            return None
+
+        try:
+            with urllib.request.urlopen(str(image_url), timeout=10) as response:
+                image_data = response.read()
+            image = Image.open(BytesIO(image_data)).convert("RGBA")
+        except (OSError, urllib.error.URLError, TimeoutError, ValueError):
+            return None
+
+        image.thumbnail((128, 128))
+        self.profile_photo_image = ctk.CTkImage(light_image=image, dark_image=image, size=(64, 64))
+        return self.profile_photo_image
+
+    def _format_profile_value(self, value: object) -> str | None:
+        if value in (None, "", [], {}):
+            return None
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        text = str(value).strip()
+        if not text or text.lower() == "none":
+            return None
+        if "T" in text and text.endswith("Z"):
+            return text.split("T", 1)[0]
+        return text
+
     def _show_employee_details(self, session: dict | None) -> None:
         employee = session.get("employee", {}) if isinstance(session, dict) else {}
-        details = [
-            ("Email", employee.get("email")),
+        role = employee.get("role") or employee.get("designation")
+        detail_fields = [
+            ("Email", employee.get("email") or session.get("email") if isinstance(session, dict) else None),
             ("Employee ID", employee.get("employeeId")),
+            ("Phone", employee.get("phone")),
             ("Department", employee.get("department")),
             ("Designation", employee.get("designation")),
             ("Organization", employee.get("organization")),
+            ("Employment Type", employee.get("employmentType")),
+            ("Status", employee.get("status")),
+            ("Lifecycle", employee.get("employmentLifecycleStatus")),
+            ("Manager", employee.get("manager")),
+            ("Shift", employee.get("shift")),
+            ("Date of Joining", employee.get("dateOfJoining")),
+            ("Profile Completed", employee.get("profileCompleted")),
         ]
-        detail_text = "\n".join(f"{label}: {value}" for label, value in details if value)
+        detail_text = "\n".join(
+            f"{label}: {formatted}"
+            for label, value in detail_fields
+            if (formatted := self._format_profile_value(value))
+        )
 
-        self.title_label.configure(text="Monitoring Active")
-        self.subtitle_label.configure(text="This window will hide automatically in 30 seconds.")
+        self._hide_login_controls()
+        self.title_label.configure(text="Profile")
+        self.subtitle_label.configure(text="Monitoring is active. This window will hide automatically in 30 seconds.")
         self.employee_name_label.configure(text=str(employee.get("name") or "Employee"))
-        self.employee_details_label.configure(text=detail_text or "Employee details saved.")
+        self.employee_role_label.configure(text=str(role or "Employee"))
+        self.employee_details_label.configure(text=detail_text or "Profile details are not available for this token.")
+
+        photo = self._load_profile_photo(employee.get("profileImage"))
+        if photo:
+            self.profile_avatar_label.configure(image=photo, text="")
+        else:
+            self.profile_avatar_label.configure(image=None, text=self._initials_for_employee(employee))
 
         if not self.employee_frame.winfo_ismapped():
             self.employee_frame.pack(fill="x", pady=(0, 14), before=self.signin_button)
