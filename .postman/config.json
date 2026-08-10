@@ -1,0 +1,15 @@
+{
+  "workspace": {
+    "id": "79c1cb50-dbe6-40db-a0f1-05fc26113051"
+  },
+  "entities": {
+    "environments": [],
+    "flows": [],
+    "globals": [],
+    "mocks": [],
+    "specs": [
+      "../rigweda/backend/src/docs/openapi.yaml"
+    ],
+    "collections": []
+  }
+}
