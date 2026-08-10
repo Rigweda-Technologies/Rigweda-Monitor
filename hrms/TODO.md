@@ -1,4 +1,4 @@
-# Upanaya CLI Attendance UI Enhancement Plan
+# Rigweda CLI Attendance UI Enhancement Plan
 
 **Current Progress: 6/8 ✅** (Modal logic, cells Pressable, legend, styles, colors matched web, App.tsx reviewed - no major changes needed as attendance icon already perfect w/ initialTab)
 
@@ -41,4 +41,3 @@
 **Next Step:** User confirm → Execute edits step-by-step, updating TODO.md after each.
 
 **Instructions:** After each completed step, I'll update this file with progress. When all done, delete or mark complete.
-

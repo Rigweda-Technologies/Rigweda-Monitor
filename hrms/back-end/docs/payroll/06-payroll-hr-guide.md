@@ -1,6 +1,6 @@
 # 06. Payroll HR Guide (Fresher-Friendly)
 
-This guide is written for new HR users who are running payroll in Upanaya for the first time.
+This guide is written for new HR users who are running payroll in Rigweda HRMS for the first time.
 
 ## 1. What You Need Before Running Payroll
 

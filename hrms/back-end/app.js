@@ -118,7 +118,7 @@ if (shouldExposeSwagger) {
 
 app.get("/", (req, res) => {
   res.json({
-    message: "Upanaya HRMS API is running",
+    message: "Rigweda HRMS API is running",
     docs: "/swagger-ui",
     health: "/health"
   });
