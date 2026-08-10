@@ -36,7 +36,12 @@ def _is_process_running(pid: int) -> bool:
         check=False,
     )
     command_line = result.stdout.lower()
-    return "rigwedamonitor" in command_line or "screenshot.py" in command_line
+
+    if getattr(sys, "frozen", False):
+        return "rigwedamonitor" in command_line or "screenshot.py" in command_line
+
+    expected_script = str(SCREENSHOT_SCRIPT).lower()
+    return "screenshot.py" in command_line and expected_script in command_line
 
 
 def _existing_monitor_is_running() -> bool:

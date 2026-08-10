@@ -10,7 +10,7 @@ const buildCloudinaryPublicId = ({ employeeId, dateFolder, originalFileName }) =
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  return `${employeeId}/${dateFolder}/screenshots/${safeFileName}`;
+  return safeFileName;
 };
 
 const resolveDateFolder = (capturedAt) =>
@@ -24,10 +24,9 @@ const safePublicIdPart = (value) =>
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-const buildBatchFolder = ({ organizationId, employeeId, deviceId, capturedAt }) => {
+const buildBatchFolder = ({ employeeId, capturedAt }) => {
   const dateFolder = resolveDateFolder(capturedAt);
-  const orgPart = organizationId || "org_unknown";
-  return `rigweda-monitor/${orgPart}/${employeeId}/${deviceId}/${dateFolder}`;
+  return `rigweda-monitor/${employeeId}/${dateFolder}`;
 };
 
 const buildBatchPublicId = ({ capturedAt, clientScreenshotId, originalFileName, sha256 }) => {
@@ -57,7 +56,7 @@ export const screenshotService = {
       originalFileName,
       employeeId: payload.employeeId,
     });
-    const folder = `${payload.employeeId}/${dateFolder}/screenshots`;
+    const folder = `rigweda-monitor/${payload.employeeId}/${dateFolder}`;
 
     console.log("Uploading screenshot to Cloudinary with publicId:", publicId, "and folder:", folder);
     const cloudinaryResult = await uploadBufferToCloudinary({
@@ -124,9 +123,7 @@ export const screenshotService = {
       });
 
       const folder = buildBatchFolder({
-        organizationId,
         employeeId,
-        deviceId,
         capturedAt: item.capturedAt,
       });
       const publicId = buildBatchPublicId(item);

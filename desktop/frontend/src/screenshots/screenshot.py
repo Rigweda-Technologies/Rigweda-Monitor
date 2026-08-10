@@ -21,7 +21,12 @@ from dotenv import load_dotenv
 from mss import MSS
 from mss.tools import to_png
 
-load_dotenv()
+try:
+    from app.env import load_app_env
+except ImportError:
+    load_dotenv()
+else:
+    load_app_env()
 
 DEFAULT_INTERVAL_MS = 60_000
 DEFAULT_BATCH_SIZE = 30

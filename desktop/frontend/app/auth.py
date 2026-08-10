@@ -13,9 +13,9 @@ import urllib.request
 from ctypes import wintypes
 from pathlib import Path
 
-from dotenv import load_dotenv
+from app.env import load_app_env
 
-load_dotenv()
+load_app_env()
 
 DEFAULT_LOGIN_URL = "https://rigweda-hrms-backend.vercel.app/api/users/login"
 DEFAULT_HRMS_API_URL = "https://rigweda-hrms-backend.vercel.app/api"

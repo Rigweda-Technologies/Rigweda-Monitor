@@ -53,6 +53,8 @@ class LoginApp:
         self.hide_after_resume = hide_after_resume
         self.profile_photo_image: ctk.CTkImage | None = None
         self.login_widgets: list[tk.Widget] = []
+        self.hide_countdown_seconds = 30
+        self.hide_countdown_after_id: str | None = None
 
         self.root = ctk.CTk()
         self.root.title("MyApp Sign In")
@@ -379,7 +381,6 @@ class LoginApp:
 
         self._hide_login_controls()
         self.title_label.configure(text="Profile")
-        self.subtitle_label.configure(text="Monitoring is active. This window will hide automatically in 30 seconds.")
         self.employee_name_label.configure(text=str(employee.get("name") or "Employee"))
         self.employee_role_label.configure(text=str(role or "Employee"))
         self.employee_details_label.configure(text=detail_text or "Profile details are not available for this token.")
@@ -393,7 +394,31 @@ class LoginApp:
         if not self.employee_frame.winfo_ismapped():
             self.employee_frame.pack(fill="x", pady=(0, 14), before=self.signin_button)
 
+    def _start_hide_countdown(self, seconds: int = 30) -> None:
+        if self.hide_countdown_after_id:
+            self.root.after_cancel(self.hide_countdown_after_id)
+            self.hide_countdown_after_id = None
+
+        self.hide_countdown_seconds = seconds
+        self._tick_hide_countdown()
+
+    def _tick_hide_countdown(self) -> None:
+        self.subtitle_label.configure(
+            text=f"Monitoring is active. This window will hide automatically in {self.hide_countdown_seconds} seconds."
+        )
+
+        if self.hide_countdown_seconds <= 0:
+            self.hide_countdown_after_id = None
+            self._hide_application()
+            return
+
+        self.hide_countdown_seconds -= 1
+        self.hide_countdown_after_id = self.root.after(1_000, self._tick_hide_countdown)
+
     def _hide_application(self) -> None:
+        if self.hide_countdown_after_id:
+            self.root.after_cancel(self.hide_countdown_after_id)
+            self.hide_countdown_after_id = None
         self.root.withdraw()
 
     def _start_monitoring(self, session: dict | None, *, register_windows_startup: bool) -> bool:
@@ -416,13 +441,13 @@ class LoginApp:
         self._show_employee_details(session)
         self._set_status("Login successful. Screenshot monitor is running.", COLORS["success"])
         self.root.update_idletasks()
-        self.root.after(30_000, self._hide_application)
+        self._start_hide_countdown(30)
         return True
 
     def _resume_saved_session(self) -> None:
         self.signin_button.configure(state="disabled", text="Monitoring Active")
         if self._start_monitoring(self.saved_session, register_windows_startup=True) and self.hide_after_resume:
-            self.root.after(1_000, self._hide_application)
+            self._start_hide_countdown(1)
 
     def _handle_login(self) -> None:
         username = self.username_entry.get().strip()
