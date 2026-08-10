@@ -116,6 +116,14 @@ if (shouldExposeSwagger) {
 /*                               ROUTES                                       */
 /* -------------------------------------------------------------------------- */
 
+app.get("/", (req, res) => {
+  res.json({
+    message: "Upanaya HRMS API is running",
+    docs: "/swagger-ui",
+    health: "/health"
+  });
+});
+
 // Health check
 app.get("/health", (req, res) => {
   const metrics = getMetricsSnapshot();
