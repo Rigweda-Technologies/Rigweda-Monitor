@@ -64,7 +64,7 @@ await fastify.register(swagger, {
     ],
     servers: [
       {
-        url: env.rigwedaBackendApiBaseUrl,
+        url: env.rigwedaBackendApiBaseUrl || `http://${env.host}:${env.port}`,
       },
     ],
   },

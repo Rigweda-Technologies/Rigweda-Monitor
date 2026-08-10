@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const dns = require("dns");
 
 const ensureCriticalIndexes = async () => {
   const modelLoaders = [
@@ -41,6 +42,11 @@ const ensureCriticalIndexes = async () => {
 
 const connectDB = async () => {
   try {
+
+    dns.setServers([
+      "8.8.8.8",
+      "8.8.4.4"
+    ]);
     const mongoUri = process.env.MONGO_URI;
 
     if (!mongoUri) {

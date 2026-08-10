@@ -29,6 +29,8 @@ Use the same date-based folder for `jpeg`, `jpg`, `png`, and `webp`.
 - `POST /api/screenshots`
 - `POST /api/screenshot-batches/uploads`
 - `POST /api/screenshot-batches/:batchId/complete`
+- `POST /api/activity-events/batch`
+- `GET /api/activity/employees?date=YYYY-MM-DD`
 
 ## Scalable Screenshot Upload Flow
 
@@ -44,6 +46,8 @@ The backend creates these tables automatically on startup:
 
 - `monitor_screenshot_batches`
 - `monitor_screenshots`
+- `monitor_activity_events`
+- `monitor_device_presence`
 
 Required backend env:
 

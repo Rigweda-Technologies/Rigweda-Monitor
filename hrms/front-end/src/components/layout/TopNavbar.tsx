@@ -49,6 +49,10 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   const roles = useMemo(() => profile?.roles || [], [profile]);
   const activeRole = useMemo(() => profile?.activeRole || roles?.[0] || null, [profile, roles]);
   const organizationName = profile?.organization?.name || profile?.activeOrganization?.name || "Organization";
+  const profileImageUrl = /^https?:\/\//i.test(String(profile?.profileImage || "")) ||
+    /^data:image\//i.test(String(profile?.profileImage || ""))
+    ? profile?.profileImage
+    : undefined;
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
@@ -262,7 +266,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 pl-4 border-l border-border">
             <Avatar className="w-9 h-9">
-              <AvatarImage src={profile?.profileImage || undefined} />
+              <AvatarImage src={profileImageUrl} />
               <AvatarFallback>
                {profile?.firstName && profile?.lastName
               ? `${profile.firstName[0]}${profile.lastName[0]}`

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -24,4 +25,20 @@ def load_app_env() -> None:
 
     for path in candidates:
         if path.exists():
-            load_dotenv(path, override=False)
+            # The app-specific .env must win over stale Windows environment values.
+            load_dotenv(path, override=True)
+
+
+def writable_runtime_path(configured_value: str, fallback_name: str) -> Path:
+    """Return a writable runtime directory without requiring administrator access."""
+    configured_path = Path(os.path.expandvars(configured_value)).expanduser()
+    try:
+        configured_path.mkdir(parents=True, exist_ok=True)
+        probe = configured_path / f".rigweda-write-probe-{os.getpid()}"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return configured_path
+    except OSError:
+        fallback = Path(__file__).resolve().parents[1] / ".monitor_runtime" / fallback_name
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback

@@ -46,13 +46,9 @@ const defaultAllowedOrigins = [
   "http://localhost:8080",
   "http://localhost:8081",
   "http://localhost:3002",
-  "http://localhost:3001",
-  "https://upanaya.vercel.app",
-  "https://upanaya-new.vercel.app",
-  "https://upanayahr.com",
-  "https://www.upanayahr.com"
+  "http://localhost:3001"
 ];
-const configuredAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "")
+const configuredAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
@@ -188,6 +184,7 @@ app.use("/api/projects", require("./src/modules/projects/project.routes"));
 app.use("/api/hiring", require("./src/modules/hiring/hiring.routes"));
 app.use("/api/dashboard", require("./src/modules/dashboard/dashboard.routes"));
 app.use("/api/payroll", require("./src/modules/payroll/payrollAttendance.routes"));
+app.use("/api/activity", require("./src/modules/activity/activity.routes"));
 
 const shouldRunSchedulerInApi = process.env.ENABLE_JOB_SCHEDULER === "true";
 
