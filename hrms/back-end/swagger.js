@@ -1,7 +1,7 @@
 module.exports = {
   openapi: "3.0.0",
   info: {
-    title: "Upanaya HRMS API",
+    title: "Rigweda HRMS API",
     description: "Multi-Org HRMS Backend APIs",
     version: "1.0.0"
   },

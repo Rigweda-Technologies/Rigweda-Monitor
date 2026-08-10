@@ -14,7 +14,7 @@ const slides = [
   {
     title: "One Workspace For Your Entire Team",
     description:
-      "Upanaya HRMS unifies employee data, attendance, leaves, approvals, and documentation in one reliable system.",
+      "Rigweda HRMS unifies employee data, attendance, leaves, approvals, and documentation in one reliable system.",
     metric: "42% faster HR operations"
   },
   {
@@ -333,7 +333,7 @@ const Login = () => {
 
         <div className="relative z-10 w-full p-14 flex flex-col">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-blue-100/90">Upanaya HRMS Platform</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-blue-100/90">Rigweda HRMS Platform</p>
             <h1 className="mt-5 text-4xl font-semibold leading-tight max-w-[18ch]">
               Human resources, reimagined for real operations
             </h1>
@@ -392,7 +392,7 @@ const Login = () => {
         <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8">
           <div className="mb-6">
             <p className="text-xs font-medium uppercase tracking-[0.22em] text-blue-600">Welcome Back</p>
-            <h2 className="text-2xl font-semibold mt-2 text-slate-900">Sign in to Upanaya HRMS</h2>
+            <h2 className="text-2xl font-semibold mt-2 text-slate-900">Sign in to Rigweda HRMS</h2>
             <p className="text-sm text-slate-500 mt-2">Manage attendance, leaves, approvals, and people operations in one place.</p>
           </div>
 

@@ -15,7 +15,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 
   const title =
     remoteMessage?.notification?.title ||
-    String(remoteMessage?.data?.title || 'Upanaya');
+    String(remoteMessage?.data?.title || 'Rigweda');
   const body =
     remoteMessage?.notification?.body ||
     String(remoteMessage?.data?.body || remoteMessage?.data?.message || 'You have a new notification.');

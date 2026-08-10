@@ -391,7 +391,7 @@ export const Sidebar = memo(({
               className="flex items-center gap-3 px-1 py-1"
             >
               <div className="w-14 h-14 rounded-xl bg-white/8 border border-white/15 flex items-center justify-center overflow-hidden">
-                <img src="/hrms-logo.png" alt="Upanaya logo" className="w-10 h-10 object-contain" />
+                <img src="/hrms-logo.png" alt="Rigweda logo" className="w-10 h-10 object-contain" />
               </div>
               <AnimatePresence>
                 {!effectiveCollapsed && (

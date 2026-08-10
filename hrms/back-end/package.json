@@ -1,7 +1,7 @@
 {
-  "name": "Upanaya",
+  "name": "Rigweda HRMS",
   "version": "1.0.0",
-  "description": "Upanaya is a software where an organization can manage all employees data and payroll",
+  "description": "Rigweda HRMS is a software where an organization can manage all employees data and payroll",
   "license": "ISC",
   "author": "Mahesh Kasarla",
   "type": "commonjs",

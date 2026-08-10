@@ -1,6 +1,6 @@
-# Payroll Technical Documentation (Upanaya)
+# Payroll Technical Documentation (Rigweda HRMS)
 
-This documentation set covers the production payroll stack for Upanaya using a hybrid MongoDB + PostgreSQL architecture for Indian companies (Telangana-first defaults).
+This documentation set covers the production payroll stack for Rigweda HRMS using a hybrid MongoDB + PostgreSQL architecture for Indian companies (Telangana-first defaults).
 
 ## Documents
 

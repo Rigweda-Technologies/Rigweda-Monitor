@@ -176,7 +176,7 @@ function LoginScreen() {
                 <View style={styles.cardTopGloss} pointerEvents="none" />
               <Text style={styles.cardEyebrow}>WELCOME BACK</Text>
 
-              <Text style={styles.cardTitle}>Sign in to Upanaya HRMS</Text>
+              <Text style={styles.cardTitle}>Sign in to Rigweda HRMS</Text>
 
               <Text style={styles.cardSubtitle}>
                 Manage attendance, leaves, approvals, and people operations in one place.
