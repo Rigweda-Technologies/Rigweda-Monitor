@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "262952323700",
+    "project_id": "upanaya-52680",
+    "storage_bucket": "upanaya-52680.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:262952323700:android:5497ff04850969bf001f21",
+        "android_client_info": {
+          "package_name": "com.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNsxatD-qED-TLAK3SW6Lt6hke2gL-oA8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

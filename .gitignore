@@ -172,7 +172,6 @@ config/secrets.js
 # ==========================
 # Cloud Credentials
 # ==========================
-*.json
 service-account.json
 firebase-adminsdk*.json
 gcp-key.json
