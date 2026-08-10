@@ -2,10 +2,8 @@ const router = require("express").Router();
 const auth = require("../../middlewares/auth.middleware");
 const authorize = require("../../middlewares/authorize.middleware");
 const asyncHandler = require("../../middlewares/asyncHandler");
-const controller = require("./agent.controller");
-const screenshotsRoutes = require("./agent.screenshots.routes");
+const controller = require("./agent.screenshots.controller");
 
-router.get("/me", auth, authorize("EMP_SELF_VIEW"), asyncHandler(controller.getMe));
-router.use("/", screenshotsRoutes);
+router.get("/screenshots", auth, authorize("ATTENDANCE_VIEW_ALL"), asyncHandler(controller.listScreenshots));
 
 module.exports = router;

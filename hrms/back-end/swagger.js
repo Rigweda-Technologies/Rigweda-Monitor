@@ -13,6 +13,109 @@ module.exports = {
     }
   ],
 
+  paths: {
+    "/agent/screenshots": {
+      get: {
+        tags: ["Agent"],
+        summary: "List attendance screenshots",
+        description: "Returns check-in and check-out screenshot records for the current organization.",
+        security: [
+          {
+            BearerAuth: []
+          }
+        ],
+        parameters: [
+          {
+            name: "employeeId",
+            in: "query",
+            required: false,
+            schema: { type: "string" }
+          },
+          {
+            name: "dateFrom",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date" }
+          },
+          {
+            name: "dateTo",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date" }
+          },
+          {
+            name: "onlyWithImage",
+            in: "query",
+            required: false,
+            schema: { type: "boolean" }
+          },
+          {
+            name: "page",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, default: 1 }
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 200, default: 50 }
+          }
+        ],
+        responses: {
+          200: {
+            description: "List of screenshots",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    code: { type: "number", example: 200 },
+                    message: { type: "string", example: "Screenshots fetched successfully" },
+                    data: {
+                      type: "object",
+                      properties: {
+                        items: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              screenshotId: { type: "string" },
+                              attendanceId: { type: "string" },
+                              organizationId: { type: "string" },
+                              employeeId: { type: "string" },
+                              employeeName: { type: "string", nullable: true },
+                              employeeCode: { type: "string", nullable: true },
+                              date: { type: "string" },
+                              dateKey: { type: "string" },
+                              action: { type: "string", enum: ["check_in", "check_out"] },
+                              capturedAt: { type: "string", format: "date-time" },
+                              imageUrl: { type: "string", nullable: true },
+                              selfieProvided: { type: "boolean" },
+                              deviceId: { type: "string", nullable: true },
+                              ip: { type: "string", nullable: true },
+                              status: { type: "string", nullable: true },
+                              shiftName: { type: "string", nullable: true },
+                              shiftCode: { type: "string", nullable: true }
+                            }
+                          }
+                        },
+                        page: { type: "integer" },
+                        limit: { type: "integer" },
+                        count: { type: "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+
   components: {
     securitySchemes: {
       BearerAuth: {
