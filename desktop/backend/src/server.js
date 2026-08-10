@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -14,6 +15,23 @@ await initializeDatabase();
 
 const fastify = Fastify({
   logger: true,
+});
+
+await fastify.register(cors, {
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (env.corsOrigins.length === 0) {
+      return callback(null, false);
+    }
+
+    const allowed = env.corsOrigins.some((allowedOrigin) => allowedOrigin === origin);
+    callback(null, allowed);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 
 await fastify.register(multipart, {
