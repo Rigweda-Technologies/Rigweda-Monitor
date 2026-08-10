@@ -64,7 +64,7 @@ await fastify.register(swagger, {
     ],
     servers: [
       {
-        url: "http://localhost:3000",
+        url: env.rigwedaBackendApiBaseUrl,
       },
     ],
   },
