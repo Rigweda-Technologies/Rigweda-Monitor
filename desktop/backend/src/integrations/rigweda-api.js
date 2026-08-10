@@ -16,8 +16,8 @@ const fetchProfileCandidate = async ({ token, path }) => {
 
 export const getEmployeeProfileFromRigweda = async ({ token }) => {
   const attempts = [
-    await fetchProfileCandidate({ token, path: "/api/users/me/profile" }),
     await fetchProfileCandidate({ token, path: "/api/employees/me" }),
+    await fetchProfileCandidate({ token, path: "/api/users/me/profile" }),
   ];
 
   const success = attempts.find((attempt) => attempt.ok);
@@ -32,7 +32,7 @@ export const getEmployeeProfileFromRigweda = async ({ token }) => {
     return null;
   }
 
-  const employeeId = data._id || data.id || data.employeeId || data.userId;
+  const employeeId = data.employeeCode || data._id || data.id || data.employeeId || data.userId;
 
   return {
     employeeId,
