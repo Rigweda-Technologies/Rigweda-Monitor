@@ -65,12 +65,18 @@ def start_screenshot_monitor() -> tuple[bool, str]:
     if getattr(sys, "frozen", False):
         command = [sys.executable, "--screenshot-monitor"]
         working_directory = Path(sys.executable).resolve().parent
+        child_env = {
+            **os.environ,
+            "PYTHONUNBUFFERED": "1",
+            "PYINSTALLER_RESET_ENVIRONMENT": "1",
+        }
     else:
         if not SCREENSHOT_SCRIPT.exists():
             return False, f"Screenshot script is missing: {SCREENSHOT_SCRIPT}"
         python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
         command = [str(python_executable), str(SCREENSHOT_SCRIPT)]
         working_directory = PROJECT_ROOT
+        child_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -79,7 +85,7 @@ def start_screenshot_monitor() -> tuple[bool, str]:
         process = subprocess.Popen(
             command,
             cwd=str(working_directory),
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            env=child_env,
             stdin=subprocess.DEVNULL,
             stdout=log_file,
             stderr=log_file,
