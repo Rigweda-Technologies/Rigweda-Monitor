@@ -13,6 +13,7 @@ export const loadEnvFiles = () => {
 const requiredEnv = [
   "JWT_ACCESS_SECRET",
   "RIGWEDA_API_BASE_URL",
+  "RIGWEDA_BACKEND_API_BASE_URL",
   "CLOUDINARY_CLOUD_NAME",
   "CLOUDINARY_API_KEY",
   "CLOUDINARY_API_SECRET",
@@ -30,6 +31,11 @@ export const validateEnv = () => {
 export const getEnv = () => ({
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   rigwedaApiBaseUrl: String(process.env.RIGWEDA_API_BASE_URL || "").replace(/\/+$/, ""),
+  rigwedaBackendApiBaseUrl: String(process.env.RIGWEDA_BACKEND_API_BASE_URL || "").replace(/\/+$/, ""),
+  corsOrigins: String(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
