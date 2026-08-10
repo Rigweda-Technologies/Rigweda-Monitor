@@ -68,7 +68,7 @@ def get_upload_concurrency() -> int:
 
 
 def get_backend_base_url() -> str:
-    return os.getenv("DESKTOP_BACKEND_URL", "http://127.0.0.1:3000/api").rstrip("/")
+    return os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
 
 
 def get_screenshot_scan_roots() -> list[Path]:
@@ -669,6 +669,8 @@ def start_screenshot_monitor() -> None:
     print("Screenshot monitor started", flush=True)
 
     queue_existing_screenshots()
+    upload_pending_screenshots()
+    capture_screenshot()
     upload_pending_screenshots()
     while not stop_event.wait(interval_seconds):
         upload_pending_screenshots()

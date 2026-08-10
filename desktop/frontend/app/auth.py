@@ -6,6 +6,7 @@ import ctypes
 import json
 import os
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -16,10 +17,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_LOGIN_URL = "https://www.upanayahr.com/api/users/login"
+DEFAULT_LOGIN_URL = "https://rigweda-hrms-backend.vercel.app/api/users/login"
+DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
 DATA_ROOT = Path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"))
 AUTH_FILE = DATA_ROOT / "auth.json"
 SERVICE_NAME = "MyAppBackendService"
+STARTUP_APP_NAME = "RigwedaMonitor"
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 SW_HIDE = 0
 
@@ -56,6 +59,11 @@ class _ShellExecuteInfo(ctypes.Structure):
 def _is_access_denied(output: str) -> bool:
     normalized = output.upper()
     return "FAILED 5" in normalized or "ACCESS IS DENIED" in normalized
+
+
+def _uses_local_backend() -> bool:
+    backend_url = os.getenv("DESKTOP_BACKEND_URL", DEFAULT_DESKTOP_BACKEND_URL).lower()
+    return "127.0.0.1" in backend_url or "localhost" in backend_url
 
 
 def _start_service_as_admin() -> tuple[bool, str]:
@@ -116,11 +124,57 @@ def _extract_token(headers: object, payload: dict) -> str | None:
     return None
 
 
-def _store_auth_session(*, email: str, token: str, payload: dict) -> None:
+def _pick_first_text(*values: object) -> str | None:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _extract_employee_details(email: str, payload: dict) -> dict:
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    user = data.get("user") if isinstance(data.get("user"), dict) else {}
+    employee = data.get("employee") if isinstance(data.get("employee"), dict) else {}
+    organization = data.get("organization") if isinstance(data.get("organization"), dict) else {}
+
+    first_name = _pick_first_text(employee.get("firstName"), user.get("firstName"), data.get("firstName"))
+    last_name = _pick_first_text(employee.get("lastName"), user.get("lastName"), data.get("lastName"))
+    full_name = _pick_first_text(
+        employee.get("name"),
+        employee.get("fullName"),
+        user.get("name"),
+        user.get("fullName"),
+        data.get("name"),
+        data.get("fullName"),
+        " ".join(part for part in (first_name, last_name) if part),
+    )
+
+    return {
+        "name": full_name or email,
+        "email": _pick_first_text(employee.get("email"), user.get("email"), data.get("email"), email),
+        "employeeId": _pick_first_text(
+            employee.get("employeeId"),
+            employee.get("employeeCode"),
+            employee.get("_id"),
+            data.get("employeeId"),
+            data.get("userId"),
+        ),
+        "department": _pick_first_text(employee.get("department"), data.get("department")),
+        "designation": _pick_first_text(employee.get("designation"), employee.get("role"), user.get("role"), data.get("role")),
+        "organization": _pick_first_text(organization.get("name"), data.get("organizationName")),
+    }
+
+
+def _store_auth_session(*, email: str, token: str, payload: dict) -> dict:
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    employee_details = _extract_employee_details(email, payload)
     session = {
         "email": email,
         "token": token,
+        "employee": employee_details,
         "userId": payload.get("data", {}).get("userId") if isinstance(payload.get("data"), dict) else None,
         "organizationId": (
             payload.get("data", {}).get("organization", {}).get("_id")
@@ -130,9 +184,60 @@ def _store_auth_session(*, email: str, token: str, payload: dict) -> None:
         "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     AUTH_FILE.write_text(json.dumps(session, indent=2), encoding="utf-8")
+    return session
 
 
-def login_to_hrms(email: str, password: str) -> tuple[bool, str, str | None]:
+def load_auth_session() -> dict | None:
+    """Load a saved login session and expose its token to child monitor processes."""
+    try:
+        session = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+    token = str(session.get("token") or "").strip()
+    if token.lower().startswith("bearer "):
+        token = token.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    session["token"] = token
+    os.environ["MONITOR_ACCESS_TOKEN"] = token
+    return session
+
+
+def register_startup() -> tuple[bool, str]:
+    """Start this app automatically for the current Windows user after sign-in."""
+    if os.name != "nt":
+        return False, "Windows startup registration is only available on Windows."
+
+    try:
+        import winreg
+    except ImportError:
+        return False, "Windows registry access is unavailable."
+
+    if getattr(sys, "frozen", False):
+        executable = Path(sys.executable).resolve()
+        command = f'"{executable}" --background-start'
+    else:
+        python_executable = Path(sys.executable).resolve()
+        main_script = Path(__file__).resolve().with_name("main.py")
+        command = f'"{python_executable}" "{main_script}" --background-start'
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            winreg.KEY_SET_VALUE,
+        ) as key:
+            winreg.SetValueEx(key, STARTUP_APP_NAME, 0, winreg.REG_SZ, command)
+    except OSError as error:
+        return False, f"Could not register Windows startup: {error}"
+
+    return True, "Windows startup registered."
+
+
+def login_to_hrms(email: str, password: str) -> tuple[bool, str, dict | None]:
     """Authenticate against HRMS and persist the returned access token."""
     login_url = os.getenv("HRMS_LOGIN_URL", DEFAULT_LOGIN_URL)
 
@@ -164,13 +269,16 @@ def login_to_hrms(email: str, password: str) -> tuple[bool, str, str | None]:
     if not token:
         return False, "Login succeeded but no access token was returned.", None
 
-    _store_auth_session(email=email, token=token, payload=payload)
+    session = _store_auth_session(email=email, token=token, payload=payload)
     os.environ["MONITOR_ACCESS_TOKEN"] = token
-    return True, "Login successful.", token
+    return True, "Login successful.", session
 
 
 def ensure_service_running() -> tuple[bool, str]:
     """Start the backend service if needed and report the outcome."""
+    if not _uses_local_backend():
+        return True, "Hosted backend configured; local service is not required."
+
     status_result = _run_sc_command("query", SERVICE_NAME)
     status_output = f"{status_result.stdout}\n{status_result.stderr}".upper()
     if "RUNNING" in status_output:

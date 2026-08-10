@@ -6,7 +6,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from app.auth import ensure_service_running, login_to_hrms
+from app.auth import ensure_service_running, login_to_hrms, register_startup
 from app.screenshot_monitor import start_screenshot_monitor
 
 COLORS = {
@@ -41,9 +41,12 @@ PADDING_X = 42
 
 
 class LoginApp:
-    def __init__(self) -> None:
+    def __init__(self, saved_session: dict | None = None, *, hide_after_resume: bool = False) -> None:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
+
+        self.saved_session = saved_session
+        self.hide_after_resume = hide_after_resume
 
         self.root = ctk.CTk()
         self.root.title("MyApp Sign In")
@@ -54,6 +57,8 @@ class LoginApp:
 
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        if self.saved_session:
+            self.root.after(250, self._resume_saved_session)
 
     def _center_geometry(self) -> str:
         screen_width = self.root.winfo_screenwidth()
@@ -207,6 +212,33 @@ class LoginApp:
         )
         self.status_label.pack(fill="x", pady=(0, 12))
 
+        self.employee_frame = ctk.CTkFrame(
+            content,
+            corner_radius=12,
+            fg_color=COLORS["entry_bg"],
+            border_width=1,
+            border_color=COLORS["entry_border"],
+        )
+
+        self.employee_name_label = ctk.CTkLabel(
+            self.employee_frame,
+            text="",
+            text_color=COLORS["text"],
+            font=("Segoe UI", 15, "bold"),
+            anchor="w",
+        )
+        self.employee_name_label.pack(fill="x", padx=16, pady=(12, 2))
+
+        self.employee_details_label = ctk.CTkLabel(
+            self.employee_frame,
+            text="",
+            text_color=COLORS["text_muted"],
+            font=("Segoe UI", 10),
+            justify="left",
+            anchor="w",
+        )
+        self.employee_details_label.pack(fill="x", padx=16, pady=(0, 12))
+
         self.signin_button = ctk.CTkButton(
             content,
             text="Sign In",
@@ -246,6 +278,56 @@ class LoginApp:
     def _set_status(self, message: str, color: str) -> None:
         self.status_label.configure(text=message, text_color=color)
 
+    def _show_employee_details(self, session: dict | None) -> None:
+        employee = session.get("employee", {}) if isinstance(session, dict) else {}
+        details = [
+            ("Email", employee.get("email")),
+            ("Employee ID", employee.get("employeeId")),
+            ("Department", employee.get("department")),
+            ("Designation", employee.get("designation")),
+            ("Organization", employee.get("organization")),
+        ]
+        detail_text = "\n".join(f"{label}: {value}" for label, value in details if value)
+
+        self.title_label.configure(text="Monitoring Active")
+        self.subtitle_label.configure(text="This window will hide automatically in 30 seconds.")
+        self.employee_name_label.configure(text=str(employee.get("name") or "Employee"))
+        self.employee_details_label.configure(text=detail_text or "Employee details saved.")
+
+        if not self.employee_frame.winfo_ismapped():
+            self.employee_frame.pack(fill="x", pady=(0, 14), before=self.signin_button)
+
+    def _hide_application(self) -> None:
+        self.root.withdraw()
+
+    def _start_monitoring(self, session: dict | None, *, register_windows_startup: bool) -> bool:
+        started, message = ensure_service_running()
+        if not started:
+            self.signin_button.configure(state="normal", text="Sign In")
+            self._set_status(message, COLORS["error"])
+            return False
+
+        screenshot_started, screenshot_message = start_screenshot_monitor()
+        if not screenshot_started:
+            self.signin_button.configure(state="normal", text="Sign In")
+            self._set_status(screenshot_message, COLORS["error"])
+            return False
+
+        if register_windows_startup:
+            register_startup()
+
+        self.signin_button.configure(state="normal", text="Monitoring Active")
+        self._show_employee_details(session)
+        self._set_status("Login successful. Screenshot monitor is running.", COLORS["success"])
+        self.root.update_idletasks()
+        self.root.after(30_000, self._hide_application)
+        return True
+
+    def _resume_saved_session(self) -> None:
+        self.signin_button.configure(state="disabled", text="Monitoring Active")
+        if self._start_monitoring(self.saved_session, register_windows_startup=True) and self.hide_after_resume:
+            self.root.after(1_000, self._hide_application)
+
     def _handle_login(self) -> None:
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
@@ -253,30 +335,13 @@ class LoginApp:
         self.signin_button.configure(state="disabled", text="Signing in...")
         self.root.update_idletasks()
 
-        logged_in, login_message, _token = login_to_hrms(username, password)
+        logged_in, login_message, session = login_to_hrms(username, password)
         if not logged_in:
             self.signin_button.configure(state="normal", text="Sign In")
             self._set_status(login_message, COLORS["error"])
             return
 
-        started, message = ensure_service_running()
-        if not started:
-            self.signin_button.configure(state="normal", text="Sign In")
-            self._set_status(message, COLORS["error"])
-            return
-
-        screenshot_started, screenshot_message = start_screenshot_monitor()
-        if not screenshot_started:
-            self.signin_button.configure(state="normal", text="Sign In")
-            self._set_status(screenshot_message, COLORS["error"])
-            return
-
-        self._set_status("Login successful. Screenshot monitor started.", COLORS["success"])
-        self.root.update_idletasks()
-        self.root.after(250, self._close_window)
-
-    def _close_window(self) -> None:
-        self.root.destroy()
+        self._start_monitoring(session, register_windows_startup=True)
 
     def run(self) -> None:
         self.root.mainloop()

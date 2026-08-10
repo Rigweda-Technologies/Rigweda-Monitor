@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -20,12 +21,22 @@ DETACHED_PROCESS = 0x00000008
 
 def _is_process_running(pid: int) -> bool:
     result = subprocess.run(
-        ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            (
+                "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
+                f"{pid}\" -ErrorAction SilentlyContinue; "
+                "if ($p) { $p.CommandLine }"
+            ),
+        ],
         capture_output=True,
         text=True,
         check=False,
     )
-    return str(pid) in result.stdout
+    command_line = result.stdout.lower()
+    return "rigwedamonitor" in command_line or "screenshot.py" in command_line
 
 
 def _existing_monitor_is_running() -> bool:
@@ -46,17 +57,23 @@ def start_screenshot_monitor() -> tuple[bool, str]:
     if _existing_monitor_is_running():
         return True, "Screenshot monitor is already running."
 
-    if not SCREENSHOT_SCRIPT.exists():
-        return False, f"Screenshot script is missing: {SCREENSHOT_SCRIPT}"
+    if getattr(sys, "frozen", False):
+        command = [sys.executable, "--screenshot-monitor"]
+        working_directory = Path(sys.executable).resolve().parent
+    else:
+        if not SCREENSHOT_SCRIPT.exists():
+            return False, f"Screenshot script is missing: {SCREENSHOT_SCRIPT}"
+        python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
+        command = [str(python_executable), str(SCREENSHOT_SCRIPT)]
+        working_directory = PROJECT_ROOT
 
-    python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     log_file = open(LOG_FILE, "a", encoding="utf-8")
     try:
         process = subprocess.Popen(
-            [str(python_executable), str(SCREENSHOT_SCRIPT)],
-            cwd=str(PROJECT_ROOT),
+            command,
+            cwd=str(working_directory),
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
             stdin=subprocess.DEVNULL,
             stdout=log_file,
