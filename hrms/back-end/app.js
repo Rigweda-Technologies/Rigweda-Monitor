@@ -18,8 +18,13 @@ const {
   getMetricsSnapshot
 } = require("./src/observability/httpMetrics");
 
-// Load env variables
+// Load the common settings first. `npm run local` and `npm run server` set
+// APP_ENV and can override only the values that differ in .env.<mode>.
 dotenv.config({ quiet: true });
+const appEnv = String(process.env.APP_ENV || "").trim();
+if (appEnv) {
+  dotenv.config({ path: `.env.${appEnv}`, override: true, quiet: true });
+}
 
 // App init
 const app = express();

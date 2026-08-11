@@ -28,6 +28,14 @@ def load_app_env() -> None:
             # The app-specific .env must win over stale Windows environment values.
             load_dotenv(path, override=True)
 
+    # APP_ENV is set by the workspace launcher.  It lets one installation use
+    # different local and hosted-backend URLs without editing the shared .env.
+    app_env = os.getenv("APP_ENV", "").strip()
+    if app_env:
+        mode_path = Path(__file__).resolve().parents[1] / f".env.{app_env}"
+        if mode_path.exists():
+            load_dotenv(mode_path, override=True)
+
 
 def writable_runtime_path(configured_value: str, fallback_name: str) -> Path:
     """Return a writable runtime directory without requiring administrator access."""

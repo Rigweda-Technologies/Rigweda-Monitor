@@ -11,6 +11,17 @@ export const loadEnvFiles = () => {
   dotenv.config({ path: path.join(repoRoot, "hrms", "back-end", ".env") });
   dotenv.config({ path: path.join(repoRoot, "rigweda", "backend", ".env") });
   dotenv.config({ path: path.join(repoRoot, "desktop", "backend", ".env"), override: true });
+
+  // APP_ENV is set by `npm run local` or `npm run server`.  The selected file
+  // overrides the shared .env without changing it on disk.
+  const appEnv = String(process.env.APP_ENV || "").trim();
+  if (appEnv) {
+    dotenv.config({
+      path: path.join(repoRoot, "desktop", "backend", `.env.${appEnv}`),
+      override: true,
+      quiet: true,
+    });
+  }
 };
 
 const requiredEnv = [
