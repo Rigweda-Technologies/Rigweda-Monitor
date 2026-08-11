@@ -27,24 +27,65 @@ const getEmployeeMap = async ({ organizationId, employeeIds }) => {
   let employees = [];
   try {
     employees = await Employee.find({
-      _id: { $in: employeeIds },
-      organizationId
+      organizationId,
+      $or: [
+        { _id: { $in: employeeIds } },
+        { employeeCode: { $in: employeeIds } },
+        { userId: { $in: employeeIds } }
+      ]
     })
-      .select("firstName lastName employeeCode")
+      .select("firstName lastName employeeCode userId")
       .lean();
   } catch {
     employees = [];
   }
 
-  return new Map(
-    employees.map((employee) => [
-      String(employee._id),
-      {
-        name: [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() || null,
-        code: employee.employeeCode || null
-      }
-    ])
-  );
+  const map = new Map();
+  for (const employee of employees) {
+    const details = {
+      name: [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() || null,
+      code: employee.employeeCode || null,
+      employeeId: String(employee._id)
+    };
+    map.set(String(employee._id), details);
+    if (employee.employeeCode) {
+      map.set(String(employee.employeeCode), details);
+    }
+    if (employee.userId) {
+      map.set(String(employee.userId), details);
+    }
+  }
+
+  return map;
+};
+
+const resolveEmployeeAliases = async ({ organizationId, employeeId }) => {
+  if (!employeeId) return [];
+  try {
+    const employee = await Employee.findOne({
+      organizationId,
+      $or: [
+        { _id: employeeId },
+        { employeeCode: employeeId },
+        { userId: employeeId }
+      ]
+    })
+      .select("_id employeeCode userId")
+      .lean();
+
+    if (!employee) return [employeeId];
+
+    return Array.from(
+      new Set([
+        String(employee._id),
+        employee.employeeCode ? String(employee.employeeCode) : null,
+        employee.userId ? String(employee.userId) : null,
+        employeeId
+      ].filter(Boolean))
+    );
+  } catch {
+    return [employeeId];
+  }
 };
 
 exports.getScreenshots = async (req) => {
@@ -63,8 +104,18 @@ exports.getScreenshots = async (req) => {
   const values = [organizationId];
 
   if (employeeId) {
-    values.push(employeeId);
-    where.push(`employee_id = $${values.length}`);
+    const employeeAliases = await resolveEmployeeAliases({ organizationId, employeeId });
+    if (employeeAliases.length === 1) {
+      values.push(employeeAliases[0]);
+      where.push(`employee_id = $${values.length}`);
+    } else {
+      const aliasClauses = [];
+      for (const alias of employeeAliases) {
+        values.push(alias);
+        aliasClauses.push(`employee_id = $${values.length}`);
+      }
+      where.push(`(${aliasClauses.join(" OR ")})`);
+    }
   }
 
   if (date) {

@@ -24,7 +24,7 @@ DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Ri
 AUTH_FILE = DATA_ROOT / "auth.json"
 SERVICE_NAME = "MyAppBackendService"
 STARTUP_APP_NAME = "RigwedaMonitor"
-PROFILE_SCHEMA_VERSION = 2
+PROFILE_SCHEMA_VERSION = 3
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 SW_HIDE = 0
 
@@ -235,13 +235,14 @@ def _extract_employee_details(email: str, payload: dict) -> dict:
         "name": full_name or email,
         "email": _pick_first_text(employee.get("email"), user.get("email"), data.get("email"), email),
         "employeeId": _pick_first_text(
-            employee.get("employeeId"),
             employee.get("employeeCode"),
-            employee.get("_id"),
-            data.get("employeeId"),
             data.get("employeeCode"),
+            employee.get("employeeId"),
+            data.get("employeeId"),
+            employee.get("_id"),
             data.get("userId"),
         ),
+        "employeeCode": _pick_first_text(employee.get("employeeCode"), data.get("employeeCode")),
         "phone": _pick_first_text(employee.get("phone"), user.get("phone"), data.get("phone"), employee.get("mobile"), data.get("mobile")),
         "role": _role_names(employee.get("roleIds"), data.get("roleIds"), employee.get("role"), user.get("role"), data.get("role"), active_role, roles)
         or designation,
