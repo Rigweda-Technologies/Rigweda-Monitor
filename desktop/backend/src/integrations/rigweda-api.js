@@ -49,7 +49,7 @@ export const getEmployeeProfileFromRigweda = async ({ token }) => {
   const employeeDbId = data.employeeId || data._id || data.id || null;
 
   return {
-    employeeId: employeeCode || employeeDbId || data.userId || null,
+    employeeId: employeeDbId || data.userId || null,
     employeeCode,
     employeeDbId,
     userId: data.userId || null,

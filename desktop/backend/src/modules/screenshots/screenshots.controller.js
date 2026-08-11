@@ -36,7 +36,7 @@ export const createScreenshotHandler = async (request, reply) => {
   };
 
   const employeeProfile = await screenshotService.resolveEmployeeProfile(request.auth.token);
-  const employeeId = employeeProfile?.employeeId || employeeProfile?.userId;
+  const employeeId = employeeProfile?.employeeDbId || employeeProfile?.employeeId || employeeProfile?.userId;
 
   if (!employeeId) {
     return reply.code(404).send({
