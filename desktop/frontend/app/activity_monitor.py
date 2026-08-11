@@ -8,6 +8,7 @@ import os
 import sqlite3
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 import uuid
@@ -20,10 +21,22 @@ from app.env import writable_runtime_path
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
 QUEUE_DB = DATA_ROOT / "activity_queue.db"
 LOCK_FILE = DATA_ROOT / "activity_monitor.lock"
+LOG_FILE = DATA_ROOT.parent / "logs" / "activity_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
-IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "300")), 10)
-HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "60")), 10)
+IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
+HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
 POLL_SECONDS = 1
+
+
+def log_message(message: object, *, exc_info: bool = False) -> None:
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(f"{utc_now()} {message}\n")
+            if exc_info:
+                traceback.print_exc(file=log_file)
+    except OSError:
+        pass
 
 
 class POINT(ctypes.Structure):
@@ -116,6 +129,7 @@ def sync_pending_events() -> bool:
     session = load_auth_session()
     token = str((session or {}).get("token") or "").strip()
     if not token:
+        log_message("Activity sync skipped: no saved token.")
         return False
     backend_url = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
     payload = {"events": [{
@@ -132,14 +146,45 @@ def sync_pending_events() -> bool:
             pass
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as error:
         mark_events(ids, status="failed", error=str(error)[:1000])
+        log_message(f"Activity sync failed: {error}")
         return False
     mark_events(ids, status="synced")
+    log_message(f"Activity sync completed: {len(ids)} event(s).")
     return True
+
+
+def process_exists(pid: int) -> bool:
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
+                    f"{pid}\" -ErrorAction SilentlyContinue; if ($p) {{ $p.CommandLine }}"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=0x08000000 if os.name == "nt" else 0,
+        )
+    except Exception:
+        return False
+
+    command_line = result.stdout.lower()
+    return "rigwedamonitor" in command_line or "activity_monitor" in command_line
 
 
 def start_activity_monitor() -> None:
     """Record one-minute activity heartbeats; every record remains durable until the API accepts it."""
     device_id = get_device_id()
+    log_message(
+        f"Activity monitor started. idle_threshold={IDLE_THRESHOLD_SECONDS}s heartbeat={HEARTBEAT_SECONDS}s device={device_id}"
+    )
     last_position = get_cursor_position()
     last_moved_at = time.monotonic()
     last_tick = last_moved_at
@@ -178,6 +223,7 @@ def start_activity_monitor() -> None:
                 active_seconds = 0.0
                 idle_seconds = 0.0
                 last_heartbeat = now
+                log_message(f"Activity event queued: status={next_status}")
                 sync_pending_events()
     finally:
         # The next app launch will replace a stale PID file if this monitor exits unexpectedly.
@@ -189,7 +235,16 @@ def main() -> int:
     try:
         lock_handle = LOCK_FILE.open("x", encoding="utf-8")
     except FileExistsError:
-        return 0
+        try:
+            pid = int(LOCK_FILE.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            pid = 0
+        if pid and process_exists(pid):
+            log_message(f"Activity monitor already running with PID {pid}.")
+            return 0
+        log_message("Removing stale activity monitor lock.")
+        LOCK_FILE.unlink(missing_ok=True)
+        lock_handle = LOCK_FILE.open("x", encoding="utf-8")
 
     lock_handle.write(str(os.getpid()))
     lock_handle.flush()
@@ -197,6 +252,9 @@ def main() -> int:
         start_activity_monitor()
     except KeyboardInterrupt:
         return 0
+    except Exception:
+        log_message("Activity monitor crashed.", exc_info=True)
+        raise
     finally:
         lock_handle.close()
         LOCK_FILE.unlink(missing_ok=True)

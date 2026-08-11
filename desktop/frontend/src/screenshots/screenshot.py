@@ -38,20 +38,46 @@ DEFAULT_UPLOAD_CONCURRENCY = 4
 if writable_runtime_path:
     SCREENSHOT_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots"), "screenshots")
     DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+    LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 else:
     SCREENSHOT_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots")))
     DATA_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data")))
+    LOG_DIR = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs"))))
 QUEUE_DB = DATA_ROOT / "screenshot_queue.db"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 AUTH_FILE = DATA_ROOT / "auth.json"
 LEGACY_SCREENSHOT_ROOT = Path(r"C:\Rigweda_monitor\screenshots")
 LEGACY_DATA_ROOT = Path(r"C:\Rigweda_monitor\data")
 MONITOR_LOCK_FILE = DATA_ROOT / "screenshot_monitor.lock"
+AGENT_LOG_FILE = LOG_DIR / "screenshot_agent.log"
 
 stop_event = threading.Event()
 capture_lock = threading.Lock()
 upload_lock = threading.Lock()
 process_lock_handle = None
+
+
+def log_message(message: object, *, error: bool = False, exc_info: bool = False) -> None:
+    """Write monitor output without crashing windowed PyInstaller builds."""
+    text = str(message)
+    stream = sys.stderr if error else sys.stdout
+    try:
+        if stream:
+            print(text, file=stream, flush=True)
+            if exc_info:
+                traceback.print_exc(file=stream)
+            return
+    except (OSError, ValueError):
+        pass
+
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with AGENT_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(f"{datetime.now(UTC).isoformat()} {text}\n")
+            if exc_info:
+                traceback.print_exc(file=log_file)
+    except OSError:
+        pass
 
 
 def _decode_jwt_payload(token: str) -> dict:
@@ -155,10 +181,9 @@ def get_access_token() -> str | None:
         candidates.append((_token_expiry(token), modified_at, token, auth_file))
 
     if not candidates:
-        print(
+        log_message(
             f"No auth token found. Checked: {', '.join(str(path) for path in dict.fromkeys(auth_files))}",
-            file=sys.stderr,
-            flush=True,
+            error=True,
         )
         return None
 
@@ -166,7 +191,7 @@ def get_access_token() -> str | None:
     expiry, _modified_at, token, auth_file = candidates[0]
     now = int(datetime.now(UTC).timestamp())
     if expiry and expiry <= now:
-        print(f"Saved auth token is expired in {auth_file}. Please log in again.", file=sys.stderr, flush=True)
+        log_message(f"Saved auth token is expired in {auth_file}. Please log in again.", error=True)
         return None
 
     return token
@@ -190,7 +215,7 @@ def acquire_process_lock() -> bool:
         if pid:
             result = subprocess_run_process_exists(pid)
             if result:
-                print(f"Screenshot monitor is already running with PID {pid}.", flush=True)
+                log_message(f"Screenshot monitor is already running with PID {pid}.")
                 return False
 
         MONITOR_LOCK_FILE.unlink(missing_ok=True)
@@ -345,7 +370,7 @@ def queue_existing_screenshots() -> int:
             inserted += 1
 
     if inserted:
-        print(f"Queued {inserted} existing local screenshot(s).", flush=True)
+        log_message(f"Queued {inserted} existing local screenshot(s).")
     return inserted
 
 
@@ -417,8 +442,7 @@ def capture_screenshot() -> Path | None:
                 width = raw_image.width
                 height = raw_image.height
         except Exception:
-            print("MSS screenshot capture failed; retrying with Pillow ImageGrab.", file=sys.stderr, flush=True)
-            traceback.print_exc()
+            log_message("MSS screenshot capture failed; retrying with Pillow ImageGrab.", error=True, exc_info=True)
             image = ImageGrab.grab(all_screens=True)
             image.save(file_path)
             width, height = image.size
@@ -434,12 +458,11 @@ def capture_screenshot() -> Path | None:
             size_bytes=file_path.stat().st_size,
         )
 
-        print(f"Screenshot queued: {file_path}", flush=True)
+        log_message(f"Screenshot queued: {file_path}")
         return file_path
     except Exception as error:
-        print("Failed to capture screenshot:", file=sys.stderr, flush=True)
-        print(error, file=sys.stderr, flush=True)
-        traceback.print_exc()
+        log_message("Failed to capture screenshot:", error=True)
+        log_message(error, error=True, exc_info=True)
         return None
     finally:
         capture_lock.release()
@@ -773,18 +796,17 @@ def upload_pending_screenshots() -> None:
             failed_ids = ", ".join(item_id for item_id, _error in retryable_upload_errors)
             raise RuntimeError(f"Retryable upload failure for screenshot(s): {failed_ids}")
 
-        print(
+        log_message(
             (
                 f"Uploaded screenshot batch {batch_id}: "
                 f"{len(uploaded)} uploaded, {len(duplicates)} duplicates, "
                 f"{len(invalid_uploads)} invalid, "
                 f"concurrency={get_upload_concurrency()}"
-            ),
-            flush=True,
+            )
         )
     except Exception as error:
-        print("Screenshot upload retry scheduled:", file=sys.stderr, flush=True)
-        print(error, file=sys.stderr, flush=True)
+        log_message("Screenshot upload retry scheduled:", error=True)
+        log_message(error, error=True)
         mark_rows_failed(rows, error)
     finally:
         upload_lock.release()
@@ -792,10 +814,10 @@ def upload_pending_screenshots() -> None:
 
 def start_screenshot_monitor() -> None:
     interval_seconds = get_interval_ms() / 1000
-    print("Screenshot monitor started", flush=True)
-    print(f"Data root: {DATA_ROOT}", flush=True)
-    print(f"Screenshot root: {SCREENSHOT_ROOT}", flush=True)
-    print(f"Backend URL: {get_backend_base_url()}", flush=True)
+    log_message("Screenshot monitor started")
+    log_message(f"Data root: {DATA_ROOT}")
+    log_message(f"Screenshot root: {SCREENSHOT_ROOT}")
+    log_message(f"Backend URL: {get_backend_base_url()}")
 
     queue_existing_screenshots()
     upload_pending_screenshots()

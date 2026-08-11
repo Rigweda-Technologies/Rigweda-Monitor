@@ -10,18 +10,17 @@ from dotenv import load_dotenv
 
 
 def load_app_env() -> None:
+    base_dir = Path(__file__).resolve().parents[1]
+    frozen_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else None
+    bundle_dir = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "_MEIPASS", None) else None
+
     candidates = [
         Path.cwd() / ".env",
-        Path(__file__).resolve().parents[1] / ".env",
+        base_dir / ".env",
     ]
 
     if getattr(sys, "frozen", False):
-        candidates.extend(
-            [
-                Path(sys.executable).resolve().parent / ".env",
-                Path(getattr(sys, "_MEIPASS", "")) / ".env",
-            ]
-        )
+        candidates.extend(path / ".env" for path in (frozen_dir, bundle_dir) if path)
 
     for path in candidates:
         if path.exists():
@@ -36,9 +35,12 @@ def load_app_env() -> None:
         # installer or a wrapper explicitly opts into local mode.
         app_env = os.getenv("RIGWEDA_MONITOR_DEFAULT_ENV", "server").strip()
     if app_env:
-        mode_path = Path(__file__).resolve().parents[1] / f".env.{app_env}"
-        if mode_path.exists():
-            load_dotenv(mode_path, override=True)
+        mode_candidates = [base_dir / f".env.{app_env}"]
+        if getattr(sys, "frozen", False):
+            mode_candidates.extend(path / f".env.{app_env}" for path in (frozen_dir, bundle_dir) if path)
+        for mode_path in mode_candidates:
+            if mode_path.exists():
+                load_dotenv(mode_path, override=True)
 
 
 def writable_runtime_path(configured_value: str, fallback_name: str) -> Path:

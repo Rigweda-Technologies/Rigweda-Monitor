@@ -17,8 +17,8 @@ from app.env import load_app_env, writable_runtime_path
 
 load_app_env()
 
-DEFAULT_LOGIN_URL = "https://rigweda-hrms-backend.vercel.app/api/users/login"
-DEFAULT_HRMS_API_URL = "https://rigweda-hrms-backend.vercel.app/api"
+DEFAULT_LOGIN_URL = "https://rigweda-hrms-backend.onrender.com/api/users/login"
+DEFAULT_HRMS_API_URL = "https://rigweda-hrms-backend.onrender.com/api"
 DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
 AUTH_FILE = DATA_ROOT / "auth.json"
