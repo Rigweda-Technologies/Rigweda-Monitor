@@ -24,9 +24,8 @@ if exist "%DIST_DIR%\RigwedaMonitorFolder" rmdir /s /q "%DIST_DIR%\RigwedaMonito
 if exist "%DIST_DIR%\RigwedaMonitorDebug" rmdir /s /q "%DIST_DIR%\RigwedaMonitorDebug"
 
 (
+  echo HRMS_BACKEND_URL=https://rigweda-hrms-backend.onrender.com/api
   echo DESKTOP_BACKEND_URL=https://rigweda-monitor-backend.vercel.app/api
-  echo HRMS_LOGIN_URL=https://rigweda-hrms-backend.onrender.com/api/users/login
-  echo HRMS_API_URL=https://rigweda-hrms-backend.onrender.com/api
   echo DESKTOP_START_WINDOWS_SERVICE=false
   echo RIGWEDA_MONITOR_DATA_ROOT=%%LOCALAPPDATA%%\RigwedaMonitor\data
   echo RIGWEDA_MONITOR_SCREENSHOT_ROOT=%%LOCALAPPDATA%%\RigwedaMonitor\screenshots

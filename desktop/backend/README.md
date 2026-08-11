@@ -25,12 +25,12 @@ Use the same date-based folder for `jpeg`, `jpg`, `png`, and `webp`.
 
 ## Endpoints
 
-- `GET /api/screenshots`
 - `POST /api/screenshots`
 - `POST /api/screenshot-batches/uploads`
 - `POST /api/screenshot-batches/:batchId/complete`
 - `POST /api/activity-events/batch`
-- `GET /api/activity/employees?date=YYYY-MM-DD`
+
+Admin/read APIs live in `hrms/back-end` and read the monitor Postgres database directly.
 
 ## Scalable Screenshot Upload Flow
 
@@ -53,13 +53,12 @@ Required backend env:
 
 ```bash
 JWT_ACCESS_SECRET=...
-RIGWEDA_API_BASE_URL=...
-CLOUDINARY_CLOUD_NAME=...
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rigweda
+HRMS_BACKEND_URL=...
+MONITOR_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rigweda_monitor
 DATABASE_SSL=false
 ```
+
+Cloudinary credentials are configured in HRMS under Employee Monitor > Settings. The backend fetches them from HRMS to create signed upload payloads, so the desktop agent never receives the API secret.
 
 The backend loads `rigweda/backend/.env` first, then overrides with `desktop/backend/.env` when present.
 
@@ -69,9 +68,12 @@ Required desktop agent env:
 SCREENSHOT_INTERVAL_MS=60000
 SCREENSHOT_UPLOAD_BATCH_SIZE=30
 SCREENSHOT_UPLOAD_CONCURRENCY=4
+HRMS_BACKEND_URL=http://127.0.0.1:8000/api
 DESKTOP_BACKEND_URL=http://127.0.0.1:3000/api
 MONITOR_ACCESS_TOKEN=<rigweda access token>
 ```
+
+`HRMS_BACKEND_URL` should point to the HRMS backend `/api`; the agent code derives `/api/agents` for monitor uploads and settings. Activity events still post to the desktop backend.
 
 ## Run
 
@@ -83,7 +85,6 @@ npm run dev
 ## Example
 
 ```bash
-curl http://localhost:3000/api/screenshots
 curl -X POST http://localhost:3000/api/screenshots \
   -H "content-type: application/json" \
   -d '{

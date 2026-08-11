@@ -5,6 +5,9 @@ module.exports = (requiredPermission) => {
   return async (req, res, next) => {
     try {
       const user = req.user;
+      if (user?.roleKey === "superadmin" || user?.activeRoleId === "superadmin" || user?.bypassMonitorDb) {
+        return next();
+      }
       if (!user || !user.activeRoleId) {
         return res.status(403).json({
           success: false,

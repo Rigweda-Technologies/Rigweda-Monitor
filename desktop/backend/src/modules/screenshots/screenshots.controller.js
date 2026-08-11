@@ -71,7 +71,10 @@ export const createScreenshotHandler = async (request, reply) => {
     });
   }
 
-  const payload = value;
+  const payload = {
+    ...value,
+    auth: request.auth,
+  };
   console.log("Validated payload for screenshot creation:", payload);
   const result = await screenshotService.createScreenshot(payload);
 

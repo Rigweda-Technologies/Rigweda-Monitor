@@ -18,7 +18,10 @@ import {
   CalendarOff,
   ClipboardCheck,
   Network,
-  Activity
+  Camera,
+  Monitor,
+  MousePointer2,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -153,12 +156,23 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <Users size={18} />, label: "Employee", to: "/employees", permissions: ["EMP_VIEW"] },
       { icon: <ClipboardCheck size={18} />, label: "Attendance", to: "/attendance", permissions: ["ATTENDANCE_VIEW_ALL", "ATTENDANCE_VIEW_SELF"] },
       { icon: <FileText size={18} />, label: "Timesheets", to: "/timesheets", permissions: ["TIMESHEET_VIEW_SELF", "TIMESHEET_VIEW_ALL"] },
-      { icon: <Activity size={18} />, label: "Desktop Activity", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
       { icon: <CalendarOff size={18} />, label: "Leave", to: "/leave", permissions: ["LEAVE_VIEW_SELF", "LEAVE_VIEW_ALL", "LEAVE_APPLY"] },
       { icon: <FileText size={18} />, label: "Payslips", to: "/employee-dashboard/payslips", permissions: ["EMP_SELF_VIEW"] },
       { icon: <Shield size={18} />, label: "Approvals", to: "/approvals", permissions: ["LEAVE_ACTION", "ATTENDANCE_MANAGE"] },
       { icon: <CalendarDays size={20} />, label: "Holidays", to: "/holidays", permissions: ["HOLIDAY_VIEW"] },
       { icon: <Network size={18} />, label: "Organization Tree", to: "/employee-tree", permissions: ["EMP_VIEW", "EMP_ORG_TREE_VIEW"] }
+    ]
+  },
+  {
+    icon: <Monitor size={20} />,
+    label: "Employee Monitor",
+    to: "/monitor",
+    permissions: ["EMP_VIEW", "ATTENDANCE_VIEW_ALL", "ORG_SETTINGS_VIEW"],
+    children: [
+      { icon: <UsersRound size={18} />, label: "Employees", to: "/monitor/employees", permissions: ["EMP_VIEW"] },
+      { icon: <MousePointer2 size={18} />, label: "Mouse Movement", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
+      { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
+      { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] }
     ]
   },
   {

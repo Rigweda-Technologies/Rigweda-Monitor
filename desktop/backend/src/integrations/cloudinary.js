@@ -1,27 +1,56 @@
 import { v2 as cloudinary } from "cloudinary";
 import { getEnv } from "../config/env.js";
+import { getMonitorCloudinarySettingsFromRigweda } from "./rigweda-api.js";
 
-let isConfigured = false;
+let configuredKey = null;
 
-const ensureConfigured = () => {
-  if (isConfigured) {
+const envCredentials = () => {
+  const env = getEnv();
+  if (!env.cloudinaryCloudName || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) {
+    return null;
+  }
+  return {
+    cloudName: env.cloudinaryCloudName,
+    apiKey: env.cloudinaryApiKey,
+    apiSecret: env.cloudinaryApiSecret,
+    uploadFolderRoot: "rigweda-monitor",
+  };
+};
+
+const configure = (settings) => {
+  const key = `${settings.cloudName}:${settings.apiKey}`;
+  if (configuredKey === key) {
     return;
   }
 
-  const env = getEnv();
   cloudinary.config({
-    cloud_name: env.cloudinaryCloudName,
-    api_key: env.cloudinaryApiKey,
-    api_secret: env.cloudinaryApiSecret,
+    cloud_name: settings.cloudName,
+    api_key: settings.apiKey,
+    api_secret: settings.apiSecret,
     secure: true,
   });
-  isConfigured = true;
+  configuredKey = key;
 };
 
-export const uploadBufferToCloudinary = ({ buffer, folder, publicId, resourceType }) =>
-  new Promise((resolve, reject) => {
-    ensureConfigured();
+export const resolveCloudinarySettings = async ({ token } = {}) => {
+  if (token) {
+    const settings = await getMonitorCloudinarySettingsFromRigweda({ token });
+    configure(settings);
+    return settings;
+  }
 
+  const settings = envCredentials();
+  if (!settings) {
+    throw new Error("Cloudinary settings are missing. Configure Employee Monitor > Settings in HRMS.");
+  }
+  configure(settings);
+  return settings;
+};
+
+export const uploadBufferToCloudinary = async ({ token, buffer, folder, publicId, resourceType }) => {
+  await resolveCloudinarySettings({ token });
+
+  return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder,
@@ -40,10 +69,10 @@ export const uploadBufferToCloudinary = ({ buffer, folder, publicId, resourceTyp
 
     uploadStream.end(buffer);
   });
+};
 
-export const createSignedUploadPayload = ({ folder, publicId, context = {} }) => {
-  ensureConfigured();
-  const env = getEnv();
+export const createSignedUploadPayload = async ({ token, folder, publicId, context = {} }) => {
+  const settings = await resolveCloudinarySettings({ token });
   const timestamp = Math.floor(Date.now() / 1000);
   const params = {
     folder,
@@ -58,12 +87,12 @@ export const createSignedUploadPayload = ({ folder, publicId, context = {} }) =>
   }
 
   return {
-    cloudName: env.cloudinaryCloudName,
-    apiKey: env.cloudinaryApiKey,
-    uploadUrl: `https://api.cloudinary.com/v1_1/${env.cloudinaryCloudName}/image/upload`,
+    cloudName: settings.cloudName,
+    apiKey: settings.apiKey,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${settings.cloudName}/image/upload`,
     params: {
       ...params,
-      signature: cloudinary.utils.api_sign_request(params, env.cloudinaryApiSecret),
+      signature: cloudinary.utils.api_sign_request(params, settings.apiSecret),
     },
   };
 };

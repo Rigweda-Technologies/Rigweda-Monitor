@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { createSignedUploadPayload, uploadBufferToCloudinary } from "../../integrations/cloudinary.js";
+import { createSignedUploadPayload, resolveCloudinarySettings, uploadBufferToCloudinary } from "../../integrations/cloudinary.js";
 import { getEmployeeProfileFromRigweda } from "../../integrations/rigweda-api.js";
 import { screenshotModel } from "./screenshots.model.js";
 
@@ -24,9 +24,9 @@ const safePublicIdPart = (value) =>
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-const buildBatchFolder = ({ employeeId, capturedAt }) => {
+const buildBatchFolder = ({ employeeId, capturedAt, folderRoot = "rigweda-monitor" }) => {
   const dateFolder = resolveDateFolder(capturedAt);
-  return `rigweda-monitor/${employeeId}/${dateFolder}`;
+  return `${String(folderRoot || "rigweda-monitor").replace(/^\/+|\/+$/g, "")}/${employeeId}/${dateFolder}`;
 };
 
 const buildBatchPublicId = ({ capturedAt, clientScreenshotId, originalFileName, sha256 }) => {
@@ -49,6 +49,7 @@ export const screenshotService = {
   },
 
   async createScreenshot(payload) {
+    const cloudinarySettings = await resolveCloudinarySettings({ token: payload.auth?.token });
     const dateFolder = payload.dateFolder || resolveDateFolder(payload.capturedAt);
     const originalFileName = payload.screenshot.filename;
     const publicId = buildCloudinaryPublicId({
@@ -56,11 +57,12 @@ export const screenshotService = {
       originalFileName,
       employeeId: payload.employeeId,
     });
-    const folder = `rigweda-monitor/${payload.employeeId}/${dateFolder}`;
+    const folder = `${String(cloudinarySettings.uploadFolderRoot || "rigweda-monitor").replace(/^\/+|\/+$/g, "")}/${payload.employeeId}/${dateFolder}`;
 
     console.log("Uploading screenshot to Cloudinary with publicId:", publicId, "and folder:", folder);
     const cloudinaryResult = await uploadBufferToCloudinary({
       buffer: payload.screenshot.buffer,
+      token: payload.auth?.token,
       folder,
       publicId,
       resourceType: "image",
@@ -101,6 +103,7 @@ export const screenshotService = {
     const organizationId = auth.organizationId || null;
     const firstCapturedAt = screenshots[0].capturedAt;
     const lastCapturedAt = screenshots[screenshots.length - 1].capturedAt;
+    const cloudinarySettings = await resolveCloudinarySettings({ token: auth.token });
 
     await screenshotModel.upsertBatch({
       batchId,
@@ -125,6 +128,7 @@ export const screenshotService = {
       const folder = buildBatchFolder({
         employeeId,
         capturedAt: item.capturedAt,
+        folderRoot: cloudinarySettings.uploadFolderRoot,
       });
       const publicId = buildBatchPublicId(item);
 
@@ -160,7 +164,8 @@ export const screenshotService = {
         clientScreenshotId: item.clientScreenshotId,
         status: "upload",
         cloudinaryPublicId: publicId,
-        ...createSignedUploadPayload({
+        ...(await createSignedUploadPayload({
+          token: auth.token,
           folder,
           publicId,
           context: {
@@ -170,7 +175,7 @@ export const screenshotService = {
             captured_at: item.capturedAt,
             sha256: item.sha256,
           },
-        }),
+        })),
       });
     }
 

@@ -4,7 +4,7 @@ import { getToken, setToken, hasAnyPermission, clearAuth } from "../utils/auth";
 import { setOrgTimeZone } from "../utils/timezone";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
 });
 
 let sessionExpiryHandled = false;

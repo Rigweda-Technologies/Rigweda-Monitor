@@ -1,0 +1,196 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Eye, Globe, LayoutGrid, RefreshCw, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getMonitorEmployeeActivity, MonitorEmployeeActivity } from "@/services/monitorActivity";
+import { toast } from "sonner";
+
+const ACTIVE_WINDOW_MS = 75_000;
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const formatDuration = (seconds: number) => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+};
+
+const getDisplayStatus = (employee: MonitorEmployeeActivity, now: number) => {
+  if (employee.status !== "active" || !employee.lastSeenAt) return "offline";
+  const lastSeenAt = new Date(employee.lastSeenAt).getTime();
+  return Number.isFinite(lastSeenAt) && now - lastSeenAt <= ACTIVE_WINDOW_MS ? "active" : "offline";
+};
+
+const MonitorEmployees = () => {
+  const navigate = useNavigate();
+  const [date, setDate] = useState(today);
+  const [employees, setEmployees] = useState<MonitorEmployeeActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  const load = useCallback(async (manual = false) => {
+    manual ? setRefreshing(true) : setLoading(true);
+    try {
+      const data = await getMonitorEmployeeActivity(date);
+      setEmployees(data.employees || []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load monitor employees.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [date]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const { activeCount, offlineCount, totalProductiveSeconds } = useMemo(() => {
+    const active = employees.filter((employee) => getDisplayStatus(employee, now) === "active").length;
+    return {
+      activeCount: active,
+      offlineCount: employees.length - active,
+      totalProductiveSeconds: employees.reduce((total, employee) => total + Number(employee.productiveSeconds || 0), 0)
+    };
+  }, [employees, now]);
+
+  return (
+    <MainLayout title="Employees" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Employees" }]}>
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold">Monitored employees</h2>
+            <p className="text-sm text-muted-foreground">
+              View the employees reporting monitor activity and jump straight into their screenshots.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-[155px]" />
+            <Button variant="outline" onClick={() => void load(true)} disabled={refreshing}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tracked employees</CardTitle></CardHeader>
+            <CardContent className="flex items-center gap-2 text-2xl font-bold"><Users className="h-5 w-5 text-muted-foreground" />{employees.length}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Online now</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-emerald-600">{activeCount}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Offline now</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-slate-600">{offlineCount}</CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Employee monitor table
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last seen</TableHead>
+                    <TableHead className="text-right">Productive time</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!loading && employees.map((employee) => {
+                    const status = getDisplayStatus(employee, now);
+                    const statusLabel = status === "active" ? "Online" : "Offline";
+                    return (
+                      <TableRow key={employee.employeeId}>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span>{employee.employeeName || "Employee"}</span>
+                            <span className="text-xs text-muted-foreground">{employee.employeeCode || "-"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{employee.employeeId}</TableCell>
+                        <TableCell>
+                          <Badge className={status === "active" ? "bg-emerald-600 hover:bg-emerald-600" : "bg-slate-500 hover:bg-slate-500"}>
+                            {statusLabel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{employee.lastSeenAt ? new Date(employee.lastSeenAt).toLocaleString() : "-"}</TableCell>
+                        <TableCell className="text-right">{formatDuration(Number(employee.productiveSeconds || 0))}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                navigate(
+                                  `/monitor/screenshots?employeeId=${encodeURIComponent(employee.employeeId)}&date=${encodeURIComponent(date)}&onlyWithImage=true`
+                                )
+                              }
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View screenshots
+                            </Button>
+                            <Button size="sm" variant="outline" disabled title="Coming soon">
+                              <Globe className="mr-2 h-4 w-4" />
+                              View webhistory
+                            </Button>
+                            <Button size="sm" variant="outline" disabled title="Coming soon">
+                              <LayoutGrid className="mr-2 h-4 w-4" />
+                              View apps used
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {!loading && employees.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                        No monitored employees were found for this date.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                        Loading monitored employees...
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-4 text-sm text-muted-foreground">
+              Total productive time: {formatDuration(totalProductiveSeconds)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </MainLayout>
+  );
+};
+
+export default MonitorEmployees;
