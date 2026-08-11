@@ -51,7 +51,8 @@ const defaultAllowedOrigins = [
   "http://localhost:8080",
   "http://localhost:8081",
   "http://localhost:3002",
-  "http://localhost:3001"
+  "http://localhost:3001",
+  "https://rigweda-hrms-frontend.vercel.app"
 ];
 const configuredAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "http://localhost:3000")
   .split(",")
