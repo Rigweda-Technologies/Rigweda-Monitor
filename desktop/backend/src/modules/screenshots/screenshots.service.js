@@ -92,7 +92,7 @@ export const screenshotService = {
 
   async createUploadSession({ auth, batchId, deviceId, screenshots }) {
     const employeeProfile = await this.resolveEmployeeProfile(auth.token);
-    const employeeId = employeeProfile?.employeeId || employeeProfile?.userId;
+    const employeeId = employeeProfile?.employeeDbId || employeeProfile?.employeeId || employeeProfile?.userId;
 
     if (!employeeId) {
       const error = new Error("Employee profile not found for the authenticated user.");

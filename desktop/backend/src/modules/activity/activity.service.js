@@ -9,7 +9,7 @@ const getEmployeeName = (profile) => {
 export const activityService = {
   async recordEvents({ auth, events }) {
     const profile = await getEmployeeProfileFromRigweda({ token: auth.token });
-    const employeeId = profile?.employeeId || profile?.userId || auth.userId;
+    const employeeId = profile?.employeeDbId || profile?.employeeId || profile?.userId || auth.userId;
     if (!employeeId) {
       const error = new Error("Employee profile not found for the authenticated user.");
       error.statusCode = 404;

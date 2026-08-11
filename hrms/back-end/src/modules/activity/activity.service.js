@@ -75,7 +75,7 @@ exports.listEmployees = async ({ organizationId, date }) => {
 
   for (const row of rows) {
     const employee = employeeMap.get(String(row.employeeId)) || {};
-    const canonicalEmployeeId = employee.code || String(row.employeeId);
+    const canonicalEmployeeId = employee.employeeId || String(row.employeeId);
     const key = canonicalEmployeeId;
     const current = groupedRows.get(key) || {
       employeeId: canonicalEmployeeId,
