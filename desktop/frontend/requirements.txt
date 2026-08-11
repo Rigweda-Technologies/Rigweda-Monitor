@@ -3,3 +3,4 @@ python-dotenv
 mss
 pywin32; platform_system == "Windows"
 Pillow
+PyInstaller

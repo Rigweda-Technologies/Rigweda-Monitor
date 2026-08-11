@@ -247,7 +247,7 @@ const startServer = async () => {
     }
   }
 
-  server.listen(PORT, () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
     if (shouldExposeSwagger) {
       console.log(`📄 Swagger docs: http://localhost:${PORT}/swagger-ui`);
