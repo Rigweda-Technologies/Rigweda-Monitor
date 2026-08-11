@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
+const DEFAULT_HRMS_BACKEND_URL = "https://rigweda-hrms-backend.onrender.com/api";
+const DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api";
 
 export const loadEnvFiles = () => {
   // The HRMS payroll database is the shared Postgres store in local development.
@@ -26,8 +28,6 @@ export const loadEnvFiles = () => {
 
 const requiredEnv = [
   "JWT_ACCESS_SECRET",
-  "HRMS_BACKEND_URL",
-  "DESKTOP_BACKEND_URL",
 ];
 
 export const validateEnv = () => {
@@ -44,8 +44,8 @@ export const validateEnv = () => {
 
 export const getEnv = () => ({
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
-  hrmsBackendUrl: String(process.env.HRMS_BACKEND_URL || "").replace(/\/+$/, ""),
-  desktopBackendUrl: String(process.env.DESKTOP_BACKEND_URL || "").replace(/\/+$/, ""),
+  hrmsBackendUrl: String(process.env.HRMS_BACKEND_URL || DEFAULT_HRMS_BACKEND_URL).replace(/\/+$/, ""),
+  desktopBackendUrl: String(process.env.DESKTOP_BACKEND_URL || DEFAULT_DESKTOP_BACKEND_URL).replace(/\/+$/, ""),
   corsOrigins: String(process.env.CORS_ORIGINS || "")
     .split(",")
     .map((origin) => origin.trim())
