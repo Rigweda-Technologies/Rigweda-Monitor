@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { getApiWithToken } from "@/services/apiWrapper";
 import { getMonitorScreenshots, MonitorScreenshot } from "@/services/monitorActivity";
+import { getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => toDateKeyInOrgTimeZone(new Date());
 const PAGE_SIZE = 20;
 
 const hourOptions = Array.from({ length: 24 }, (_, hour) => {
@@ -49,6 +50,7 @@ const MonitorScreenshots = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
 
   const selectedEmployeeName = useMemo(() => {
     if (employeeId === "all") return "All employees";
@@ -96,6 +98,12 @@ const MonitorScreenshots = () => {
     void loadEmployees();
   }, [loadEmployees]);
 
+  useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
+
+  useEffect(() => {
+    setDate(toDateKeyInOrgTimeZone(new Date()));
+  }, [timeZone]);
+
   useEffect(() => {
     void loadScreenshots(1);
   }, [loadScreenshots]);
@@ -117,6 +125,7 @@ const MonitorScreenshots = () => {
             <p className="text-sm text-muted-foreground">
               Review attendance screenshots employee-wise from the monitor API.
             </p>
+            <p className="text-xs text-muted-foreground">Displayed in {timeZone} time.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <Select value={employeeId} onValueChange={setEmployeeId}>

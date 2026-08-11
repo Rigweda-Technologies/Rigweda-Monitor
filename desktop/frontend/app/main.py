@@ -21,7 +21,7 @@ else:  # pragma: no cover - import path depends on launch style
     from .screenshot_monitor import start_activity_monitor, start_screenshot_monitor
     from src.screenshots.screenshot import main as screenshot_main
 
-DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 STARTUP_LOG_FILE = LOG_DIR / "startup.log"
 CRASH_LOG_FILE = LOG_DIR / "crash.log"

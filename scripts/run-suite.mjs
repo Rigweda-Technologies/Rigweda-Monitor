@@ -10,7 +10,6 @@ const commands = {
   // only the UI/agent, which uses the deployed URLs from .env.server.
   desktop: mode === "local"
     ? [
-        { label: "hrms backend", cwd: "hrms/back-end", args: ["run", mode] },
         { label: "desktop backend", cwd: "desktop/backend", args: ["run", mode] },
         { label: "desktop agent", cwd: "desktop/frontend", args: ["-m", "app.main"], python: true },
       ]
@@ -31,13 +30,10 @@ if (!commands[suite] || !["local", "server"].includes(mode)) {
 const activeUrls = {
   desktop: mode === "local"
     ? [
-        "HRMS API:            http://localhost:8000/api",
         "Desktop monitor API: http://localhost:3001/api",
-        "HRMS login API:      http://localhost:8000/api/users/login",
       ]
     : [
         "Desktop monitor API: https://rigweda-monitor-backend.vercel.app/api",
-        "HRMS login API:      https://rigweda-hrms-backend.vercel.app/api/users/login",
       ],
   hrms: mode === "local"
     ? [

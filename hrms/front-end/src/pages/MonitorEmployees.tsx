@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getMonitorEmployeeActivity, MonitorEmployeeActivity } from "@/services/monitorActivity";
+import { formatDateTimeInOrgTimeZone, getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
 const ACTIVE_WINDOW_MS = 75_000;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => toDateKeyInOrgTimeZone(new Date());
 
 const formatDuration = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
@@ -33,6 +34,7 @@ const MonitorEmployees = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
 
   const load = useCallback(async (manual = false) => {
     manual ? setRefreshing(true) : setLoading(true);
@@ -56,6 +58,8 @@ const MonitorEmployees = () => {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
+
   const { activeCount, offlineCount, totalProductiveSeconds } = useMemo(() => {
     const active = employees.filter((employee) => getDisplayStatus(employee, now) === "active").length;
     return {
@@ -74,6 +78,7 @@ const MonitorEmployees = () => {
             <p className="text-sm text-muted-foreground">
               View the employees reporting monitor activity and jump straight into their screenshots.
             </p>
+            <p className="text-xs text-muted-foreground">Date and time are shown in {timeZone} time.</p>
           </div>
           <div className="flex items-center gap-2">
             <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-[155px]" />
@@ -137,7 +142,7 @@ const MonitorEmployees = () => {
                             {statusLabel}
                           </Badge>
                         </TableCell>
-                        <TableCell>{employee.lastSeenAt ? new Date(employee.lastSeenAt).toLocaleString() : "-"}</TableCell>
+                        <TableCell>{employee.lastSeenAt ? formatDateTimeInOrgTimeZone(employee.lastSeenAt) : "-"}</TableCell>
                         <TableCell className="text-right">{formatDuration(Number(employee.productiveSeconds || 0))}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-2">

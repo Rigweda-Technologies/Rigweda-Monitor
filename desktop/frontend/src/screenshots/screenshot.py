@@ -36,12 +36,12 @@ DEFAULT_INTERVAL_MS = 60_000
 DEFAULT_BATCH_SIZE = 30
 DEFAULT_UPLOAD_CONCURRENCY = 4
 if writable_runtime_path:
-    SCREENSHOT_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots"), "screenshots")
-    DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+    SCREENSHOT_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\screenshots"), "screenshots")
+    DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
     LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 else:
-    SCREENSHOT_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots")))
-    DATA_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data")))
+    SCREENSHOT_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\screenshots")))
+    DATA_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data")))
     LOG_DIR = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs"))))
 QUEUE_DB = DATA_ROOT / "screenshot_queue.db"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
@@ -510,6 +510,24 @@ def mark_rows_failed(rows: list[sqlite3.Row], error: Exception) -> None:
         )
 
 
+def mark_rows_pending(rows: list[sqlite3.Row], reason: str | None = None) -> None:
+    if not rows:
+        return
+
+    with get_connection() as connection:
+        connection.executemany(
+            """
+            UPDATE screenshots
+            SET status = 'pending',
+                batch_id = NULL,
+                last_error = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            [(reason[:1000] if reason else None, row["id"]) for row in rows],
+        )
+
+
 def mark_batch_id(rows: list[sqlite3.Row], batch_id: str) -> None:
     with get_connection() as connection:
         connection.executemany(
@@ -545,6 +563,25 @@ def post_json(url: str, payload: dict, *, token: str | None = None, timeout: int
         data=json.dumps(payload).encode("utf-8"),
         headers=headers,
         method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            text = response.read().decode("utf-8")
+            return json.loads(text) if text else {}
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {error.code} from {url}: {body}") from error
+
+
+def get_json(url: str, *, token: str | None = None, timeout: int = 60) -> dict:
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    request = urllib.request.Request(
+        url,
+        headers=headers,
+        method="GET",
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -708,6 +745,20 @@ def upload_pending_screenshots() -> None:
         if not token:
             return
 
+        try:
+            settings_response = get_json(
+                f"{get_backend_base_url()}/cloudinary/upload-config",
+                token=token,
+                timeout=30,
+            )
+        except Exception as error:
+            log_message(f"Cloudinary settings sync failed: {error}", error=True)
+            return
+
+        if not settings_response.get("success") or not settings_response.get("data"):
+            log_message("Cloudinary settings are unavailable yet; screenshots will stay queued.")
+            return
+
         queue_existing_screenshots()
         rows = fetch_upload_candidates(get_batch_size())
         if not rows:
@@ -742,6 +793,11 @@ def upload_pending_screenshots() -> None:
             timeout=60,
         )
         upload_session = response_payload["data"]
+
+        if upload_session.get("deferred"):
+            mark_rows_pending(rows, upload_session.get("reason") or "Cloudinary settings unavailable")
+            log_message(upload_session.get("reason") or "Cloudinary settings unavailable")
+            return
 
         row_by_id = {row["id"]: row for row in rows}
         uploaded: list[dict] = []
