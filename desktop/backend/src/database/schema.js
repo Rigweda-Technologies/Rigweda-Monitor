@@ -63,5 +63,43 @@ export const initializeDatabase = async () => {
     CREATE INDEX IF NOT EXISTS idx_monitor_screenshots_sha
     ON monitor_screenshots (organization_id, employee_id, sha256)
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_activity_events (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT,
+      employee_id TEXT NOT NULL,
+      employee_name TEXT,
+      device_id TEXT NOT NULL,
+      observed_at TIMESTAMPTZ NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('active', 'idle', 'offline')),
+      active_seconds INTEGER NOT NULL DEFAULT 0 CHECK (active_seconds >= 0),
+      idle_seconds INTEGER NOT NULL DEFAULT 0 CHECK (idle_seconds >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (device_id, id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_device_presence (
+      device_id TEXT PRIMARY KEY,
+      organization_id TEXT,
+      employee_id TEXT NOT NULL,
+      employee_name TEXT,
+      status TEXT NOT NULL CHECK (status IN ('active', 'idle', 'offline')),
+      last_seen_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_activity_events_employee_time
+    ON monitor_activity_events (organization_id, employee_id, observed_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_device_presence_organization_seen
+    ON monitor_device_presence (organization_id, last_seen_at DESC)
+  `);
 };
 

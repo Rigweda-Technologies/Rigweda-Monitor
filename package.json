@@ -1,0 +1,10 @@
+{
+  "name": "rigweda-monitor-workspace",
+  "private": true,
+  "scripts": {
+    "desktop:local": "node scripts/run-suite.mjs desktop local",
+    "desktop:server": "node scripts/run-suite.mjs desktop server",
+    "hrms:local": "node scripts/run-suite.mjs hrms local",
+    "hrms:server": "node scripts/run-suite.mjs hrms server"
+  }
+}

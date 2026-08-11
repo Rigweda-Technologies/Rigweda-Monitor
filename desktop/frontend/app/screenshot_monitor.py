@@ -7,19 +7,24 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.env import writable_runtime_path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VENV_PYTHON = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
 SCREENSHOT_SCRIPT = PROJECT_ROOT / "src" / "screenshots" / "screenshot.py"
-LOG_DIR = Path(r"C:\Rigweda_monitor\logs")
+ACTIVITY_SCRIPT = PROJECT_ROOT / "app" / "activity_monitor.py"
+DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 LOG_FILE = LOG_DIR / "screenshot_monitor.log"
 PID_FILE = LOG_DIR / "screenshot_monitor.pid"
+ACTIVITY_PID_FILE = LOG_DIR / "activity_monitor.pid"
 
 CREATE_NO_WINDOW = 0x08000000
 DETACHED_PROCESS = 0x00000008
 
 
-def _is_process_running(pid: int) -> bool:
+def _is_process_running(pid: int, expected_script: Path = SCREENSHOT_SCRIPT) -> bool:
     result = subprocess.run(
         [
             "powershell",
@@ -40,8 +45,11 @@ def _is_process_running(pid: int) -> bool:
     if getattr(sys, "frozen", False):
         return "rigwedamonitor" in command_line or "screenshot.py" in command_line
 
-    expected_script = str(SCREENSHOT_SCRIPT).lower()
-    return "screenshot.py" in command_line and expected_script in command_line
+    if expected_script == ACTIVITY_SCRIPT and "app.activity_monitor" in command_line:
+        return True
+
+    expected_path = str(expected_script).lower()
+    return expected_script.name.lower() in command_line and expected_path in command_line
 
 
 def _existing_monitor_is_running() -> bool:
@@ -99,3 +107,37 @@ def start_screenshot_monitor() -> tuple[bool, str]:
     PID_FILE.write_text(str(process.pid), encoding="utf-8")
     log_file.close()
     return True, "Screenshot monitor started."
+
+
+def start_activity_monitor() -> tuple[bool, str]:
+    """Launch the durable mouse activity agent in the desktop user session."""
+    try:
+        existing_pid = int(ACTIVITY_PID_FILE.read_text(encoding="utf-8").strip())
+    except (FileNotFoundError, ValueError):
+        existing_pid = 0
+
+    if existing_pid and _is_process_running(existing_pid, ACTIVITY_SCRIPT):
+        return True, "Activity monitor is already running."
+    ACTIVITY_PID_FILE.unlink(missing_ok=True)
+
+    if getattr(sys, "frozen", False):
+        command = [sys.executable, "--activity-monitor"]
+        working_directory = Path(sys.executable).resolve().parent
+    else:
+        if not ACTIVITY_SCRIPT.exists():
+            return False, f"Activity script is missing: {ACTIVITY_SCRIPT}"
+        python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
+        command = [str(python_executable), "-m", "app.activity_monitor"]
+        working_directory = PROJECT_ROOT
+
+    try:
+        process = subprocess.Popen(
+            command, cwd=str(working_directory), env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
+        )
+    except Exception as error:
+        return False, f"Could not start activity monitor: {error}"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    ACTIVITY_PID_FILE.write_text(str(process.pid), encoding="utf-8")
+    return True, "Activity monitor started."

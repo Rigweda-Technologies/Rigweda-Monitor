@@ -13,14 +13,14 @@ import urllib.request
 from ctypes import wintypes
 from pathlib import Path
 
-from app.env import load_app_env
+from app.env import load_app_env, writable_runtime_path
 
 load_app_env()
 
 DEFAULT_LOGIN_URL = "https://rigweda-hrms-backend.vercel.app/api/users/login"
 DEFAULT_HRMS_API_URL = "https://rigweda-hrms-backend.vercel.app/api"
 DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
-DATA_ROOT = Path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"))
+DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
 AUTH_FILE = DATA_ROOT / "auth.json"
 SERVICE_NAME = "MyAppBackendService"
 STARTUP_APP_NAME = "RigwedaMonitor"
@@ -63,9 +63,13 @@ def _is_access_denied(output: str) -> bool:
     return "FAILED 5" in normalized or "ACCESS IS DENIED" in normalized
 
 
-def _uses_local_backend() -> bool:
-    backend_url = os.getenv("DESKTOP_BACKEND_URL", DEFAULT_DESKTOP_BACKEND_URL).lower()
-    return "127.0.0.1" in backend_url or "localhost" in backend_url
+def _requires_local_windows_service() -> bool:
+    """Use the legacy Windows service only when explicitly enabled.
+
+    A local API URL does not mean that ``MyAppBackendService`` exists: during
+    development the API is commonly started directly with Node/Python.
+    """
+    return str(os.getenv("DESKTOP_START_WINDOWS_SERVICE", "false")).strip().lower() in {"1", "true", "yes"}
 
 
 def _start_service_as_admin() -> tuple[bool, str]:
@@ -329,8 +333,11 @@ def register_startup() -> tuple[bool, str]:
         command = f'"{executable}" --background-start'
     else:
         python_executable = Path(sys.executable).resolve()
+        python_windowed = python_executable.with_name("pythonw.exe")
+        launcher = python_windowed if python_windowed.exists() else python_executable
         main_script = Path(__file__).resolve().with_name("main.py")
-        command = f'"{python_executable}" "{main_script}" --background-start'
+        # pythonw prevents a visible terminal at every Windows sign-in.
+        command = f'"{launcher}" "{main_script}" --background-start'
 
     try:
         with winreg.OpenKey(
@@ -388,9 +395,9 @@ def login_to_hrms(email: str, password: str) -> tuple[bool, str, dict | None]:
 
 
 def ensure_service_running() -> tuple[bool, str]:
-    """Start the backend service if needed and report the outcome."""
-    if not _uses_local_backend():
-        return True, "Hosted backend configured; local service is not required."
+    """Start the optional legacy backend service if it has been enabled."""
+    if not _requires_local_windows_service():
+        return True, "Windows backend service is disabled; using the configured API URL."
 
     status_result = _run_sc_command("query", SERVICE_NAME)
     status_output = f"{status_result.stdout}\n{status_result.stderr}".upper()

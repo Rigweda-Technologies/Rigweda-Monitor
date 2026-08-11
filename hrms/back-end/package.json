@@ -10,6 +10,8 @@
     "test": "node --test",
     "test:watch": "node --test --watch",
     "start": "nodemon app.js",
+    "local": "set APP_ENV=local&& nodemon app.js",
+    "server": "set APP_ENV=server&& nodemon app.js",
     "jobs:scheduler": "node src/jobs/scheduler.js",
     "jobs:worker": "node src/jobs/worker.js",
     "migrate:weekoffs:rotational": "node src/script/migrate.weekoffs.rotational.js",

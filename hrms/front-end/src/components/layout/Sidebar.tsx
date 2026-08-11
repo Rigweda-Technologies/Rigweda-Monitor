@@ -17,7 +17,8 @@ import {
   CalendarDays,
   CalendarOff,
   ClipboardCheck,
-  Network
+  Network,
+  Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -152,6 +153,7 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <Users size={18} />, label: "Employee", to: "/employees", permissions: ["EMP_VIEW"] },
       { icon: <ClipboardCheck size={18} />, label: "Attendance", to: "/attendance", permissions: ["ATTENDANCE_VIEW_ALL", "ATTENDANCE_VIEW_SELF"] },
       { icon: <FileText size={18} />, label: "Timesheets", to: "/timesheets", permissions: ["TIMESHEET_VIEW_SELF", "TIMESHEET_VIEW_ALL"] },
+      { icon: <Activity size={18} />, label: "Desktop Activity", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
       { icon: <CalendarOff size={18} />, label: "Leave", to: "/leave", permissions: ["LEAVE_VIEW_SELF", "LEAVE_VIEW_ALL", "LEAVE_APPLY"] },
       { icon: <FileText size={18} />, label: "Payslips", to: "/employee-dashboard/payslips", permissions: ["EMP_SELF_VIEW"] },
       { icon: <Shield size={18} />, label: "Approvals", to: "/approvals", permissions: ["LEAVE_ACTION", "ATTENDANCE_MANAGE"] },

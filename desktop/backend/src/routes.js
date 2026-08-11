@@ -1,4 +1,5 @@
 import { registerScreenshotRoutes } from "./modules/screenshots/screenshots.routes.js";
+import { registerActivityRoutes } from "./modules/activity/activity.routes.js";
 
 export const registerRoutes = async (fastify) => {
   fastify.get("/", async () => ({
@@ -13,4 +14,5 @@ export const registerRoutes = async (fastify) => {
   }));
 
   await fastify.register(registerScreenshotRoutes, { prefix: "/api" });
+  await fastify.register(registerActivityRoutes, { prefix: "/api" });
 };

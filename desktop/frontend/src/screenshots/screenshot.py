@@ -25,17 +25,22 @@ from mss.tools import to_png
 from PIL import ImageGrab
 
 try:
-    from app.env import load_app_env
+    from app.env import load_app_env, writable_runtime_path
 except ImportError:
     load_dotenv()
+    writable_runtime_path = None
 else:
     load_app_env()
 
 DEFAULT_INTERVAL_MS = 60_000
 DEFAULT_BATCH_SIZE = 30
 DEFAULT_UPLOAD_CONCURRENCY = 4
-SCREENSHOT_ROOT = Path(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots"))
-DATA_ROOT = Path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"))
+if writable_runtime_path:
+    SCREENSHOT_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots"), "screenshots")
+    DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+else:
+    SCREENSHOT_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_SCREENSHOT_ROOT", r"C:\Rigweda_monitor\screenshots")))
+    DATA_ROOT = Path(os.path.expandvars(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data")))
 QUEUE_DB = DATA_ROOT / "screenshot_queue.db"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 AUTH_FILE = DATA_ROOT / "auth.json"

@@ -6,22 +6,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 
 export const loadEnvFiles = () => {
+  // The HRMS payroll database is the shared Postgres store in local development.
+  // Desktop-specific values loaded below always take precedence.
+  dotenv.config({ path: path.join(repoRoot, "hrms", "back-end", ".env") });
   dotenv.config({ path: path.join(repoRoot, "rigweda", "backend", ".env") });
   dotenv.config({ path: path.join(repoRoot, "desktop", "backend", ".env"), override: true });
+
+  // APP_ENV is set by `npm run local` or `npm run server`.  The selected file
+  // overrides the shared .env without changing it on disk.
+  const appEnv = String(process.env.APP_ENV || "").trim();
+  if (appEnv) {
+    dotenv.config({
+      path: path.join(repoRoot, "desktop", "backend", `.env.${appEnv}`),
+      override: true,
+      quiet: true,
+    });
+  }
 };
 
 const requiredEnv = [
   "JWT_ACCESS_SECRET",
   "RIGWEDA_API_BASE_URL",
-  "RIGWEDA_BACKEND_API_BASE_URL",
   "CLOUDINARY_CLOUD_NAME",
   "CLOUDINARY_API_KEY",
   "CLOUDINARY_API_SECRET",
-  "DATABASE_URL",
 ];
 
 export const validateEnv = () => {
   const missing = requiredEnv.filter((key) => !String(process.env[key] || "").trim());
+
+  if (!String(process.env.MONITOR_DATABASE_URL || process.env.DATABASE_URL || process.env.PAYROLL_DATABASE_URL || "").trim()) {
+    missing.push("MONITOR_DATABASE_URL, PAYROLL_DATABASE_URL, or DATABASE_URL");
+  }
 
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
@@ -39,7 +55,7 @@ export const getEnv = () => ({
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
-  databaseUrl: process.env.DATABASE_URL,
+  databaseUrl: process.env.MONITOR_DATABASE_URL || process.env.DATABASE_URL || process.env.PAYROLL_DATABASE_URL,
   databaseSsl: ["1", "true", "yes"].includes(String(process.env.DATABASE_SSL || "").toLowerCase()),
   databaseSslRejectUnauthorized: ["1", "true", "yes"].includes(
     String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || "").toLowerCase()
