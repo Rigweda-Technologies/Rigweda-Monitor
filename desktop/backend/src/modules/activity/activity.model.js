@@ -1,5 +1,8 @@
 import { getPool } from "../../database/pool.js";
 
+const ACTIVE_PRESENCE_WINDOW_SECONDS = 75;
+const FRESH_EVENT_WINDOW_SECONDS = 120;
+
 export const activityModel = {
   async saveEvents({ organizationId, employeeId, employeeName, events }) {
     const pool = getPool();
@@ -31,7 +34,14 @@ export const activityModel = {
         await client.query(
           `INSERT INTO monitor_device_presence (
             device_id, organization_id, employee_id, employee_name, status, last_seen_at
-          ) VALUES ($1, $2, $3, $4, $5, $6)
+          ) VALUES (
+            $1, $2, $3, $4, $5,
+            CASE
+              WHEN $6::timestamptz BETWEEN NOW() - ($7::integer * INTERVAL '1 second') AND NOW() + INTERVAL '1 minute'
+              THEN NOW()
+              ELSE $6::timestamptz
+            END
+          )
           ON CONFLICT (device_id) DO UPDATE SET
             organization_id = EXCLUDED.organization_id,
             employee_id = EXCLUDED.employee_id,
@@ -42,7 +52,15 @@ export const activityModel = {
             END,
             last_seen_at = GREATEST(monitor_device_presence.last_seen_at, EXCLUDED.last_seen_at),
             updated_at = NOW()`,
-          [event.deviceId, organizationId || null, employeeId, employeeName || null, event.status, event.observedAt]
+          [
+            event.deviceId,
+            organizationId || null,
+            employeeId,
+            employeeName || null,
+            event.status,
+            event.observedAt,
+            FRESH_EVENT_WINDOW_SECONDS,
+          ]
         );
       }
       await client.query("COMMIT");
@@ -67,7 +85,7 @@ export const activityModel = {
         GROUP BY employee_id
       ), presence AS (
         SELECT employee_id, MAX(employee_name) AS employee_name,
-          BOOL_OR(status = 'active' AND last_seen_at >= NOW() - INTERVAL '3 minutes') AS is_active,
+          BOOL_OR(status = 'active' AND last_seen_at >= NOW() - ($3::integer * INTERVAL '1 second')) AS is_active,
           MAX(last_seen_at) AS last_seen_at
         FROM monitor_device_presence
         WHERE ($1::text IS NULL OR organization_id = $1)
@@ -80,7 +98,7 @@ export const activityModel = {
         COALESCE(d.productive_seconds, 0) AS "productiveSeconds"
       FROM daily d FULL OUTER JOIN presence p ON p.employee_id = d.employee_id
       ORDER BY status DESC, "employeeName" NULLS LAST, "employeeId"`,
-      [organizationId || null, date]
+      [organizationId || null, date, ACTIVE_PRESENCE_WINDOW_SECONDS]
     );
     return rows;
   },

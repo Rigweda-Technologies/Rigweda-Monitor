@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import sys
+import threading
 import time
 import os
+import traceback
 from pathlib import Path
 
 if __package__ in {None, ""}:
@@ -22,6 +24,7 @@ else:  # pragma: no cover - import path depends on launch style
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 STARTUP_LOG_FILE = LOG_DIR / "startup.log"
+CRASH_LOG_FILE = LOG_DIR / "crash.log"
 
 
 def _log_startup(message: str) -> None:
@@ -29,6 +32,15 @@ def _log_startup(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     with STARTUP_LOG_FILE.open("a", encoding="utf-8") as log_file:
         log_file.write(f"{timestamp} {message}\n")
+
+
+def _log_crash(error: BaseException) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with CRASH_LOG_FILE.open("a", encoding="utf-8") as log_file:
+        log_file.write(f"{timestamp} Unhandled exception: {error}\n")
+        traceback.print_exc(file=log_file)
+        log_file.write("\n")
 
 
 def _resume_monitor_in_background() -> int:
@@ -43,19 +55,36 @@ def _resume_monitor_in_background() -> int:
         _log_startup(f"Service/backend start failed: {_service_message}")
         return 1
 
-    monitor_started, _monitor_message = start_screenshot_monitor()
-    if not monitor_started:
-        _log_startup(f"Screenshot monitor start failed: {_monitor_message}")
-        return 1
-
-    activity_started, activity_message = start_activity_monitor()
-    if not activity_started:
-        _log_startup(f"Activity monitor start failed: {activity_message}")
-        return 1
-
     startup_registered, startup_message = register_startup()
-    _log_startup(f"{_monitor_message} {startup_message if startup_registered else startup_message}")
-    return 0
+    _log_startup(startup_message if startup_registered else startup_message)
+
+    if __package__ in {None, ""}:
+        from app.activity_monitor import main as activity_main
+    else:  # pragma: no cover
+        from .activity_monitor import main as activity_main
+
+    def run_activity_monitor() -> None:
+        try:
+            exit_code = activity_main()
+        except Exception as error:
+            _log_startup(f"Activity monitor crashed: {error}")
+            _log_crash(error)
+            return
+        _log_startup(f"Activity monitor exited with code {exit_code}.")
+
+    activity_thread = threading.Thread(target=run_activity_monitor, daemon=True)
+    activity_thread.start()
+    time.sleep(2)
+    if not activity_thread.is_alive():
+        _log_startup("Activity monitor did not stay running.")
+
+    _log_startup("Running screenshot and activity monitors in one background process.")
+    previous_argv = sys.argv
+    sys.argv = [sys.argv[0]]
+    try:
+        return screenshot_main()
+    finally:
+        sys.argv = previous_argv
 
 
 def main() -> None:
@@ -85,5 +114,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:
+        _log_crash(error)
+        raise
 
