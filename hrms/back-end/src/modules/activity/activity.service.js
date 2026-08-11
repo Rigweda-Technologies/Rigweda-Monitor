@@ -8,21 +8,32 @@ const getEmployeeMap = async ({ organizationId, employeeIds }) => {
 
   try {
     const employees = await Employee.find({
-      _id: { $in: employeeIds },
-      organizationId
+      organizationId,
+      $or: [
+        { _id: { $in: employeeIds } },
+        { employeeCode: { $in: employeeIds } },
+        { userId: { $in: employeeIds } }
+      ]
     })
-      .select("firstName lastName employeeCode")
+      .select("firstName lastName employeeCode userId")
       .lean();
 
-    return new Map(
-      employees.map((employee) => [
-        String(employee._id),
-        {
-          name: [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() || null,
-          code: employee.employeeCode || null
-        }
-      ])
-    );
+    const map = new Map();
+    for (const employee of employees) {
+      const details = {
+        name: [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() || null,
+        code: employee.employeeCode || null,
+        employeeId: String(employee._id),
+      };
+      map.set(String(employee._id), details);
+      if (employee.employeeCode) {
+        map.set(String(employee.employeeCode), details);
+      }
+      if (employee.userId) {
+        map.set(String(employee.userId), details);
+      }
+    }
+    return map;
   } catch {
     return new Map();
   }
@@ -60,12 +71,39 @@ exports.listEmployees = async ({ organizationId, date }) => {
   const employeeIds = Array.from(new Set(rows.map((row) => String(row.employeeId)).filter(Boolean)));
   const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
 
-  return rows.map((row) => {
+  const groupedRows = new Map();
+
+  for (const row of rows) {
     const employee = employeeMap.get(String(row.employeeId)) || {};
-    return {
-      ...row,
+    const canonicalEmployeeId = employee.code || String(row.employeeId);
+    const key = canonicalEmployeeId;
+    const current = groupedRows.get(key) || {
+      employeeId: canonicalEmployeeId,
       employeeName: row.employeeName || employee.name || null,
-      employeeCode: employee.code || null
+      employeeCode: employee.code || null,
+      status: "offline",
+      lastSeenAt: null,
+      productiveSeconds: 0
     };
+
+    const rowLastSeen = row.lastSeenAt ? new Date(row.lastSeenAt).getTime() : 0;
+    const currentLastSeen = current.lastSeenAt ? new Date(current.lastSeenAt).getTime() : 0;
+
+    current.employeeName = current.employeeName || row.employeeName || employee.name || null;
+    current.employeeCode = current.employeeCode || employee.code || null;
+    current.productiveSeconds += Number(row.productiveSeconds || 0);
+    if (row.status === "active") {
+      current.status = "active";
+    }
+    if (row.lastSeenAt && rowLastSeen >= currentLastSeen) {
+      current.lastSeenAt = row.lastSeenAt;
+    }
+
+    groupedRows.set(key, current);
+  }
+
+  return Array.from(groupedRows.values()).sort((a, b) => {
+    if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+    return String(a.employeeName || "").localeCompare(String(b.employeeName || ""));
   });
 };
