@@ -13,7 +13,12 @@ const getBearerToken = (request) => {
 };
 
 const verifyRemoteToken = async (token) => {
-  const response = await fetch(`${getEnv().rigwedaApiBaseUrl}/api/users/me/profile`, {
+  const hrmsBackendUrl = getEnv().hrmsBackendUrl;
+  const profileUrl = hrmsBackendUrl.endsWith("/api")
+    ? `${hrmsBackendUrl}/users/me/profile`
+    : `${hrmsBackendUrl}/api/users/me/profile`;
+
+  const response = await fetch(profileUrl, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

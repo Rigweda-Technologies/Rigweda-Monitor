@@ -1,7 +1,16 @@
 import { getEnv } from "../config/env.js";
 
+const buildHrmsApiUrl = (path) => {
+  const baseUrl = getEnv().hrmsBackendUrl.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (baseUrl.endsWith("/api")) {
+    return `${baseUrl}${normalizedPath.startsWith("/api/") ? normalizedPath.slice(4) : normalizedPath}`;
+  }
+  return `${baseUrl}${normalizedPath}`;
+};
+
 const fetchProfileCandidate = async ({ token, path }) => {
-  const response = await fetch(`${getEnv().rigwedaApiBaseUrl}${path}`, {
+  const response = await fetch(buildHrmsApiUrl(path), {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -32,12 +41,29 @@ export const getEmployeeProfileFromRigweda = async ({ token }) => {
     return null;
   }
 
-  const employeeId = data.employeeCode || data._id || data.id || data.employeeId || data.userId;
+  const employeeId = data._id || data.id || data.employeeId || data.userId;
 
   return {
     employeeId,
+    employeeCode: data.employeeCode || null,
     userId: data.userId || null,
     organizationId: data.organizationId || data.organization?._id || null,
     raw: data,
   };
+};
+
+export const getMonitorCloudinarySettingsFromRigweda = async ({ token }) => {
+  const response = await fetch(buildHrmsApiUrl("/api/agents/cloudinary/upload-config"), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success || !payload?.data) {
+    throw new Error(payload?.message || `Failed to fetch Cloudinary monitor settings: ${response.status}`);
+  }
+
+  return payload.data;
 };

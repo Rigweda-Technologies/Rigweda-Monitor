@@ -62,11 +62,11 @@ const MonitorActivity = () => {
   const productiveSeconds = employees.reduce((total, employee) => total + Number(employee.productiveSeconds || 0), 0);
 
   return (
-    <MainLayout title="Desktop Activity" breadcrumb={[{ label: "Home", href: "/" }, { label: "Desktop Activity" }]}>
+    <MainLayout title="Mouse Movement" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Mouse Movement" }]}>
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Employee desktop activity</h2>
+            <h2 className="text-2xl font-semibold">Employee mouse movement</h2>
             <p className="text-sm text-muted-foreground">
               Updates automatically every 30 seconds. An employee is active only while fresh desktop activity is being reported.
             </p>

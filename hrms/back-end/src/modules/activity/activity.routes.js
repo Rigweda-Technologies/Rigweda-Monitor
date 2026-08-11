@@ -3,14 +3,11 @@ const router = require("express").Router();
 const auth = require("../../middlewares/auth.middleware");
 const authorize = require("../../middlewares/authorize.middleware");
 const asyncHandler = require("../../middlewares/asyncHandler");
-
-const monitorApiBaseUrl = () =>
-  String(process.env.MONITOR_API_BASE_URL || "https://rigweda-monitor-backend.vercel.app/api").replace(/\/+$/, "");
+const activityService = require("./activity.service");
 
 /**
- * Web-app API facade for activity data.
- * Activity events remain stored by desktop/backend; this route forwards the
- * signed-in HRMS user's token rather than exposing a second browser API host.
+ * Web-app read API for monitor activity data.
+ * Desktop backend owns writes; HRMS reads directly from the monitor Postgres DB.
  */
 router.get(
   "/employees",
@@ -18,21 +15,18 @@ router.get(
   authorize("EMP_VIEW"),
   asyncHandler(async (req, res) => {
     const date = typeof req.query.date === "string" ? req.query.date : "";
-    const query = date ? `?date=${encodeURIComponent(date)}` : "";
-    const response = await fetch(`${monitorApiBaseUrl()}/activity/employees${query}`, {
-      headers: {
-        Authorization: req.headers.authorization,
-        Accept: "application/json"
-      },
-      signal: AbortSignal.timeout(15_000)
+    const employees = await activityService.listEmployees({
+      organizationId: req.user.organizationId,
+      date: date || new Date().toISOString().slice(0, 10)
     });
 
-    const body = await response.json().catch(() => ({
-      success: false,
-      message: "Monitor API returned an invalid response."
-    }));
-
-    return res.status(response.status).json(body);
+    return res.status(200).json({
+      success: true,
+      code: 200,
+      message: "Activity fetched successfully",
+      data: { date, employees },
+      error: null
+    });
   })
 );
 

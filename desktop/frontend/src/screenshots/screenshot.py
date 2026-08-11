@@ -57,17 +57,24 @@ upload_lock = threading.Lock()
 process_lock_handle = None
 
 
+def _can_write_to_console(stream: object) -> bool:
+    try:
+        return bool(stream) and hasattr(stream, "isatty") and stream.isatty()
+    except Exception:
+        return False
+
+
 def log_message(message: object, *, error: bool = False, exc_info: bool = False) -> None:
     """Write monitor output without crashing windowed PyInstaller builds."""
     text = str(message)
     stream = sys.stderr if error else sys.stdout
     try:
-        if stream:
+        if _can_write_to_console(stream):
             print(text, file=stream, flush=True)
             if exc_info:
                 traceback.print_exc(file=stream)
             return
-    except (OSError, ValueError):
+    except Exception:
         pass
 
     try:
@@ -127,7 +134,10 @@ def get_upload_concurrency() -> int:
 
 
 def get_backend_base_url() -> str:
-    return os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+    hrms_url = os.getenv("HRMS_BACKEND_URL", "https://rigweda-hrms-backend.onrender.com/api").strip().rstrip("/")
+    if hrms_url.endswith("/api"):
+        return f"{hrms_url}/agents"
+    return f"{hrms_url}/api/agents"
 
 
 def get_screenshot_scan_roots() -> list[Path]:

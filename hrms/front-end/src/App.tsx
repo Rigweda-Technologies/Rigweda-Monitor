@@ -61,7 +61,10 @@ const Expenses = lazyWithRetry(() => import("./pages/Expenses"), "Expenses");
 const Projects = lazyWithRetry(() => import("./pages/Projects"), "Projects");
 const Hiring = lazyWithRetry(() => import("./pages/Hiring"), "Hiring");
 const EmployeeTree = lazyWithRetry(() => import("./pages/EmployeeTree"), "EmployeeTree");
+const MonitorEmployees = lazyWithRetry(() => import("./pages/MonitorEmployees"), "MonitorEmployees");
 const MonitorActivity = lazyWithRetry(() => import("./pages/MonitorActivity"), "MonitorActivity");
+const MonitorScreenshots = lazyWithRetry(() => import("./pages/MonitorScreenshots"), "MonitorScreenshots");
+const MonitorSettings = lazyWithRetry(() => import("./pages/MonitorSettings"), "MonitorSettings");
 
 const queryClient = new QueryClient();
 
@@ -555,11 +558,45 @@ const App = () => (
               }
             />
             <Route
+              path="/monitor"
+              element={<Navigate to="/monitor/employees" replace />}
+            />
+            <Route
+              path="/monitor/employees"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorEmployees />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
               path="/monitor/activity"
               element={
                 <RequireAuth permissions={["EMP_VIEW"]}>
                   <RequireProfile>
                     <MonitorActivity />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/screenshots"
+              element={
+                <RequireAuth permissions={["ATTENDANCE_VIEW_ALL"]}>
+                  <RequireProfile>
+                    <MonitorScreenshots />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/settings"
+              element={
+                <RequireAuth permissions={["ORG_SETTINGS_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorSettings />
                   </RequireProfile>
                 </RequireAuth>
               }

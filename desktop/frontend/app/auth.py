@@ -17,9 +17,9 @@ from app.env import load_app_env, writable_runtime_path
 
 load_app_env()
 
-DEFAULT_LOGIN_URL = "https://rigweda-hrms-backend.onrender.com/api/users/login"
-DEFAULT_HRMS_API_URL = "https://rigweda-hrms-backend.onrender.com/api"
+DEFAULT_HRMS_BACKEND_URL = "https://rigweda-hrms-backend.onrender.com/api"
 DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
+DEFAULT_LOGIN_URL = f"{DEFAULT_HRMS_BACKEND_URL}/users/login"
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
 AUTH_FILE = DATA_ROOT / "auth.json"
 SERVICE_NAME = "MyAppBackendService"
@@ -189,6 +189,18 @@ def _response_data(payload: dict) -> dict:
     return data if isinstance(data, dict) else payload
 
 
+def _hrms_backend_url() -> str:
+    return os.getenv("HRMS_BACKEND_URL", DEFAULT_HRMS_BACKEND_URL).rstrip("/")
+
+
+def _hrms_api_url(path: str) -> str:
+    base_url = _hrms_backend_url()
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    if base_url.endswith("/api"):
+        return f"{base_url}{normalized_path}"
+    return f"{base_url}/api{normalized_path}"
+
+
 def _extract_employee_details(email: str, payload: dict) -> dict:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     user = data.get("user") if isinstance(data.get("user"), dict) else {}
@@ -248,10 +260,9 @@ def _extract_employee_details(email: str, payload: dict) -> dict:
 
 
 def _fetch_employee_details(email: str, token: str) -> dict | None:
-    api_url = os.getenv("HRMS_API_URL", DEFAULT_HRMS_API_URL).rstrip("/")
     for path in ("/employees/me", "/users/me/profile"):
         try:
-            payload = _request_json(f"{api_url}{path}", token=token)
+            payload = _request_json(_hrms_api_url(path), token=token)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
             continue
 
@@ -355,7 +366,11 @@ def register_startup() -> tuple[bool, str]:
 
 def login_to_hrms(email: str, password: str) -> tuple[bool, str, dict | None]:
     """Authenticate against HRMS and persist the returned access token."""
-    login_url = os.getenv("HRMS_LOGIN_URL", DEFAULT_LOGIN_URL)
+    login_url = os.getenv("HRMS_BACKEND_URL", DEFAULT_HRMS_BACKEND_URL).rstrip("/")
+    if login_url.endswith("/api"):
+        login_url = f"{login_url}/users/login"
+    else:
+        login_url = f"{login_url}/api/users/login"
 
     request_body = json.dumps({"email": email, "password": password}).encode("utf-8")
     request = urllib.request.Request(

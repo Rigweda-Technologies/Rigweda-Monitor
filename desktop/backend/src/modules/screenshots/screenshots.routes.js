@@ -2,23 +2,9 @@ import {
   completeUploadSessionHandler,
   createScreenshotHandler,
   createUploadSessionHandler,
-  listScreenshotsHandler,
 } from "./screenshots.controller.js";
 
 export const registerScreenshotRoutes = async (fastify) => {
-  fastify.get(
-    "/screenshots",
-    {
-      preHandler: fastify.authenticateRequest,
-      schema: {
-        tags: ["Screenshots"],
-        summary: "List recent uploaded screenshots",
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    listScreenshotsHandler
-  );
-
   fastify.post(
     "/screenshots",
     {

@@ -1,4 +1,4 @@
-const Attendance = require("../timesheets/timesheetAttendance.model");
+const { getMonitorPgPool } = require("../../config/monitorDb");
 const Employee = require("../employees/employee.model");
 
 const parsePositiveInt = (value, fallback) => {
@@ -15,98 +15,144 @@ const parseBooleanQuery = (value) => {
   return null;
 };
 
-const startOfDay = (value) => {
-  const d = new Date(value);
-  d.setHours(0, 0, 0, 0);
-  return d;
+const parseHour = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 23) return null;
+  return parsed;
 };
 
-const endOfDay = (value) => {
-  const d = new Date(value);
-  d.setHours(23, 59, 59, 999);
-  return d;
+const getEmployeeMap = async ({ organizationId, employeeIds }) => {
+  if (!employeeIds.length) return new Map();
+  let employees = [];
+  try {
+    employees = await Employee.find({
+      _id: { $in: employeeIds },
+      organizationId
+    })
+      .select("firstName lastName employeeCode")
+      .lean();
+  } catch {
+    employees = [];
+  }
+
+  return new Map(
+    employees.map((employee) => [
+      String(employee._id),
+      {
+        name: [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() || null,
+        code: employee.employeeCode || null
+      }
+    ])
+  );
 };
 
 exports.getScreenshots = async (req) => {
-  const organizationId = req.user.organizationId;
+  const organizationId = String(req.user.organizationId || "");
   const employeeId = String(req.query.employeeId || "").trim();
+  const date = String(req.query.date || "").trim();
   const dateFrom = String(req.query.dateFrom || "").trim();
   const dateTo = String(req.query.dateTo || "").trim();
+  const hour = parseHour(req.query.hour);
   const onlyWithImage = parseBooleanQuery(req.query.onlyWithImage);
   const page = parsePositiveInt(req.query.page, 1);
-  const limit = Math.min(parsePositiveInt(req.query.limit, 50), 200);
+  const limit = Math.min(parsePositiveInt(req.query.limit, 20), 200);
+  const offset = (page - 1) * limit;
 
-  const query = { organizationId };
+  const where = ["organization_id = $1"];
+  const values = [organizationId];
 
   if (employeeId) {
-    query.employeeId = employeeId;
+    values.push(employeeId);
+    where.push(`employee_id = $${values.length}`);
   }
 
-  if (dateFrom || dateTo) {
-    query.date = {};
-    if (dateFrom) query.date.$gte = startOfDay(dateFrom);
-    if (dateTo) query.date.$lte = endOfDay(dateTo);
+  if (date) {
+    values.push(date);
+    where.push(`captured_at >= $${values.length}::date`);
+    values.push(date);
+    where.push(`captured_at < ($${values.length}::date + INTERVAL '1 day')`);
+  } else {
+    if (dateFrom) {
+      values.push(dateFrom);
+      where.push(`captured_at >= $${values.length}::date`);
+    }
+    if (dateTo) {
+      values.push(dateTo);
+      where.push(`captured_at < ($${values.length}::date + INTERVAL '1 day')`);
+    }
   }
 
-  const rows = await Attendance.find(query)
-    .select(
-      "employeeId organizationId date dateKey status checkInAt checkInIp checkInSelfieProvided checkInSelfieImage checkInDeviceId checkOutAt checkOutIp checkOutSelfieProvided checkOutSelfieImage checkOutDeviceId shiftName shiftCode createdAt updatedAt"
-    )
-    .populate("employeeId", "firstName lastName employeeCode")
-    .sort({ date: -1, updatedAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .lean();
+  if (hour !== null) {
+    values.push(hour);
+    where.push(`EXTRACT(HOUR FROM captured_at)::integer = $${values.length}`);
+  }
 
-  const items = [];
+  if (onlyWithImage === true) {
+    where.push("cloudinary_url IS NOT NULL");
+    where.push("upload_status = 'uploaded'");
+  } else if (onlyWithImage === false) {
+    where.push("(cloudinary_url IS NULL OR upload_status <> 'uploaded')");
+  }
 
-  for (const row of rows) {
-    const employee = row.employeeId || {};
-    const employeeName = [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() || null;
+  const pool = await getMonitorPgPool();
+  const baseWhere = where.join(" AND ");
+  const totalResult = await pool.query(
+    `SELECT COUNT(*)::integer AS total FROM monitor_screenshots WHERE ${baseWhere}`,
+    values
+  );
 
-    const addItem = ({ action, capturedAt, imageUrl, selfieProvided, deviceId, ip }) => {
-      if (onlyWithImage === true && !imageUrl) return;
-      if (onlyWithImage === false && imageUrl) return;
+  const rowsResult = await pool.query(
+    `
+      SELECT
+        id, batch_id, organization_id, employee_id, device_id, client_screenshot_id,
+        captured_at, original_file_name, mime_type, width, height, size_bytes,
+        cloudinary_folder, cloudinary_public_id, cloudinary_asset_id, cloudinary_url,
+        upload_status, processing_status, created_at, uploaded_at
+      FROM monitor_screenshots
+      WHERE ${baseWhere}
+      ORDER BY captured_at DESC
+      LIMIT $${values.length + 1}
+      OFFSET $${values.length + 2}
+    `,
+    [...values, limit, offset]
+  );
 
-      items.push({
-        screenshotId: `${row._id}-${action}`,
-        attendanceId: row._id,
-        organizationId: row.organizationId,
-        employeeId: employee._id || row.employeeId,
-        employeeName,
-        employeeCode: employee.employeeCode || null,
-        date: row.date,
-        dateKey: row.dateKey,
-        action,
-        capturedAt: capturedAt || row.createdAt || row.updatedAt,
-        imageUrl: imageUrl || null,
-        selfieProvided: Boolean(selfieProvided),
-        deviceId: deviceId || null,
-        ip: ip || null,
-        status: row.status || null,
-        shiftName: row.shiftName || null,
-        shiftCode: row.shiftCode || null
-      });
+  const employeeIds = Array.from(new Set(rowsResult.rows.map((row) => String(row.employee_id)).filter(Boolean)));
+  const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
+
+  const items = rowsResult.rows.map((row) => {
+    const employee = employeeMap.get(String(row.employee_id)) || {};
+    return {
+      screenshotId: row.id,
+      attendanceId: null,
+      organizationId: row.organization_id,
+      employeeId: row.employee_id,
+      employeeName: employee.name || null,
+      employeeCode: employee.code || null,
+      date: row.captured_at,
+      dateKey: row.captured_at ? new Date(row.captured_at).toISOString().slice(0, 10) : null,
+      action: "screenshot",
+      capturedAt: row.captured_at,
+      imageUrl: row.cloudinary_url || null,
+      selfieProvided: Boolean(row.cloudinary_url),
+      deviceId: row.device_id || null,
+      ip: null,
+      status: row.upload_status || null,
+      shiftName: null,
+      shiftCode: null,
+      source: "monitor_db",
+      publicId: row.cloudinary_public_id || null,
+      processingStatus: row.processing_status || null
     };
+  });
 
-    addItem({
-      action: "check_in",
-      capturedAt: row.checkInAt,
-      imageUrl: row.checkInSelfieImage,
-      selfieProvided: row.checkInSelfieProvided,
-      deviceId: row.checkInDeviceId,
-      ip: row.checkInIp
-    });
-
-    addItem({
-      action: "check_out",
-      capturedAt: row.checkOutAt,
-      imageUrl: row.checkOutSelfieImage,
-      selfieProvided: row.checkOutSelfieProvided,
-      deviceId: row.checkOutDeviceId,
-      ip: row.checkOutIp
-    });
-  }
-
-  return { items, page, limit, count: items.length };
+  return {
+    items,
+    page,
+    limit,
+    count: items.length,
+    total: Number(totalResult.rows[0]?.total || 0),
+    source: "monitor_db"
+  };
 };
