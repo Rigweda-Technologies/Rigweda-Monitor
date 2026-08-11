@@ -333,8 +333,11 @@ def register_startup() -> tuple[bool, str]:
         command = f'"{executable}" --background-start'
     else:
         python_executable = Path(sys.executable).resolve()
+        python_windowed = python_executable.with_name("pythonw.exe")
+        launcher = python_windowed if python_windowed.exists() else python_executable
         main_script = Path(__file__).resolve().with_name("main.py")
-        command = f'"{python_executable}" "{main_script}" --background-start'
+        # pythonw prevents a visible terminal at every Windows sign-in.
+        command = f'"{launcher}" "{main_script}" --background-start'
 
     try:
         with winreg.OpenKey(

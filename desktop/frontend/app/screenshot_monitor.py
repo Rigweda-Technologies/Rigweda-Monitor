@@ -45,6 +45,9 @@ def _is_process_running(pid: int, expected_script: Path = SCREENSHOT_SCRIPT) -> 
     if getattr(sys, "frozen", False):
         return "rigwedamonitor" in command_line or "screenshot.py" in command_line
 
+    if expected_script == ACTIVITY_SCRIPT and "app.activity_monitor" in command_line:
+        return True
+
     expected_path = str(expected_script).lower()
     return expected_script.name.lower() in command_line and expected_path in command_line
 
@@ -124,7 +127,7 @@ def start_activity_monitor() -> tuple[bool, str]:
         if not ACTIVITY_SCRIPT.exists():
             return False, f"Activity script is missing: {ACTIVITY_SCRIPT}"
         python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
-        command = [str(python_executable), str(ACTIVITY_SCRIPT)]
+        command = [str(python_executable), "-m", "app.activity_monitor"]
         working_directory = PROJECT_ROOT
 
     try:

@@ -19,6 +19,7 @@ from app.env import writable_runtime_path
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
 QUEUE_DB = DATA_ROOT / "activity_queue.db"
+LOCK_FILE = DATA_ROOT / "activity_monitor.lock"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "300")), 10)
 HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "60")), 10)
@@ -184,10 +185,21 @@ def start_activity_monitor() -> None:
 
 
 def main() -> int:
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    try:
+        lock_handle = LOCK_FILE.open("x", encoding="utf-8")
+    except FileExistsError:
+        return 0
+
+    lock_handle.write(str(os.getpid()))
+    lock_handle.flush()
     try:
         start_activity_monitor()
     except KeyboardInterrupt:
         return 0
+    finally:
+        lock_handle.close()
+        LOCK_FILE.unlink(missing_ok=True)
     return 0
 
 
