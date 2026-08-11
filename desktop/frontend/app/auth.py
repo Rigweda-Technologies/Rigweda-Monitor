@@ -20,7 +20,7 @@ load_app_env()
 DEFAULT_HRMS_BACKEND_URL = "https://rigweda-hrms-backend.onrender.com/api"
 DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
 DEFAULT_LOGIN_URL = f"{DEFAULT_HRMS_BACKEND_URL}/users/login"
-DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 AUTH_FILE = DATA_ROOT / "auth.json"
 SERVICE_NAME = "MyAppBackendService"
 STARTUP_APP_NAME = "RigwedaMonitor"

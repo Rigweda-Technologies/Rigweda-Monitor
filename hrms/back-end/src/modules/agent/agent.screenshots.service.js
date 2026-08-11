@@ -1,5 +1,22 @@
 const { getMonitorPgPool } = require("../../config/monitorDb");
 const Employee = require("../employees/employee.model");
+const OrgSettings = require("../orgSettings/orgSettings.model");
+const Organization = require("../organizations/organization.model");
+const {
+  isValidTimeZone,
+  toDateKeyInTimeZone,
+  startOfDayInTimeZone,
+  endOfDayInTimeZone
+} = require("../../utils/timezone");
+
+const getOrganizationTimeZone = async (organizationId) => {
+  const settings = await OrgSettings.findOne({ organizationId }).select("timezone").lean();
+  if (isValidTimeZone(settings?.timezone)) return settings.timezone;
+
+  const organization = await Organization.findById(organizationId).select("timezone").lean();
+  if (isValidTimeZone(organization?.timezone)) return organization.timezone;
+  return "Asia/Kolkata";
+};
 
 const parsePositiveInt = (value, fallback) => {
   const parsed = Number(value);
@@ -99,6 +116,7 @@ exports.getScreenshots = async (req) => {
   const page = parsePositiveInt(req.query.page, 1);
   const limit = Math.min(parsePositiveInt(req.query.limit, 20), 200);
   const offset = (page - 1) * limit;
+  const timeZone = await getOrganizationTimeZone(organizationId);
 
   const where = ["organization_id = $1"];
   const values = [organizationId];
@@ -119,24 +137,27 @@ exports.getScreenshots = async (req) => {
   }
 
   if (date) {
-    values.push(date);
-    where.push(`captured_at >= $${values.length}::date`);
-    values.push(date);
-    where.push(`captured_at < ($${values.length}::date + INTERVAL '1 day')`);
+    const dayStart = startOfDayInTimeZone(date, timeZone);
+    const dayEnd = endOfDayInTimeZone(date, timeZone);
+    values.push(dayStart);
+    where.push(`captured_at >= $${values.length}`);
+    values.push(dayEnd);
+    where.push(`captured_at <= $${values.length}`);
   } else {
     if (dateFrom) {
-      values.push(dateFrom);
-      where.push(`captured_at >= $${values.length}::date`);
+      values.push(startOfDayInTimeZone(dateFrom, timeZone));
+      where.push(`captured_at >= $${values.length}`);
     }
     if (dateTo) {
-      values.push(dateTo);
-      where.push(`captured_at < ($${values.length}::date + INTERVAL '1 day')`);
+      values.push(endOfDayInTimeZone(dateTo, timeZone));
+      where.push(`captured_at <= $${values.length}`);
     }
   }
 
   if (hour !== null) {
     values.push(hour);
-    where.push(`EXTRACT(HOUR FROM captured_at)::integer = $${values.length}`);
+    values.push(timeZone);
+    where.push(`EXTRACT(HOUR FROM captured_at AT TIME ZONE $${values.length})::integer = $${values.length - 1}`);
   }
 
   if (onlyWithImage === true) {
@@ -182,7 +203,7 @@ exports.getScreenshots = async (req) => {
       employeeName: employee.name || null,
       employeeCode: employee.code || null,
       date: row.captured_at,
-      dateKey: row.captured_at ? new Date(row.captured_at).toISOString().slice(0, 10) : null,
+      dateKey: row.captured_at ? toDateKeyInTimeZone(row.captured_at, timeZone) : null,
       action: "screenshot",
       capturedAt: row.captured_at,
       imageUrl: row.cloudinary_url || null,
@@ -204,6 +225,7 @@ exports.getScreenshots = async (req) => {
     limit,
     count: items.length,
     total: Number(totalResult.rows[0]?.total || 0),
+    timezone: timeZone,
     source: "monitor_db"
   };
 };

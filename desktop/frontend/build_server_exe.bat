@@ -27,10 +27,10 @@ if exist "%DIST_DIR%\RigwedaMonitorDebug" rmdir /s /q "%DIST_DIR%\RigwedaMonitor
   echo HRMS_BACKEND_URL=https://rigweda-hrms-backend.onrender.com/api
   echo DESKTOP_BACKEND_URL=https://rigweda-monitor-backend.vercel.app/api
   echo DESKTOP_START_WINDOWS_SERVICE=false
-  echo RIGWEDA_MONITOR_DATA_ROOT=%%LOCALAPPDATA%%\RigwedaMonitor\data
-  echo RIGWEDA_MONITOR_SCREENSHOT_ROOT=%%LOCALAPPDATA%%\RigwedaMonitor\screenshots
-  echo RIGWEDA_MONITOR_LOG_ROOT=%%LOCALAPPDATA%%\RigwedaMonitor\logs
-  echo RIGWEDA_MONITOR_SCAN_ROOTS=%%LOCALAPPDATA%%\RigwedaMonitor\screenshots
+  echo RIGWEDA_MONITOR_DATA_ROOT=%%LOCALAPPDATA%%\rigweda-monitor\data
+  echo RIGWEDA_MONITOR_SCREENSHOT_ROOT=%%LOCALAPPDATA%%\rigweda-monitor\screenshots
+  echo RIGWEDA_MONITOR_LOG_ROOT=%%LOCALAPPDATA%%\rigweda-monitor\logs
+  echo RIGWEDA_MONITOR_SCAN_ROOTS=%%LOCALAPPDATA%%\rigweda-monitor\screenshots
   echo SCREENSHOT_INTERVAL_MS=30000
   echo SCREENSHOT_UPLOAD_BATCH_SIZE=30
   echo SCREENSHOT_UPLOAD_CONCURRENCY=4

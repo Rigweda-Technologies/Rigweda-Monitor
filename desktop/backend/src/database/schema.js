@@ -65,6 +65,19 @@ export const initializeDatabase = async () => {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_cloudinary_settings (
+      organization_id TEXT PRIMARY KEY,
+      cloud_name TEXT NOT NULL,
+      api_key TEXT NOT NULL,
+      api_secret_ciphertext TEXT NOT NULL,
+      api_secret_iv TEXT NOT NULL,
+      api_secret_auth_tag TEXT NOT NULL,
+      upload_folder_root TEXT NOT NULL DEFAULT 'rigweda-monitor',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS monitor_activity_events (
       id TEXT PRIMARY KEY,
       organization_id TEXT,

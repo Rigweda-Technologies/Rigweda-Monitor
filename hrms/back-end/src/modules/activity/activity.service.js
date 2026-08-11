@@ -1,7 +1,24 @@
 const { getMonitorPgPool } = require("../../config/monitorDb");
 const Employee = require("../employees/employee.model");
+const OrgSettings = require("../orgSettings/orgSettings.model");
+const Organization = require("../organizations/organization.model");
+const {
+  isValidTimeZone,
+  toDateKeyInTimeZone,
+  startOfDayInTimeZone,
+  endOfDayInTimeZone
+} = require("../../utils/timezone");
 
 const ACTIVE_PRESENCE_WINDOW_SECONDS = 75;
+
+const getOrganizationTimeZone = async (organizationId) => {
+  const settings = await OrgSettings.findOne({ organizationId }).select("timezone").lean();
+  if (isValidTimeZone(settings?.timezone)) return settings.timezone;
+
+  const organization = await Organization.findById(organizationId).select("timezone").lean();
+  if (isValidTimeZone(organization?.timezone)) return organization.timezone;
+  return "Asia/Kolkata";
+};
 
 const getEmployeeMap = async ({ organizationId, employeeIds }) => {
   if (!employeeIds.length) return new Map();
@@ -40,6 +57,10 @@ const getEmployeeMap = async ({ organizationId, employeeIds }) => {
 };
 
 exports.listEmployees = async ({ organizationId, date }) => {
+  const timeZone = await getOrganizationTimeZone(organizationId);
+  const normalizedDate = toDateKeyInTimeZone(date || new Date(), timeZone);
+  const dayStart = startOfDayInTimeZone(normalizedDate, timeZone);
+  const dayEnd = endOfDayInTimeZone(normalizedDate, timeZone);
   const pool = await getMonitorPgPool();
   const { rows } = await pool.query(
     `WITH daily AS (
@@ -47,12 +68,12 @@ exports.listEmployees = async ({ organizationId, date }) => {
         COALESCE(SUM(active_seconds), 0)::integer AS productive_seconds
       FROM monitor_activity_events
       WHERE organization_id = $1
-        AND observed_at >= $2::date
-        AND observed_at < ($2::date + INTERVAL '1 day')
+        AND observed_at >= $2
+        AND observed_at <= $3
       GROUP BY employee_id
     ), presence AS (
       SELECT employee_id, MAX(employee_name) AS employee_name,
-        BOOL_OR(status = 'active' AND last_seen_at >= NOW() - ($3::integer * INTERVAL '1 second')) AS is_active,
+        BOOL_OR(status = 'active' AND last_seen_at >= NOW() - ($4::integer * INTERVAL '1 second')) AS is_active,
         MAX(last_seen_at) AS last_seen_at
       FROM monitor_device_presence
       WHERE organization_id = $1
@@ -65,7 +86,7 @@ exports.listEmployees = async ({ organizationId, date }) => {
       COALESCE(d.productive_seconds, 0) AS "productiveSeconds"
     FROM daily d FULL OUTER JOIN presence p ON p.employee_id = d.employee_id
     ORDER BY status DESC, "employeeName" NULLS LAST, "employeeId"`,
-    [String(organizationId), date, ACTIVE_PRESENCE_WINDOW_SECONDS]
+    [String(organizationId), dayStart, dayEnd, ACTIVE_PRESENCE_WINDOW_SECONDS]
   );
 
   const employeeIds = Array.from(new Set(rows.map((row) => String(row.employeeId)).filter(Boolean)));
@@ -102,8 +123,12 @@ exports.listEmployees = async ({ organizationId, date }) => {
     groupedRows.set(key, current);
   }
 
-  return Array.from(groupedRows.values()).sort((a, b) => {
-    if (a.status !== b.status) return a.status === "active" ? -1 : 1;
-    return String(a.employeeName || "").localeCompare(String(b.employeeName || ""));
-  });
+  return {
+    date: normalizedDate,
+    timezone: timeZone,
+    employees: Array.from(groupedRows.values()).sort((a, b) => {
+      if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+      return String(a.employeeName || "").localeCompare(String(b.employeeName || ""));
+    })
+  };
 };

@@ -15,16 +15,16 @@ router.get(
   authorize("EMP_VIEW"),
   asyncHandler(async (req, res) => {
     const date = typeof req.query.date === "string" ? req.query.date : "";
-    const employees = await activityService.listEmployees({
+    const data = await activityService.listEmployees({
       organizationId: req.user.organizationId,
-      date: date || new Date().toISOString().slice(0, 10)
+      date
     });
 
     return res.status(200).json({
       success: true,
       code: 200,
       message: "Activity fetched successfully",
-      data: { date, employees },
+      data,
       error: null
     });
   })

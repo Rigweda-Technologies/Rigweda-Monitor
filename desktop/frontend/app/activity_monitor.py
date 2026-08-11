@@ -18,7 +18,7 @@ from pathlib import Path
 from app.auth import load_auth_session
 from app.env import writable_runtime_path
 
-DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"C:\Rigweda_monitor\data"), "data")
+DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 QUEUE_DB = DATA_ROOT / "activity_queue.db"
 LOCK_FILE = DATA_ROOT / "activity_monitor.lock"
 LOG_FILE = DATA_ROOT.parent / "logs" / "activity_monitor.log"

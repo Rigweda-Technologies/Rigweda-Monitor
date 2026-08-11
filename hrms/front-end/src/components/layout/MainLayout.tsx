@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 import { cn } from "@/lib/utils";
+import { getApiWithToken } from "@/services/apiWrapper";
 import { getOrgTimeZone, subscribeToOrgTimeZone } from "@/utils/timezone";
 
 interface MainLayoutProps {
@@ -50,6 +51,13 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
   }, [location.pathname]);
 
   useEffect(() => subscribeToOrgTimeZone(setTimeZoneVersion), []);
+
+  useEffect(() => {
+    void getApiWithToken("/org-settings", null, {
+      suppressPermissionError: true,
+      cacheTtlMs: 5 * 60 * 1000
+    });
+  }, []);
 
   if (parentLayout) {
     return <>{children}</>;

@@ -103,7 +103,24 @@ export const screenshotService = {
     const organizationId = auth.organizationId || null;
     const firstCapturedAt = screenshots[0].capturedAt;
     const lastCapturedAt = screenshots[screenshots.length - 1].capturedAt;
-    const cloudinarySettings = await resolveCloudinarySettings({ token: auth.token });
+    const cloudinarySettings = await resolveCloudinarySettings({
+      token: auth.token,
+      organizationId,
+      refresh: true,
+      allowMissing: true,
+    });
+
+    if (!cloudinarySettings) {
+      return {
+        batchId,
+        employeeId,
+        deviceId,
+        expiresInSeconds: 300,
+        deferred: true,
+        reason: "Cloudinary settings are not configured yet.",
+        uploads: [],
+      };
+    }
 
     await screenshotModel.upsertBatch({
       batchId,
@@ -163,13 +180,14 @@ export const screenshotService = {
       uploads.push({
         clientScreenshotId: item.clientScreenshotId,
         status: "upload",
-        cloudinaryPublicId: publicId,
-        ...(await createSignedUploadPayload({
-          token: auth.token,
-          folder,
-          publicId,
-          context: {
-            batch_id: batchId,
+          cloudinaryPublicId: publicId,
+          ...(await createSignedUploadPayload({
+            token: auth.token,
+            organizationId,
+            folder,
+            publicId,
+            context: {
+              batch_id: batchId,
             employee_id: employeeId,
             device_id: deviceId,
             captured_at: item.capturedAt,
