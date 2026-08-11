@@ -31,6 +31,10 @@ def load_app_env() -> None:
     # APP_ENV is set by the workspace launcher.  It lets one installation use
     # different local and hosted-backend URLs without editing the shared .env.
     app_env = os.getenv("APP_ENV", "").strip()
+    if not app_env and getattr(sys, "frozen", False):
+        # Packaged builds should default to the hosted backend unless the
+        # installer or a wrapper explicitly opts into local mode.
+        app_env = os.getenv("RIGWEDA_MONITOR_DEFAULT_ENV", "server").strip()
     if app_env:
         mode_path = Path(__file__).resolve().parents[1] / f".env.{app_env}"
         if mode_path.exists():
