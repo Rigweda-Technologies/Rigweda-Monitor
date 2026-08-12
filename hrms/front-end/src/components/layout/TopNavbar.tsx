@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, Settings, ChevronDown, Menu } from "lucide-react";
+import { Search, Bell, Settings, ChevronDown, Menu, Paintbrush, Save, SlidersHorizontal } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,12 +14,15 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { getApiWithToken, patchApiWithToken, switchRole } from "@/services/apiWrapper";
+import { Button } from "@/components/ui/button";
+import { getApiWithToken, patchApiWithToken, postApiWithToken, switchRole } from "@/services/apiWrapper";
 import { clearAuth, setToken, updateActiveRoleInProfile } from "@/utils/auth";
 import { useAuth } from "@/context/useAuth";
 import { toast } from "sonner";
 import { formatDateTimeInOrgTimeZone } from "@/utils/timezone";
+import { applyThemeToDocument, THEME_PRESETS, OrgThemeConfig, OrgThemePreset, OrgThemeSettings } from "@/utils/theme";
 import {
   RealtimeNotification,
   disconnectRealtimeSocket,
@@ -43,9 +46,42 @@ interface NotificationItem {
   meta?: Record<string, unknown>;
 }
 
+type OrgSettingsSnapshot = {
+  leaveCreditFrequency?: string;
+  leaveTypeCreditMode?: string;
+  sandwichRuleEnabled?: boolean;
+  attendanceLockEnabled?: boolean;
+  attendanceLockAfterDays?: number;
+  attendanceLockMode?: string;
+  attendanceLockDay?: number;
+  timezone?: string;
+  logoUrl?: string;
+  payrollCutoffDay?: number;
+  payrollSalaryPayDay?: number;
+  payrollEnabled?: boolean;
+  minWorkHoursPerDay?: number;
+  minHalfDayHours?: number;
+  attendanceIpEnabled?: boolean;
+  attendanceAllowedIp?: string;
+  attendanceSelfieRequired?: boolean;
+  attendanceMultiPunchEnabled?: boolean;
+  attendanceGeoFenceEnabled?: boolean;
+  attendanceGeoLatitude?: number | null;
+  attendanceGeoLongitude?: number | null;
+  attendanceGeoRadiusMeters?: number;
+  attendanceDevBypassEnabled?: boolean;
+  probationPeriodDays?: number;
+  noticePeriodDays?: number;
+  employeeIdPrefix?: string;
+  maxActiveLoginsPerUser?: number;
+  themeMode?: "preset" | "custom";
+  themePreset?: OrgThemePreset;
+  themeConfig?: OrgThemeConfig;
+};
+
 export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) => {
   const navigate = useNavigate();
-  const { profile, setProfile, setPermissions } = useAuth();
+  const { profile, setProfile, setPermissions, hasAnyPermission } = useAuth();
   const roles = useMemo(() => profile?.roles || [], [profile]);
   const activeRole = useMemo(() => profile?.activeRole || roles?.[0] || null, [profile, roles]);
   const organizationName = profile?.organization?.name || profile?.activeOrganization?.name || "Organization";
@@ -56,6 +92,25 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [orgSettings, setOrgSettings] = useState<OrgSettingsSnapshot | null>(null);
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [savingTheme, setSavingTheme] = useState(false);
+  const canManageSettings = hasAnyPermission(["ORG_SETTINGS_MANAGE"]);
+  const currentThemeMode = orgSettings?.themeMode || "preset";
+  const currentThemePreset = orgSettings?.themePreset || "ocean";
+  const [customTheme, setCustomTheme] = useState<OrgThemeConfig>({
+    primary: "",
+    secondary: "",
+    background: "",
+    foreground: "",
+    sidebar: "",
+    sidebarForeground: "",
+    accent: "",
+    card: "",
+    muted: "",
+    border: "",
+    ring: ""
+  });
 
   const loadNotifications = async (showLoader = false) => {
     if (showLoader) setLoadingNotifications(true);
@@ -72,6 +127,38 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   useEffect(() => {
     loadNotifications(true);
   }, []);
+
+  const loadThemeSettings = async () => {
+    if (!canManageSettings) return;
+    const res: any = await getApiWithToken("/org-settings", null, {
+      requiredPermissions: ["ORG_SETTINGS_VIEW"]
+    });
+    if (res?.success) {
+      setOrgSettings(res.data || null);
+      setCustomTheme({
+        primary: res.data?.themeConfig?.primary || "",
+        secondary: res.data?.themeConfig?.secondary || "",
+        background: res.data?.themeConfig?.background || "",
+        foreground: res.data?.themeConfig?.foreground || "",
+        sidebar: res.data?.themeConfig?.sidebar || "",
+        sidebarForeground: res.data?.themeConfig?.sidebarForeground || "",
+        accent: res.data?.themeConfig?.accent || "",
+        card: res.data?.themeConfig?.card || "",
+        muted: res.data?.themeConfig?.muted || "",
+        border: res.data?.themeConfig?.border || "",
+        ring: res.data?.themeConfig?.ring || ""
+      });
+      applyThemeToDocument(res.data);
+    }
+  };
+
+  useEffect(() => {
+    loadThemeSettings();
+  }, [canManageSettings]);
+
+  useEffect(() => {
+    applyThemeToDocument(orgSettings);
+  }, [orgSettings]);
 
   useEffect(() => {
     return subscribeNotifications((notification: RealtimeNotification) => {
@@ -136,6 +223,60 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
     navigate("/login", { replace: true });
   };
 
+  const saveTheme = async (payload: OrgThemeSettings) => {
+    if (!orgSettings) return;
+    setSavingTheme(true);
+    try {
+      const res: any = await postApiWithToken(
+        "/org-settings",
+        {
+          leaveCreditFrequency: orgSettings.leaveCreditFrequency || "monthly",
+          leaveTypeCreditMode: orgSettings.leaveTypeCreditMode || "current_month_onwards",
+          sandwichRuleEnabled: Boolean(orgSettings.sandwichRuleEnabled),
+          attendanceLockEnabled: orgSettings.attendanceLockEnabled ?? true,
+          attendanceLockAfterDays: Number(orgSettings.attendanceLockAfterDays ?? 7),
+          attendanceLockMode: orgSettings.attendanceLockMode || "payroll_cutoff",
+          attendanceLockDay: Number(orgSettings.attendanceLockDay ?? 25),
+          timezone: orgSettings.timezone || "Asia/Kolkata",
+          payrollCutoffDay: Number(orgSettings.payrollCutoffDay ?? 25),
+          payrollSalaryPayDay: Number(orgSettings.payrollSalaryPayDay ?? 30),
+          payrollEnabled: Boolean(orgSettings.payrollEnabled),
+          minWorkHoursPerDay: Number(orgSettings.minWorkHoursPerDay ?? 8),
+          minHalfDayHours: Number(orgSettings.minHalfDayHours ?? 4),
+          attendanceIpEnabled: Boolean(orgSettings.attendanceIpEnabled),
+          attendanceAllowedIp: orgSettings.attendanceAllowedIp || "",
+          attendanceSelfieRequired: Boolean(orgSettings.attendanceSelfieRequired),
+          attendanceMultiPunchEnabled: Boolean(orgSettings.attendanceMultiPunchEnabled),
+          attendanceGeoFenceEnabled: Boolean(orgSettings.attendanceGeoFenceEnabled),
+          attendanceGeoLatitude: orgSettings.attendanceGeoLatitude ?? null,
+          attendanceGeoLongitude: orgSettings.attendanceGeoLongitude ?? null,
+          attendanceGeoRadiusMeters: Number(orgSettings.attendanceGeoRadiusMeters ?? 200),
+          attendanceDevBypassEnabled: Boolean(orgSettings.attendanceDevBypassEnabled),
+          probationPeriodDays: Number(orgSettings.probationPeriodDays ?? 90),
+          noticePeriodDays: Number(orgSettings.noticePeriodDays ?? 30),
+          employeeIdPrefix: orgSettings.employeeIdPrefix || "",
+          maxActiveLoginsPerUser: Number(orgSettings.maxActiveLoginsPerUser ?? 1),
+          logoUpload: undefined,
+          themeMode: payload.themeMode || "preset",
+          themePreset: payload.themePreset || "ocean",
+          themeConfig: payload.themeConfig || {}
+        },
+        null,
+        { requiredPermissions: ["ORG_SETTINGS_MANAGE"] }
+      );
+      if (res?.success) {
+        setOrgSettings(res.data || null);
+        applyThemeToDocument(res.data);
+        toast.success("Theme updated");
+        setThemeEditorOpen(false);
+      } else {
+        toast.error(res?.message || "Failed to update theme");
+      }
+    } finally {
+      setSavingTheme(false);
+    }
+  };
+
   const markOneNotificationRead = async (id: string) => {
     const res: any = await patchApiWithToken(`/notifications/${id}/read`, {}, null, {
       requiredPermissions: ["NOTIFICATION_MANAGE_SELF"]
@@ -158,6 +299,22 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return "";
     return formatDateTimeInOrgTimeZone(d);
+  };
+
+  const updateThemePreset = (preset: OrgThemePreset) => {
+    const presetConfig = THEME_PRESETS[preset]?.config || THEME_PRESETS.ocean.config;
+    const nextTheme = {
+      themeMode: "preset" as const,
+      themePreset: preset,
+      themeConfig: presetConfig
+    };
+    setOrgSettings((prev) => (prev ? { ...prev, ...nextTheme } : prev));
+    applyThemeToDocument(nextTheme);
+    void saveTheme(nextTheme);
+  };
+
+  const updateCustomThemeField = (key: keyof OrgThemeConfig, value: string) => {
+    setCustomTheme((prev) => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -257,6 +414,38 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {canManageSettings && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="relative flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted transition-colors">
+              <Paintbrush className="h-4 w-4 text-muted-foreground" />
+              <span className="hidden sm:inline">Theme</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4" />
+                Organization Theme
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+                <DropdownMenuItem key={key} onClick={() => updateThemePreset(key as OrgThemePreset)}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="h-3.5 w-3.5 rounded-full border"
+                      style={{ backgroundColor: `hsl(${preset.config.primary})` }}
+                    />
+                    {preset.label}
+                    {currentThemeMode === "preset" && currentThemePreset === key ? " (active)" : ""}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setThemeEditorOpen(true)}>
+                Custom theme...
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Settings */}
         {/* <button className="p-2 rounded-lg hover:bg-muted transition-colors">
           <Settings className="w-5 h-5 text-muted-foreground" />
@@ -326,6 +515,55 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <Dialog open={themeEditorOpen} onOpenChange={setThemeEditorOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Custom Theme</DialogTitle>
+            <DialogDescription>
+              Set your organization palette. Use HSL values like `217 89% 45%` for best results.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            {(["primary", "secondary", "background", "foreground", "sidebar", "sidebarForeground", "accent", "card", "muted", "border", "ring"] as const).map((field) => (
+              <label key={field} className="space-y-2">
+                <span className="text-sm font-medium capitalize">{field.replace(/([A-Z])/g, " $1")}</span>
+                <Input
+                  value={customTheme[field] || ""}
+                  onChange={(e) => updateCustomThemeField(field, e.target.value)}
+                  placeholder="e.g. 217 89% 45%"
+                />
+              </label>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                const presetConfig = THEME_PRESETS.ocean.config;
+                setCustomTheme(presetConfig);
+              }}
+            >
+              Reset
+            </Button>
+            <Button
+              type="button"
+              disabled={savingTheme}
+              onClick={() =>
+                void saveTheme({
+                  themeMode: "custom",
+                  themePreset: currentThemePreset,
+                  themeConfig: customTheme
+                })
+              }
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {savingTheme ? "Saving..." : "Save Theme"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 };

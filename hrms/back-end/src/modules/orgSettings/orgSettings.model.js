@@ -50,6 +50,31 @@ const orgSettingsSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
+    themeMode: {
+      type: String,
+      enum: ["preset", "custom"],
+      default: "preset"
+    },
+    themePreset: {
+      type: String,
+      enum: ["ocean", "forest", "sunset", "graphite"],
+      default: "ocean"
+    },
+    themeConfig: {
+      primary: { type: String, default: "" },
+      secondary: { type: String, default: "" },
+      background: { type: String, default: "" },
+      foreground: { type: String, default: "" },
+      sidebar: { type: String, default: "" },
+      sidebarGradientStart: { type: String, default: "" },
+      sidebarGradientEnd: { type: String, default: "" },
+      sidebarForeground: { type: String, default: "" },
+      accent: { type: String, default: "" },
+      card: { type: String, default: "" },
+      muted: { type: String, default: "" },
+      border: { type: String, default: "" },
+      ring: { type: String, default: "" }
+    },
     payrollCutoffDay: {
       type: Number,
       default: 25
