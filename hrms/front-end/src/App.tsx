@@ -63,6 +63,8 @@ const Hiring = lazyWithRetry(() => import("./pages/Hiring"), "Hiring");
 const EmployeeTree = lazyWithRetry(() => import("./pages/EmployeeTree"), "EmployeeTree");
 const MonitorEmployees = lazyWithRetry(() => import("./pages/MonitorEmployees"), "MonitorEmployees");
 const MonitorActivity = lazyWithRetry(() => import("./pages/MonitorActivity"), "MonitorActivity");
+const MonitorAppUsage = lazyWithRetry(() => import("./pages/MonitorAppUsage"), "MonitorAppUsage");
+const MonitorAppKeyUsage = lazyWithRetry(() => import("./pages/MonitorAppKeyUsage"), "MonitorAppKeyUsage");
 const MonitorScreenshots = lazyWithRetry(() => import("./pages/MonitorScreenshots"), "MonitorScreenshots");
 const MonitorSettings = lazyWithRetry(() => import("./pages/MonitorSettings"), "MonitorSettings");
 
@@ -577,6 +579,26 @@ const App = () => (
                 <RequireAuth permissions={["EMP_VIEW"]}>
                   <RequireProfile>
                     <MonitorActivity />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/apps"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorAppUsage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/app-keys"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorAppKeyUsage />
                   </RequireProfile>
                 </RequireAuth>
               }

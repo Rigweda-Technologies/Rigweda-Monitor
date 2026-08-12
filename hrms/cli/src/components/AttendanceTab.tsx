@@ -12,6 +12,13 @@ type AttendanceTabProps = {
   dayNames: string[];
   formatTime: (value: string | Date) => string;
   employeeName: string;
+  attendancePolicy?: {
+    attendanceIpEnabled: boolean;
+    attendanceSelfieRequired: boolean;
+    attendanceMultiPunchEnabled: boolean;
+    attendanceGeoFenceEnabled: boolean;
+    attendanceGeoRadiusMeters: number;
+  } | null;
   upcomingHolidays?: any[];
   holidaysLoading?: boolean;
 };
@@ -33,10 +40,18 @@ const getStatusMeta = (status?: string | null) => {
   }
   if (normalized === 'half_day_present') {
     return {
-      label: 'half day present',
+      label: 'Half day present',
       icon: 'check-circle',
       chip: styles.statusHalfDayPresent,
       chipText: styles.statusHalfDayPresentText,
+    };
+  }
+  if (normalized === 'pending_checkout') {
+    return {
+      label: 'Pending checkout',
+      icon: 'clock-outline',
+      chip: styles.statusPending,
+      chipText: styles.statusPendingText,
     };
   }
   if (isPresentLikeStatus(normalized)) {
@@ -104,6 +119,15 @@ const normalizeHolidayName = (value?: string) => {
   return raw.replace(/\s*\/?\s*festivals?\b/gi, '').trim();
 };
 
+const getLegendItems = () => [
+  { label: 'Present', tone: styles.legendPresent, dot: '#10b981' },
+  { label: 'Pending', tone: styles.legendPending, dot: '#f59e0b' },
+  { label: 'Absent', tone: styles.legendAbsent, dot: '#ef4444' },
+  { label: 'Leave', tone: styles.legendLeave, dot: '#8b5cf6' },
+  { label: 'Week off', tone: styles.legendWeekOff, dot: '#0ea5e9' },
+  { label: 'Holiday', tone: styles.legendHoliday, dot: '#f59e0b' },
+];
+
 const AttendanceTab = ({
   matrixDays,
   daysInMonth,
@@ -112,6 +136,7 @@ const AttendanceTab = ({
   dayNames,
   formatTime,
   employeeName,
+  attendancePolicy,
   upcomingHolidays = [],
   holidaysLoading = false,
 }: AttendanceTabProps) => {
@@ -165,6 +190,7 @@ const AttendanceTab = ({
 
     if (cell.status === 'half_day_present') return styles.calendarHalfDay;
     if (isPresentLikeStatus(cell.status)) return styles.calendarPresent;
+    if (cell.status === 'pending_checkout') return styles.calendarPending;
 
     if (cell.status === 'absent') return styles.calendarAbsent;
 
@@ -225,10 +251,11 @@ const AttendanceTab = ({
           return (
             <Pressable
               key={`day-${day}`}
-              style={[
+              style={({ pressed }) => [
                 styles.dayCell,
                 getAttendanceStyle(day),
                 day === selectedDay && styles.dayCellSelected,
+                pressed && styles.dayCellPressed,
               ]}
               onPress={() => handleSelectDay(day)}
             >
@@ -238,6 +265,21 @@ const AttendanceTab = ({
             </Pressable>
           );
         })}
+      </View>
+
+      <View style={styles.legendCard}>
+        <View style={styles.legendHeader}>
+          <Text style={styles.legendTitle}>Legend</Text>
+          <Text style={styles.legendSubtitle}>Same color language as the web attendance grid</Text>
+        </View>
+        <View style={styles.legendGrid}>
+          {getLegendItems().map((item) => (
+            <View key={item.label} style={[styles.legendItem, item.tone]}>
+              <Text style={[styles.legendDot, { color: item.dot }]}>●</Text>
+              <Text style={styles.legendText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
       <Modal visible={selectedDay !== null} transparent animationType="fade" onRequestClose={closeDetailCard}>
@@ -264,6 +306,8 @@ const AttendanceTab = ({
                   {(() => {
                     const cell = matrixDays[selectedDay] || {};
                     const statusMeta = getStatusMeta(cell.status);
+                    const hasCheckIn = Boolean(cell.checkInAt);
+                    const hasCheckOut = Boolean(cell.checkOutAt);
                     
                     return (
                       <>
@@ -271,54 +315,112 @@ const AttendanceTab = ({
                           <View style={[styles.statusChip, statusMeta.chip]}>
                             <MaterialCommunityIcons name={statusMeta.icon as any} size={13} color="#0f172a" />
                             <Text style={[styles.statusChipText, statusMeta.chipText]}>
-                              {statusMeta.label.charAt(0).toUpperCase() + statusMeta.label.slice(1)}
+                              {statusMeta.label}
                             </Text>
                           </View>
                         </View>
-                        {cell.checkInAt && (
-                          <View style={styles.detailRowCard}>
-                            <View style={styles.detailRow}>
+                        <View style={styles.detailRowCard}>
+                          <View style={styles.detailRow}>
                             <View style={styles.detailKeyWrap}>
                               <MaterialCommunityIcons name="login" size={14} color="#64748b" />
                               <Text style={styles.detailKey}>Check-in</Text>
                             </View>
-                            <Text style={styles.detailValue}>{formatTime(cell.checkInAt)}</Text>
-                            </View>
+                            <Text style={styles.detailValue}>
+                              {hasCheckIn ? formatTime(cell.checkInAt as string) : 'Not recorded'}
+                            </Text>
                           </View>
-                        )}
-                        {cell.checkOutAt && (
-                          <View style={styles.detailRowCard}>
-                            <View style={styles.detailRow}>
+                        </View>
+                        <View style={styles.detailRowCard}>
+                          <View style={styles.detailRow}>
                             <View style={styles.detailKeyWrap}>
                               <MaterialCommunityIcons name="logout" size={14} color="#64748b" />
                               <Text style={styles.detailKey}>Check-out</Text>
                             </View>
-                            <Text style={styles.detailValue}>{formatTime(cell.checkOutAt)}</Text>
+                            <Text style={styles.detailValue}>
+                              {hasCheckOut ? formatTime(cell.checkOutAt as string) : 'Not recorded'}
+                            </Text>
+                          </View>
+                        </View>
+                        {cell.missedCheckout ? (
+                          <View style={styles.detailRowCard}>
+                            <View style={styles.detailRow}>
+                              <View style={styles.detailKeyWrap}>
+                                <MaterialCommunityIcons name="alert-circle-outline" size={14} color="#64748b" />
+                                <Text style={styles.detailKey}>Note</Text>
+                              </View>
+                              <Text style={styles.detailValue}>Missed checkout</Text>
                             </View>
                           </View>
-                        )}
+                        ) : null}
                         {cell.leaveType && (
                           <View style={styles.detailRowCard}>
                             <View style={styles.detailRow}>
-                            <View style={styles.detailKeyWrap}>
-                              <MaterialCommunityIcons name="beach" size={14} color="#64748b" />
-                              <Text style={styles.detailKey}>Leave Type</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{cell.leaveType}</Text>
+                              <View style={styles.detailKeyWrap}>
+                                <MaterialCommunityIcons name="beach" size={14} color="#64748b" />
+                                <Text style={styles.detailKey}>Leave Type</Text>
+                              </View>
+                              <Text style={styles.detailValue}>{cell.leaveType}</Text>
                             </View>
                           </View>
                         )}
                         {cell.holidayName && (
                           <View style={styles.detailRowCard}>
                             <View style={styles.detailRow}>
-                            <View style={styles.detailKeyWrap}>
-                              <MaterialCommunityIcons name="party-popper" size={14} color="#64748b" />
-                              <Text style={styles.detailKey}>Holiday</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{normalizeHolidayName(cell.holidayName)}</Text>
+                              <View style={styles.detailKeyWrap}>
+                                <MaterialCommunityIcons name="party-popper" size={14} color="#64748b" />
+                                <Text style={styles.detailKey}>Holiday</Text>
+                              </View>
+                              <Text style={styles.detailValue}>{normalizeHolidayName(cell.holidayName)}</Text>
                             </View>
                           </View>
                         )}
+                        {typeof cell.lateByMinutes === 'number' && cell.lateByMinutes > 0 ? (
+                          <View style={styles.detailRowCard}>
+                            <View style={styles.detailRow}>
+                              <View style={styles.detailKeyWrap}>
+                                <MaterialCommunityIcons name="clock-alert-outline" size={14} color="#64748b" />
+                                <Text style={styles.detailKey}>Late by</Text>
+                              </View>
+                              <Text style={styles.detailValue}>{cell.lateByMinutes} min</Text>
+                            </View>
+                          </View>
+                        ) : null}
+                        {attendancePolicy ? (
+                          <View style={styles.policyCard}>
+                            <View style={styles.policyHeader}>
+                              <MaterialCommunityIcons name="shield-check-outline" size={15} color="#2563eb" />
+                              <Text style={styles.policyTitle}>Policy details</Text>
+                            </View>
+                            <View style={styles.policyGrid}>
+                              <View style={styles.policyRow}>
+                                <Text style={styles.policyLabel}>IP lock</Text>
+                                <Text style={styles.policyValue}>
+                                  {attendancePolicy.attendanceIpEnabled ? 'Enabled' : 'Disabled'}
+                                </Text>
+                              </View>
+                              <View style={styles.policyRow}>
+                                <Text style={styles.policyLabel}>Selfie</Text>
+                                <Text style={styles.policyValue}>
+                                  {attendancePolicy.attendanceSelfieRequired ? 'Required' : 'Optional'}
+                                </Text>
+                              </View>
+                              <View style={styles.policyRow}>
+                                <Text style={styles.policyLabel}>Multi punch</Text>
+                                <Text style={styles.policyValue}>
+                                  {attendancePolicy.attendanceMultiPunchEnabled ? 'Allowed' : 'Single punch'}
+                                </Text>
+                              </View>
+                              <View style={styles.policyRow}>
+                                <Text style={styles.policyLabel}>Geo fence</Text>
+                                <Text style={styles.policyValue}>
+                                  {attendancePolicy.attendanceGeoFenceEnabled
+                                    ? `${attendancePolicy.attendanceGeoRadiusMeters || 200}m`
+                                    : 'Off'}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        ) : null}
                       </>
                     );
                   })()}
@@ -459,6 +561,8 @@ const styles = StyleSheet.create({
     width: '13%',
     height: 48,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -480,6 +584,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.24,
     shadowRadius: 10,
     elevation: 5,
+    borderColor: '#2563eb',
+    transform: [{ scale: 0.98 }],
+  },
+  dayCellPressed: {
+    transform: [{ scale: 0.96 }],
   },
   dayTextSelected: {
     color: '#0f172a',
@@ -489,28 +598,39 @@ const styles = StyleSheet.create({
   /* LIGHT COLORS */
 
   calendarPresent: {
-    backgroundColor: '#a8eabf',
+    backgroundColor: '#d1fae5',
+    borderColor: '#10b981',
   },
   calendarHalfDay: {
-    backgroundColor: '#fde68a',
+    backgroundColor: '#fed7aa',
+    borderColor: '#f59e0b',
+  },
+  calendarPending: {
+    backgroundColor: '#fed7aa',
+    borderColor: '#f59e0b',
   },
   calendarHoliday: {
-    backgroundColor: '#f3dfa1',
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
   },
   calendarLeave: {
-    backgroundColor: '#8fe8ad',
+    backgroundColor: '#e0e7ff',
+    borderColor: '#8b5cf6',
   },
 
   calendarWeekOff: {
-    backgroundColor: '#b8cfef',
+    backgroundColor: '#e0f2fe',
+    borderColor: '#0ea5e9',
   },
 
   calendarAbsent: {
-    backgroundColor: '#f8dede',
+    backgroundColor: '#fee2e2',
+    borderColor: '#ef4444',
   },
 
   calendarNeutral: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
   },
 
   detailCard: {
@@ -667,36 +787,43 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   statusHalfDayPresent: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#fbbf24',
+    backgroundColor: '#fed7aa',
+    borderColor: '#f59e0b',
   },
   statusHalfDayPresentText: {
-    color: '#92400e',
+    color: '#9a3412',
+  },
+  statusPending: {
+    backgroundColor: '#fed7aa',
+    borderColor: '#f59e0b',
+  },
+  statusPendingText: {
+    color: '#9a3412',
   },
   statusAbsent: {
     backgroundColor: '#fee2e2',
-    borderColor: '#fca5a5',
+    borderColor: '#ef4444',
   },
   statusAbsentText: {
     color: '#b91c1c',
   },
   statusLeave: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#4ade80',
+    backgroundColor: '#e0e7ff',
+    borderColor: '#8b5cf6',
   },
   statusLeaveText: {
-    color: '#15803d',
+    color: '#6d28d9',
   },
   statusWeekOff: {
-    backgroundColor: '#dbeafe',
-    borderColor: '#93c5fd',
+    backgroundColor: '#e0f2fe',
+    borderColor: '#0ea5e9',
   },
   statusWeekOffText: {
-    color: '#1d4ed8',
+    color: '#0369a1',
   },
   statusHoliday: {
     backgroundColor: '#fef3c7',
-    borderColor: '#fcd34d',
+    borderColor: '#f59e0b',
   },
   statusHolidayText: {
     color: '#92400e',
@@ -707,6 +834,113 @@ const styles = StyleSheet.create({
   },
   statusNeutralText: {
     color: '#334155',
+  },
+  legendCard: {
+    marginTop: 16,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+    gap: 10,
+  },
+  legendHeader: {
+    gap: 2,
+  },
+  legendTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  legendSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  legendGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    minWidth: 100,
+  },
+  legendDot: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    width: 14,
+  },
+  legendText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+    color: '#0f172a',
+  },
+  legendPresent: {
+    backgroundColor: '#ecfdf5',
+  },
+  legendPending: {
+    backgroundColor: '#fff7ed',
+  },
+  legendAbsent: {
+    backgroundColor: '#fef2f2',
+  },
+  legendLeave: {
+    backgroundColor: '#f5f3ff',
+  },
+  legendWeekOff: {
+    backgroundColor: '#f0f9ff',
+  },
+  legendHoliday: {
+    backgroundColor: '#fffbeb',
+  },
+  policyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dbe4f2',
+    backgroundColor: '#f8fbff',
+    padding: 12,
+    gap: 10,
+  },
+  policyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  policyTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  policyGrid: {
+    gap: 8,
+  },
+  policyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  policyLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  policyValue: {
+    fontSize: 11,
+    color: '#0f172a',
+    fontWeight: '700',
+    textAlign: 'right',
   },
   holidaysSection: {
     marginTop: 16,

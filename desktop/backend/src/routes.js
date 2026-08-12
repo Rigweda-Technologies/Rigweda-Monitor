@@ -1,5 +1,6 @@
 import { registerScreenshotRoutes } from "./modules/screenshots/screenshots.routes.js";
 import { registerActivityRoutes } from "./modules/activity/activity.routes.js";
+import { registerAppUsageRoutes } from "./modules/appUsage/appUsage.routes.js";
 import { registerCloudinaryRoutes } from "./modules/cloudinary/cloudinary.routes.js";
 
 export const registerRoutes = async (fastify) => {
@@ -16,5 +17,6 @@ export const registerRoutes = async (fastify) => {
 
   await fastify.register(registerScreenshotRoutes, { prefix: "/api" });
   await fastify.register(registerActivityRoutes, { prefix: "/api" });
+  await fastify.register(registerAppUsageRoutes, { prefix: "/api" });
   await fastify.register(registerCloudinaryRoutes, { prefix: "/api" });
 };

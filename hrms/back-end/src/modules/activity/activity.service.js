@@ -132,3 +132,191 @@ exports.listEmployees = async ({ organizationId, date }) => {
     })
   };
 };
+
+exports.listAppUsage = async ({ organizationId, date }) => {
+  const timeZone = await getOrganizationTimeZone(organizationId);
+  const normalizedDate = toDateKeyInTimeZone(date || new Date(), timeZone);
+  const dayStart = startOfDayInTimeZone(normalizedDate, timeZone);
+  const dayEnd = endOfDayInTimeZone(normalizedDate, timeZone);
+  const pool = await getMonitorPgPool();
+  const { rows } = await pool.query(
+    `
+      SELECT
+        session_id AS "sessionId",
+        employee_id AS "employeeId",
+        device_id AS "deviceId",
+        app_name AS "appName",
+        process_name AS "processName",
+        observed_at AS "observedAt",
+        started_at AS "startedAt",
+        ended_at AS "endedAt",
+        active_seconds AS "activeSeconds",
+        COALESCE(key_press_count, 0) AS "keyPressCount",
+        COALESCE(key_names, '[]'::jsonb) AS "keyNames"
+      FROM monitor_app_usage_sessions
+      WHERE organization_id = $1
+        AND started_at >= $2
+        AND started_at <= $3
+      ORDER BY started_at DESC
+    `,
+    [String(organizationId), dayStart, dayEnd]
+  );
+
+  const employeeIds = Array.from(new Set(rows.map((row) => String(row.employeeId)).filter(Boolean)));
+  const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
+  const groupedEmployees = new Map();
+
+  for (const row of rows) {
+    const employee = employeeMap.get(String(row.employeeId)) || {};
+    const canonicalEmployeeId = employee.employeeId || String(row.employeeId);
+      const current = groupedEmployees.get(canonicalEmployeeId) || {
+        employeeId: canonicalEmployeeId,
+        employeeName: row.employeeName || employee.name || null,
+        employeeCode: employee.code || null,
+        totalSeconds: 0,
+        totalKeyPresses: 0,
+        sessionCount: 0,
+        apps: new Map()
+      };
+
+      current.employeeName = current.employeeName || employee.name || null;
+      current.employeeCode = current.employeeCode || employee.code || null;
+      current.totalSeconds += Number(row.activeSeconds || 0);
+      current.totalKeyPresses += Number(row.keyPressCount || 0);
+      current.sessionCount += 1;
+
+    const appKey = `${row.appName}::${row.processName}`;
+      const appCurrent = current.apps.get(appKey) || {
+        appName: row.appName,
+        processName: row.processName,
+        totalSeconds: 0,
+        keyPressCount: 0,
+        sessionCount: 0
+      };
+      appCurrent.totalSeconds += Number(row.activeSeconds || 0);
+      appCurrent.keyPressCount += Number(row.keyPressCount || 0);
+      appCurrent.sessionCount += 1;
+      current.apps.set(appKey, appCurrent);
+
+    groupedEmployees.set(canonicalEmployeeId, current);
+  }
+
+  const employees = Array.from(groupedEmployees.values())
+    .map((item) => ({
+      employeeId: item.employeeId,
+      employeeName: item.employeeName,
+      employeeCode: item.employeeCode,
+      totalSeconds: item.totalSeconds,
+      totalKeyPresses: item.totalKeyPresses,
+      sessionCount: item.sessionCount,
+      apps: Array.from(item.apps.values()).sort((a, b) => b.totalSeconds - a.totalSeconds || a.appName.localeCompare(b.appName))
+    }))
+    .sort((a, b) => b.totalSeconds - a.totalSeconds || String(a.employeeName || "").localeCompare(String(b.employeeName || "")));
+
+  const sessions = rows.map((row) => {
+    const employee = employeeMap.get(String(row.employeeId)) || {};
+    return {
+      sessionId: row.sessionId,
+      employeeId: employee.employeeId || String(row.employeeId),
+      employeeName: employee.name || null,
+      employeeCode: employee.code || null,
+      deviceId: row.deviceId,
+      appName: row.appName,
+      processName: row.processName,
+      observedAt: row.observedAt,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+      activeSeconds: Number(row.activeSeconds || 0),
+      keyPressCount: Number(row.keyPressCount || 0),
+      keyNames: Array.isArray(row.keyNames) ? row.keyNames : []
+    };
+  });
+
+  return {
+    date: normalizedDate,
+    timezone: timeZone,
+    employees,
+    sessions
+  };
+};
+
+exports.listAppKeyUsage = async ({ organizationId, date }) => {
+  const timeZone = await getOrganizationTimeZone(organizationId);
+  const normalizedDate = toDateKeyInTimeZone(date || new Date(), timeZone);
+  const dayStart = startOfDayInTimeZone(normalizedDate, timeZone);
+  const dayEnd = endOfDayInTimeZone(normalizedDate, timeZone);
+  const pool = await getMonitorPgPool();
+  const { rows } = await pool.query(
+    `
+      SELECT
+        employee_id AS "employeeId",
+        employee_name AS "employeeName",
+        app_name AS "appName",
+        process_name AS "processName",
+        active_seconds AS "activeSeconds",
+        key_press_count AS "keyPressCount",
+        COALESCE(key_names, '[]'::jsonb) AS "keyNames"
+      FROM monitor_app_usage_sessions
+      WHERE organization_id = $1
+        AND started_at >= $2
+        AND started_at <= $3
+      ORDER BY started_at DESC
+    `,
+    [String(organizationId), dayStart, dayEnd]
+  );
+
+  const employeeIds = Array.from(new Set(rows.map((row) => String(row.employeeId)).filter(Boolean)));
+  const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
+
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const employee = employeeMap.get(String(row.employeeId)) || {};
+    const canonicalEmployeeId = employee.employeeId || String(row.employeeId);
+    const key = `${canonicalEmployeeId}::${row.appName}::${row.processName}`;
+    const current = grouped.get(key) || {
+      employeeId: canonicalEmployeeId,
+      employeeName: row.employeeName || employee.name || null,
+      employeeCode: employee.code || null,
+      appName: row.appName,
+      processName: row.processName,
+      totalSeconds: 0,
+      keyPressCount: 0,
+      sessionCount: 0,
+      keyNames: new Set(),
+    };
+
+    current.totalSeconds += Number(row.activeSeconds || 0);
+    current.keyPressCount += Number(row.keyPressCount || 0);
+    current.sessionCount += 1;
+
+    const keyNamesArray = Array.isArray(row.keyNames) ? row.keyNames : [];
+    for (const name of keyNamesArray) {
+      if (typeof name === "string" && name) {
+        current.keyNames.add(name);
+      }
+    }
+
+    grouped.set(key, current);
+  }
+
+  const appKeys = Array.from(grouped.values())
+    .map((item) => ({
+      employeeId: item.employeeId,
+      employeeName: item.employeeName,
+      employeeCode: item.employeeCode,
+      appName: item.appName,
+      processName: item.processName,
+      totalSeconds: item.totalSeconds,
+      keyPressCount: item.keyPressCount,
+      sessionCount: item.sessionCount,
+      keyNames: Array.from(item.keyNames).sort(),
+    }))
+    .sort((a, b) => b.keyPressCount - a.keyPressCount || b.totalSeconds - a.totalSeconds || String(a.employeeName || "").localeCompare(String(b.employeeName || "")));
+
+  return {
+    date: normalizedDate,
+    timezone: timeZone,
+    appKeys
+  };
+};

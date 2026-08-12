@@ -39,6 +39,73 @@ export type MonitorCloudinarySettings = {
   updatedAt?: string;
 };
 
+export type MonitorAppUsageApp = {
+  appName: string;
+  processName: string;
+  totalSeconds: number;
+  keyPressCount: number;
+  sessionCount: number;
+};
+
+export type MonitorAppUsageEmployee = {
+  employeeId: string;
+  employeeName: string | null;
+  employeeCode?: string | null;
+  totalSeconds: number;
+  totalKeyPresses: number;
+  sessionCount: number;
+  apps: MonitorAppUsageApp[];
+};
+
+export type MonitorAppUsageSession = {
+  sessionId: string;
+  employeeId: string;
+  employeeName: string | null;
+  employeeCode?: string | null;
+  deviceId: string | null;
+  appName: string;
+  processName: string;
+  observedAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  activeSeconds: number;
+  keyPressCount: number;
+  keyNames: string[];
+};
+
+export type MonitorAppKeyUsage = {
+  employeeId: string;
+  employeeName: string | null;
+  employeeCode?: string | null;
+  appName: string;
+  processName: string;
+  totalSeconds: number;
+  keyPressCount: number;
+  sessionCount: number;
+  keyNames: string[];
+};
+
+export const getMonitorAppKeyUsage = async (date: string) => {
+  const response = await getApiWithToken(
+    `/activity/app-key-usage?date=${encodeURIComponent(date)}`,
+    null,
+    { requiredPermissions: ["EMP_VIEW"] }
+  ) as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      date: string;
+      timezone: string;
+      appKeys: MonitorAppKeyUsage[];
+    };
+  };
+
+  if (!response.success || !response.data) {
+    throw new Error(response.message || "Could not load key press usage.");
+  }
+  return response.data;
+};
+
 export const getMonitorEmployeeActivity = async (date: string) => {
   const response = await getApiWithToken(
     `/activity/employees?date=${encodeURIComponent(date)}`,
@@ -48,6 +115,28 @@ export const getMonitorEmployeeActivity = async (date: string) => {
 
   if (!response.success || !response.data) {
     throw new Error(response.message || "Could not load monitor activity.");
+  }
+  return response.data;
+};
+
+export const getMonitorAppUsage = async (date: string) => {
+  const response = await getApiWithToken(
+    `/activity/apps?date=${encodeURIComponent(date)}`,
+    null,
+    { requiredPermissions: ["EMP_VIEW"] }
+  ) as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      date: string;
+      timezone: string;
+      employees: MonitorAppUsageEmployee[];
+      sessions: MonitorAppUsageSession[];
+    };
+  };
+
+  if (!response.success || !response.data) {
+    throw new Error(response.message || "Could not load app usage.");
   }
   return response.data;
 };

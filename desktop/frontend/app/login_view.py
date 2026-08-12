@@ -11,7 +11,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from app.auth import ensure_service_running, login_to_hrms, register_startup
-from app.screenshot_monitor import start_activity_monitor, start_screenshot_monitor
+from app.screenshot_monitor import start_activity_monitor, start_app_usage_monitor, start_screenshot_monitor
 
 COLORS = {
     "window_bg": "#1a1a2e",
@@ -440,12 +440,18 @@ class LoginApp:
             self._set_status(activity_message, COLORS["error"])
             return False
 
+        app_usage_started, app_usage_message = start_app_usage_monitor()
+        if not app_usage_started:
+            self.signin_button.configure(state="normal", text="Sign In")
+            self._set_status(app_usage_message, COLORS["error"])
+            return False
+
         if register_windows_startup:
             register_startup()
 
         self.signin_button.configure(state="normal", text="Monitoring Active")
         self._show_employee_details(session)
-        self._set_status("Login successful. Screenshot and activity monitoring are running.", COLORS["success"])
+        self._set_status("Login successful. Screenshot, activity, and app usage monitoring are running.", COLORS["success"])
         self.root.update_idletasks()
         self._start_hide_countdown(30)
         return True

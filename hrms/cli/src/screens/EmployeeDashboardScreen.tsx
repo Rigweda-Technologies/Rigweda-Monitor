@@ -1532,6 +1532,7 @@ function EmployeeDashboardScreen() {
                     dayNames={dayNames}
                     formatTime={formatTime}
                     employeeName={employeeName || 'Employee'}
+                    attendancePolicy={checkInPolicy}
                   />
                 )}
                 

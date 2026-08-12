@@ -164,6 +164,16 @@ def get_backend_base_url() -> str:
     return f"{hrms_url}/api/agents"
 
 
+def get_backend_base_url_candidates() -> list[str]:
+    """Try the configured HRMS backend first, then fall back to hosted service."""
+    configured = get_backend_base_url().rstrip("/")
+    hosted = "https://rigweda-hrms-backend.onrender.com/api/agents"
+    candidates = [configured]
+    if configured != hosted:
+        candidates.append(hosted)
+    return list(dict.fromkeys(candidates))
+
+
 def get_screenshot_scan_roots() -> list[Path]:
     configured_roots = [
         Path(item.strip())
@@ -769,18 +779,33 @@ def upload_pending_screenshots() -> None:
         if not token:
             return
 
-        try:
-            settings_response = get_json(
-                f"{get_backend_base_url()}/cloudinary/upload-config",
-                token=token,
-                timeout=30,
-            )
-        except Exception as error:
-            log_exception("Cloudinary settings sync failed.", error)
-            return
+        settings_response = None
+        backend_errors: list[str] = []
+        backend_url_used: str | None = None
+        for backend_url in get_backend_base_url_candidates():
+            try:
+                candidate_response = get_json(
+                    f"{backend_url}/cloudinary/upload-config",
+                    token=token,
+                    timeout=30,
+                )
+            except Exception as error:
+                backend_errors.append(f"{backend_url}: {error}")
+                continue
 
-        if not settings_response.get("success") or not settings_response.get("data"):
-            log_message("Cloudinary settings are unavailable yet; screenshots will stay queued.")
+            if candidate_response.get("success") and candidate_response.get("data"):
+                settings_response = candidate_response
+                backend_url_used = backend_url
+                break
+
+            backend_errors.append(f"{backend_url}: Cloudinary settings unavailable")
+
+        if not settings_response or not backend_url_used:
+            log_message(
+                "Cloudinary settings are unavailable yet; screenshots will stay queued."
+                + (f" Tried: {' | '.join(backend_errors[:3])}" if backend_errors else ""),
+                error=True,
+            )
             return
 
         queue_existing_screenshots()
@@ -810,13 +835,34 @@ def upload_pending_screenshots() -> None:
             ],
         }
 
-        response_payload = post_json(
-            f"{get_backend_base_url()}/screenshot-batches/uploads",
-            request_payload,
-            token=token,
-            timeout=60,
-        )
-        upload_session = response_payload["data"]
+        upload_session = None
+        upload_errors: list[str] = []
+        for backend_url in get_backend_base_url_candidates():
+            try:
+                response_payload = post_json(
+                    f"{backend_url}/screenshot-batches/uploads",
+                    request_payload,
+                    token=token,
+                    timeout=60,
+                )
+            except Exception as error:
+                upload_errors.append(f"{backend_url}: {error}")
+                continue
+
+            if response_payload.get("data"):
+                upload_session = response_payload["data"]
+                backend_url_used = backend_url
+                break
+
+            upload_errors.append(f"{backend_url}: upload session unavailable")
+
+        if not upload_session:
+            log_message(
+                "Screenshot upload session could not be created; screenshots will stay queued."
+                + (f" Tried: {' | '.join(upload_errors[:3])}" if upload_errors else ""),
+                error=True,
+            )
+            return
 
         if upload_session.get("deferred"):
             mark_rows_pending(rows, upload_session.get("reason") or "Cloudinary settings unavailable")
