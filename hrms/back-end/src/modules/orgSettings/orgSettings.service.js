@@ -34,7 +34,10 @@ const DEFAULTS = {
   probationPeriodDays: 90,
   noticePeriodDays: 30,
   employeeIdPrefix: "",
-  maxActiveLoginsPerUser: DEFAULT_MAX_ACTIVE_LOGINS_PER_USER
+  maxActiveLoginsPerUser: DEFAULT_MAX_ACTIVE_LOGINS_PER_USER,
+  themeMode: "preset",
+  themePreset: "ocean",
+  themeConfig: {}
 };
 
 exports.get = async (req) => {
@@ -94,6 +97,9 @@ exports.upsert = async (req) => {
     attendanceLockDay,
     timezone,
     logoUpload,
+    themeMode,
+    themePreset,
+    themeConfig,
     payrollCutoffDay,
     payrollSalaryPayDay,
     payrollEnabled,
@@ -166,6 +172,9 @@ exports.upsert = async (req) => {
       attendanceLockDay,
       timezone,
       logoUrl,
+      themeMode: ["preset", "custom"].includes(themeMode) ? themeMode : "preset",
+      themePreset: ["ocean", "forest", "sunset", "graphite"].includes(themePreset) ? themePreset : "ocean",
+      themeConfig: themeConfig && typeof themeConfig === "object" ? themeConfig : {},
       payrollCutoffDay,
       payrollSalaryPayDay,
       payrollEnabled,
