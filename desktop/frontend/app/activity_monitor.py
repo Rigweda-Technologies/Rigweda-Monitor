@@ -39,6 +39,20 @@ def log_message(message: object, *, exc_info: bool = False) -> None:
         pass
 
 
+def log_exception(message: object, error: BaseException | None = None) -> None:
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(f"{utc_now()} {message}\n")
+            if error is not None:
+                log_file.write(f"{utc_now()} {type(error).__name__}: {error}\n")
+                traceback.print_exception(type(error), error, error.__traceback__, file=log_file)
+            else:
+                traceback.print_exc(file=log_file)
+    except OSError:
+        pass
+
+
 class POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
@@ -146,7 +160,7 @@ def sync_pending_events() -> bool:
             pass
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as error:
         mark_events(ids, status="failed", error=str(error)[:1000])
-        log_message(f"Activity sync failed: {error}")
+        log_exception("Activity sync failed.", error)
         return False
     mark_events(ids, status="synced")
     log_message(f"Activity sync completed: {len(ids)} event(s).")
@@ -185,7 +199,13 @@ def start_activity_monitor() -> None:
     log_message(
         f"Activity monitor started. idle_threshold={IDLE_THRESHOLD_SECONDS}s heartbeat={HEARTBEAT_SECONDS}s device={device_id}"
     )
-    last_position = get_cursor_position()
+    while True:
+        try:
+            last_position = get_cursor_position()
+            break
+        except OSError as error:
+            log_message(f"Activity monitor waiting for cursor position: {error}")
+            time.sleep(2)
     last_moved_at = time.monotonic()
     last_tick = last_moved_at
     last_heartbeat = last_moved_at
@@ -199,7 +219,11 @@ def start_activity_monitor() -> None:
             now = time.monotonic()
             elapsed = max(now - last_tick, 0)
             last_tick = now
-            position = get_cursor_position()
+            try:
+                position = get_cursor_position()
+            except OSError as error:
+                log_message(f"Activity monitor retrying cursor position read: {error}")
+                continue
             if position != last_position:
                 last_position = position
                 last_moved_at = now
@@ -253,7 +277,7 @@ def main() -> int:
     except KeyboardInterrupt:
         return 0
     except Exception:
-        log_message("Activity monitor crashed.", exc_info=True)
+        log_exception("Activity monitor crashed.")
         raise
     finally:
         lock_handle.close()

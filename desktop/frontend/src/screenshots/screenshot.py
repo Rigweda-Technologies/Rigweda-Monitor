@@ -87,6 +87,30 @@ def log_message(message: object, *, error: bool = False, exc_info: bool = False)
         pass
 
 
+def log_exception(message: object, error: BaseException | None = None, *, stream_error: bool = True) -> None:
+    """Write a message plus the full traceback for later debugging."""
+    text = str(message)
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with AGENT_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(f"{datetime.now(UTC).isoformat()} {text}\n")
+            if error is not None:
+                log_file.write(f"{datetime.now(UTC).isoformat()} {type(error).__name__}: {error}\n")
+                traceback.print_exception(type(error), error, error.__traceback__, file=log_file)
+            else:
+                traceback.print_exc(file=log_file)
+    except OSError:
+        pass
+
+    if stream_error and _can_write_to_console(sys.stderr):
+        print(text, file=sys.stderr, flush=True)
+        if error is not None:
+            print(f"{type(error).__name__}: {error}", file=sys.stderr, flush=True)
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        else:
+            traceback.print_exc(file=sys.stderr)
+
+
 def _decode_jwt_payload(token: str) -> dict:
     try:
         payload_part = token.split(".")[1]
@@ -752,7 +776,7 @@ def upload_pending_screenshots() -> None:
                 timeout=30,
             )
         except Exception as error:
-            log_message(f"Cloudinary settings sync failed: {error}", error=True)
+            log_exception("Cloudinary settings sync failed.", error)
             return
 
         if not settings_response.get("success") or not settings_response.get("data"):
@@ -836,6 +860,10 @@ def upload_pending_screenshots() -> None:
                     try:
                         upload_result = future.result()
                     except Exception as error:
+                        log_exception(
+                            f"Cloudinary upload failed for screenshot {instruction['clientScreenshotId']}.",
+                            error,
+                        )
                         if "Invalid image file" in str(error):
                             invalid_uploads.append((instruction["clientScreenshotId"], error))
                         else:
@@ -871,8 +899,7 @@ def upload_pending_screenshots() -> None:
             )
         )
     except Exception as error:
-        log_message("Screenshot upload retry scheduled:", error=True)
-        log_message(error, error=True)
+        log_exception("Screenshot upload retry scheduled.", error)
         mark_rows_failed(rows, error)
     finally:
         upload_lock.release()
@@ -940,6 +967,18 @@ def main() -> int:
 
     stdin_thread = threading.Thread(target=listen_for_stop_command, daemon=True)
     stdin_thread.start()
+
+    try:
+        start_screenshot_monitor()
+        return 0
+    finally:
+        release_process_lock()
+
+
+def run_monitor() -> int:
+    """Run the screenshot monitor loop inside an already-running process."""
+    if not acquire_process_lock():
+        return 0
 
     try:
         start_screenshot_monitor()
