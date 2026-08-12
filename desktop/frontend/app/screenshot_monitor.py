@@ -1,143 +1,86 @@
-"""Start the screenshot monitor in the logged-in user's desktop session."""
+"""Start the screenshot and activity monitors in the logged-in user's desktop session."""
 
 from __future__ import annotations
 
 import os
-import subprocess
-import sys
+import threading
+import time
+import traceback
 from pathlib import Path
 
 from app.env import writable_runtime_path
+from app.activity_monitor import main as activity_main
+from src.screenshots.screenshot import run_monitor as screenshot_run_monitor
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-VENV_PYTHON = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
-SCREENSHOT_SCRIPT = PROJECT_ROOT / "src" / "screenshots" / "screenshot.py"
-ACTIVITY_SCRIPT = PROJECT_ROOT / "app" / "activity_monitor.py"
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 LOG_FILE = LOG_DIR / "screenshot_monitor.log"
-PID_FILE = LOG_DIR / "screenshot_monitor.pid"
-ACTIVITY_PID_FILE = LOG_DIR / "activity_monitor.pid"
 
-CREATE_NO_WINDOW = 0x08000000
-DETACHED_PROCESS = 0x00000008
-
-
-def _is_process_running(pid: int, expected_script: Path = SCREENSHOT_SCRIPT) -> bool:
-    result = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            (
-                "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
-                f"{pid}\" -ErrorAction SilentlyContinue; "
-                "if ($p) { $p.CommandLine }"
-            ),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    command_line = result.stdout.lower()
-
-    if getattr(sys, "frozen", False):
-        return "rigwedamonitor" in command_line or "screenshot.py" in command_line
-
-    if expected_script == ACTIVITY_SCRIPT and "app.activity_monitor" in command_line:
-        return True
-
-    expected_path = str(expected_script).lower()
-    return expected_script.name.lower() in command_line and expected_path in command_line
+_STATE_LOCK = threading.Lock()
+_SCREENSHOT_THREAD: threading.Thread | None = None
+_ACTIVITY_THREAD: threading.Thread | None = None
 
 
-def _existing_monitor_is_running() -> bool:
+def _log_message(message: str) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with LOG_FILE.open("a", encoding="utf-8") as log_file:
+        log_file.write(f"{timestamp} {message}\n")
+
+
+def _log_exception(message: str) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with LOG_FILE.open("a", encoding="utf-8") as log_file:
+        log_file.write(f"{timestamp} {message}\n")
+        traceback.print_exc(file=log_file)
+
+
+def _thread_is_running(thread: threading.Thread | None) -> bool:
+    return thread is not None and thread.is_alive()
+
+
+def _run_screenshot_worker() -> None:
     try:
-        pid = int(PID_FILE.read_text(encoding="utf-8").strip())
-    except (FileNotFoundError, ValueError):
-        return False
+        exit_code = screenshot_run_monitor()
+        _log_message(f"Screenshot monitor exited with code {exit_code}.")
+    except Exception as error:
+        _log_exception(f"Screenshot monitor crashed: {type(error).__name__}: {error}")
 
-    if _is_process_running(pid):
-        return True
 
-    PID_FILE.unlink(missing_ok=True)
-    return False
+def _run_activity_worker() -> None:
+    try:
+        exit_code = activity_main()
+        _log_message(f"Activity monitor exited with code {exit_code}.")
+    except Exception as error:
+        _log_exception(f"Activity monitor crashed: {type(error).__name__}: {error}")
 
 
 def start_screenshot_monitor() -> tuple[bool, str]:
-    """Launch screenshot capture outside the Windows service session."""
-    if _existing_monitor_is_running():
-        return True, "Screenshot monitor is already running."
+    """Launch screenshot capture in the current desktop process."""
+    global _SCREENSHOT_THREAD
 
-    if getattr(sys, "frozen", False):
-        command = [sys.executable, "--screenshot-monitor"]
-        working_directory = Path(sys.executable).resolve().parent
-        child_env = {
-            **os.environ,
-            "PYTHONUNBUFFERED": "1",
-            "PYINSTALLER_RESET_ENVIRONMENT": "1",
-        }
-    else:
-        if not SCREENSHOT_SCRIPT.exists():
-            return False, f"Screenshot script is missing: {SCREENSHOT_SCRIPT}"
-        python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
-        command = [str(python_executable), str(SCREENSHOT_SCRIPT)]
-        working_directory = PROJECT_ROOT
-        child_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    with _STATE_LOCK:
+        if _thread_is_running(_SCREENSHOT_THREAD):
+            return True, "Screenshot monitor is already running."
 
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+        thread = threading.Thread(target=_run_screenshot_worker, name="ScreenshotMonitor", daemon=False)
+        _SCREENSHOT_THREAD = thread
+        thread.start()
 
-    log_file = open(LOG_FILE, "a", encoding="utf-8")
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=str(working_directory),
-            env=child_env,
-            stdin=subprocess.DEVNULL,
-            stdout=log_file,
-            stderr=log_file,
-            text=True,
-            creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
-        )
-    except Exception as error:
-        log_file.close()
-        return False, f"Could not start screenshot monitor: {error}"
-
-    PID_FILE.write_text(str(process.pid), encoding="utf-8")
-    log_file.close()
     return True, "Screenshot monitor started."
 
 
 def start_activity_monitor() -> tuple[bool, str]:
-    """Launch the durable mouse activity agent in the desktop user session."""
-    try:
-        existing_pid = int(ACTIVITY_PID_FILE.read_text(encoding="utf-8").strip())
-    except (FileNotFoundError, ValueError):
-        existing_pid = 0
+    """Launch the durable mouse activity agent in the current desktop process."""
+    global _ACTIVITY_THREAD
 
-    if existing_pid and _is_process_running(existing_pid, ACTIVITY_SCRIPT):
-        return True, "Activity monitor is already running."
-    ACTIVITY_PID_FILE.unlink(missing_ok=True)
+    with _STATE_LOCK:
+        if _thread_is_running(_ACTIVITY_THREAD):
+            return True, "Activity monitor is already running."
 
-    if getattr(sys, "frozen", False):
-        command = [sys.executable, "--activity-monitor"]
-        working_directory = Path(sys.executable).resolve().parent
-    else:
-        if not ACTIVITY_SCRIPT.exists():
-            return False, f"Activity script is missing: {ACTIVITY_SCRIPT}"
-        python_executable = VENV_PYTHON if VENV_PYTHON.exists() else Path("python")
-        command = [str(python_executable), "-m", "app.activity_monitor"]
-        working_directory = PROJECT_ROOT
+        thread = threading.Thread(target=_run_activity_worker, name="ActivityMonitor", daemon=False)
+        _ACTIVITY_THREAD = thread
+        thread.start()
 
-    try:
-        process = subprocess.Popen(
-            command, cwd=str(working_directory), env={**os.environ, "PYTHONUNBUFFERED": "1"},
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
-        )
-    except Exception as error:
-        return False, f"Could not start activity monitor: {error}"
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    ACTIVITY_PID_FILE.write_text(str(process.pid), encoding="utf-8")
     return True, "Activity monitor started."
