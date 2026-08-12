@@ -7,6 +7,8 @@ export type OrgThemeConfig = {
   background?: string;
   foreground?: string;
   sidebar?: string;
+  sidebarGradientStart?: string;
+  sidebarGradientEnd?: string;
   sidebarForeground?: string;
   accent?: string;
   card?: string;
@@ -30,6 +32,8 @@ export const THEME_PRESETS: Record<OrgThemePreset, { label: string; config: Requ
       background: "220 20% 97%",
       foreground: "220 20% 14%",
       sidebar: "217 89% 45%",
+      sidebarGradientStart: "217 89% 39%",
+      sidebarGradientEnd: "217 89% 32%",
       sidebarForeground: "0 0% 100%",
       accent: "217 89% 45%",
       card: "0 0% 100%",
@@ -46,6 +50,8 @@ export const THEME_PRESETS: Record<OrgThemePreset, { label: string; config: Requ
       background: "150 20% 97%",
       foreground: "155 20% 14%",
       sidebar: "155 72% 28%",
+      sidebarGradientStart: "155 72% 28%",
+      sidebarGradientEnd: "155 72% 20%",
       sidebarForeground: "0 0% 100%",
       accent: "155 72% 35%",
       card: "0 0% 100%",
@@ -62,6 +68,8 @@ export const THEME_PRESETS: Record<OrgThemePreset, { label: string; config: Requ
       background: "24 40% 97%",
       foreground: "22 20% 15%",
       sidebar: "18 90% 45%",
+      sidebarGradientStart: "18 90% 45%",
+      sidebarGradientEnd: "18 90% 35%",
       sidebarForeground: "0 0% 100%",
       accent: "18 90% 52%",
       card: "0 0% 100%",
@@ -78,6 +86,8 @@ export const THEME_PRESETS: Record<OrgThemePreset, { label: string; config: Requ
       background: "220 20% 98%",
       foreground: "220 15% 12%",
       sidebar: "220 10% 18%",
+      sidebarGradientStart: "220 10% 18%",
+      sidebarGradientEnd: "220 10% 12%",
       sidebarForeground: "0 0% 100%",
       accent: "220 8% 18%",
       card: "0 0% 100%",
@@ -106,4 +116,10 @@ export const applyThemeToDocument = (settings?: OrgThemeSettings | null) => {
     const cssVar = `--${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
     root.style.setProperty(cssVar, value);
   });
+  if (!theme.sidebarGradientStart) {
+    root.style.setProperty("--sidebar-gradient-start", theme.sidebar || theme.primary || "217 89% 39%");
+  }
+  if (!theme.sidebarGradientEnd) {
+    root.style.setProperty("--sidebar-gradient-end", theme.sidebar || theme.primary || "217 89% 32%");
+  }
 };

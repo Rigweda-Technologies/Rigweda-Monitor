@@ -25,6 +25,8 @@ exports.upsertOrgSettingsSchema = Joi.object({
     background: Joi.string().allow("").default(""),
     foreground: Joi.string().allow("").default(""),
     sidebar: Joi.string().allow("").default(""),
+    sidebarGradientStart: Joi.string().allow("").default(""),
+    sidebarGradientEnd: Joi.string().allow("").default(""),
     sidebarForeground: Joi.string().allow("").default(""),
     accent: Joi.string().allow("").default(""),
     card: Joi.string().allow("").default(""),

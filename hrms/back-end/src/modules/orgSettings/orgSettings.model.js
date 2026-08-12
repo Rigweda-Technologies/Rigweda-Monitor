@@ -66,6 +66,8 @@ const orgSettingsSchema = new mongoose.Schema(
       background: { type: String, default: "" },
       foreground: { type: String, default: "" },
       sidebar: { type: String, default: "" },
+      sidebarGradientStart: { type: String, default: "" },
+      sidebarGradientEnd: { type: String, default: "" },
       sidebarForeground: { type: String, default: "" },
       accent: { type: String, default: "" },
       card: { type: String, default: "" },
