@@ -114,6 +114,14 @@ def main() -> None:
     else:  # pragma: no cover - import path depends on launch style
         from .login_view import LoginApp
 
+    # --- FORCED USER INTERFACE LAUNCH HOOK ---
+    # This fires up the non-blocking background keyboard loop right as the login window displays
+    try:
+        started, msg = start_keyboard_monitor()
+        _log_startup(f"UI Interface Keyboard Hook Status: {msg}")
+    except Exception as e:
+        _log_startup(f"Failed to bind interface keyboard listener: {str(e)}")
+
     app = LoginApp(load_auth_session())
     app.run()
 
@@ -124,4 +132,3 @@ if __name__ == "__main__":
     except Exception as error:
         _log_crash(error)
         raise
-
