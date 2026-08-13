@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, Globe, LayoutGrid, RefreshCw, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,8 +11,6 @@ import { getMonitorEmployeeActivity, MonitorEmployeeActivity } from "@/services/
 import { formatDateTimeInOrgTimeZone, getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
-const ACTIVE_WINDOW_MS = 75_000;
-
 const today = () => toDateKeyInOrgTimeZone(new Date());
 
 const formatDuration = (seconds: number) => {
@@ -22,10 +19,33 @@ const formatDuration = (seconds: number) => {
   return `${hours}h ${minutes}m`;
 };
 
-const getDisplayStatus = (employee: MonitorEmployeeActivity, now: number) => {
-  if (employee.status !== "active" || !employee.lastSeenAt) return "offline";
-  const lastSeenAt = new Date(employee.lastSeenAt).getTime();
-  return Number.isFinite(lastSeenAt) && now - lastSeenAt <= ACTIVE_WINDOW_MS ? "active" : "offline";
+const formatLastSeen = (value: string | null) => {
+  if (!value) return "-";
+  return formatDateTimeInOrgTimeZone(value);
+};
+
+const getStatusMeta = (status: MonitorEmployeeActivity["status"], lastSeenAt: string | null) => {
+  const lastSeenLabel = lastSeenAt ? `Last seen: ${formatLastSeen(lastSeenAt)}` : "Last seen: -";
+  switch (status) {
+    case "online":
+      return {
+        label: "Online",
+        dotClassName: "bg-emerald-500",
+        tooltip: "Online"
+      };
+    case "away":
+      return {
+        label: "Away",
+        dotClassName: "bg-amber-400",
+        tooltip: `Away\n${lastSeenLabel}`
+      };
+    default:
+      return {
+        label: "Offline",
+        dotClassName: "bg-slate-400",
+        tooltip: `Offline\n${lastSeenLabel}`
+      };
+  }
 };
 
 const MonitorEmployees = () => {
@@ -34,7 +54,6 @@ const MonitorEmployees = () => {
   const [employees, setEmployees] = useState<MonitorEmployeeActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
 
   const load = useCallback(async (manual = false) => {
@@ -54,21 +73,21 @@ const MonitorEmployees = () => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(interval);
-  }, []);
-
   useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
 
-  const { activeCount, offlineCount, totalProductiveSeconds } = useMemo(() => {
-    const active = employees.filter((employee) => getDisplayStatus(employee, now) === "active").length;
+  const { onlineCount, awayCount, offlineCount, totalProductiveSeconds, totalIdleSeconds, totalSeconds } = useMemo(() => {
+    const online = employees.filter((employee) => employee.status === "online").length;
+    const away = employees.filter((employee) => employee.status === "away").length;
+    const offline = employees.filter((employee) => employee.status === "offline").length;
     return {
-      activeCount: active,
-      offlineCount: employees.length - active,
-      totalProductiveSeconds: employees.reduce((total, employee) => total + Number(employee.productiveSeconds || 0), 0)
+      onlineCount: online,
+      awayCount: away,
+      offlineCount: offline,
+      totalProductiveSeconds: employees.reduce((total, employee) => total + Number(employee.productiveSeconds || 0), 0),
+      totalIdleSeconds: employees.reduce((total, employee) => total + Number(employee.idleSeconds || 0), 0),
+      totalSeconds: employees.reduce((total, employee) => total + Number(employee.totalSeconds || 0), 0)
     };
-  }, [employees, now]);
+  }, [employees]);
 
   return (
     <MainLayout title="Employees" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Employees" }]}>
@@ -90,18 +109,26 @@ const MonitorEmployees = () => {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tracked employees</CardTitle></CardHeader>
             <CardContent className="flex items-center gap-2 text-2xl font-bold"><Users className="h-5 w-5 text-muted-foreground" />{employees.length}</CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Online now</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-emerald-600">{activeCount}</CardContent>
+            <CardContent className="text-2xl font-bold text-emerald-600">{onlineCount}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Away now</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-amber-500">{awayCount}</CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Offline now</CardTitle></CardHeader>
             <CardContent className="text-2xl font-bold text-slate-600">{offlineCount}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total time</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold">{formatDuration(totalSeconds)}</CardContent>
           </Card>
         </div>
 
@@ -119,32 +146,40 @@ const MonitorEmployees = () => {
                   <TableRow>
                     <TableHead>Employee</TableHead>
                     <TableHead>Employee ID</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last seen</TableHead>
-                    <TableHead className="text-right">Productive time</TableHead>
+                    <TableHead className="text-right">Productive hours</TableHead>
+                    <TableHead className="text-right">Idle hours</TableHead>
+                    <TableHead className="text-right">Total hours</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!loading && employees.map((employee) => {
-                    const status = getDisplayStatus(employee, now);
-                    const statusLabel = status === "active" ? "Online" : "Offline";
+                    const statusMeta = getStatusMeta(employee.status, employee.lastSeenAt);
                     return (
                       <TableRow key={employee.employeeId}>
                         <TableCell className="font-medium">
-                          <div className="flex flex-col">
-                            <span>{employee.employeeName || "Employee"}</span>
-                            <span className="text-xs text-muted-foreground">{employee.employeeCode || "-"}</span>
+                          <div className="flex items-start gap-3">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className={`mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full ${statusMeta.dotClassName}`}
+                                  aria-hidden="true"
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="whitespace-pre-line text-left">{statusMeta.tooltip}</div>
+                              </TooltipContent>
+                            </Tooltip>
+                            <div className="flex flex-col">
+                              <span>{employee.employeeName || "Employee"}</span>
+                              <span className="text-xs text-muted-foreground">{employee.employeeCode || "-"}</span>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>{employee.employeeId}</TableCell>
-                        <TableCell>
-                          <Badge className={status === "active" ? "bg-emerald-600 hover:bg-emerald-600" : "bg-slate-500 hover:bg-slate-500"}>
-                            {statusLabel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{employee.lastSeenAt ? formatDateTimeInOrgTimeZone(employee.lastSeenAt) : "-"}</TableCell>
                         <TableCell className="text-right">{formatDuration(Number(employee.productiveSeconds || 0))}</TableCell>
+                        <TableCell className="text-right">{formatDuration(Number(employee.idleSeconds || 0))}</TableCell>
+                        <TableCell className="text-right">{formatDuration(Number(employee.totalSeconds || 0))}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-2">
                             <Tooltip>
@@ -226,7 +261,7 @@ const MonitorEmployees = () => {
               </Table>
             </div>
             <div className="mt-4 text-sm text-muted-foreground">
-              Total productive time: {formatDuration(totalProductiveSeconds)}
+              Productive time: {formatDuration(totalProductiveSeconds)} | Idle time: {formatDuration(totalIdleSeconds)} | Total time: {formatDuration(totalSeconds)}
             </div>
           </CardContent>
         </Card>

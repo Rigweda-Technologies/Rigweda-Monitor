@@ -10,6 +10,9 @@ const {
 } = require("../../utils/timezone");
 
 const ACTIVE_PRESENCE_WINDOW_SECONDS = 75;
+const AWAY_PRESENCE_WINDOW_SECONDS = 5 * 60;
+const ACTIVE_WINDOW_MS = ACTIVE_PRESENCE_WINDOW_SECONDS * 1000;
+const AWAY_WINDOW_MS = AWAY_PRESENCE_WINDOW_SECONDS * 1000;
 
 const getOrganizationTimeZone = async (organizationId) => {
   const settings = await OrgSettings.findOne({ organizationId }).select("timezone").lean();
@@ -264,38 +267,95 @@ const cleanUserText = (value) => {
   return reconstructTypedText(keptLines.join("\n").trimEnd());
 };
 
+const toMillis = (value) => {
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+const clampInterval = (startMs, endMs, dayStartMs, dayEndMs) => {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  const start = Math.max(startMs, dayStartMs);
+  const end = Math.min(endMs, dayEndMs);
+  if (end <= start) return null;
+  return { start, end };
+};
+
+const mergeIntervals = (intervals) => {
+  const sorted = intervals
+    .filter((interval) => interval && Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const merged = [];
+  for (const interval of sorted) {
+    const last = merged[merged.length - 1];
+    if (!last || interval.start > last.end) {
+      merged.push({ start: interval.start, end: interval.end });
+      continue;
+    }
+
+    last.end = Math.max(last.end, interval.end);
+  }
+  return merged;
+};
+
+const sumMergedIntervalSeconds = (intervals) => {
+  const totalMs = mergeIntervals(intervals).reduce((total, interval) => total + Math.max(interval.end - interval.start, 0), 0);
+  return Math.max(Math.round(totalMs / 1000), 0);
+};
+
 exports.listEmployees = async ({ organizationId, date }) => {
   const timeZone = await getOrganizationTimeZone(organizationId);
   const normalizedDate = toDateKeyInTimeZone(date || new Date(), timeZone);
   const dayStart = startOfDayInTimeZone(normalizedDate, timeZone);
   const dayEnd = endOfDayInTimeZone(normalizedDate, timeZone);
+  const dayStartMs = toMillis(dayStart) ?? 0;
+  const dayEndMs = toMillis(dayEnd) ?? Date.now();
+  const nowMs = Date.now();
   const pool = await getMonitorPgPool();
-  const { rows } = await pool.query(
-    `WITH daily AS (
-      SELECT employee_id, MAX(employee_name) AS employee_name,
-        COALESCE(SUM(active_seconds), 0)::integer AS productive_seconds
-      FROM monitor_activity_events
-      WHERE organization_id = $1
-        AND observed_at >= $2
-        AND observed_at <= $3
-      GROUP BY employee_id
-    ), presence AS (
-      SELECT employee_id, MAX(employee_name) AS employee_name,
-        BOOL_OR(status = 'active' AND last_seen_at >= NOW() - ($4::integer * INTERVAL '1 second')) AS is_active,
-        MAX(last_seen_at) AS last_seen_at
-      FROM monitor_device_presence
-      WHERE organization_id = $1
-      GROUP BY employee_id
+  const [activityResult, sessionResult] = await Promise.all([
+    pool.query(
+      `
+        SELECT
+          employee_id AS "employeeId",
+          employee_name AS "employeeName",
+          status,
+          observed_at AS "observedAt",
+          active_seconds AS "activeSeconds",
+          idle_seconds AS "idleSeconds"
+        FROM monitor_activity_events
+        WHERE organization_id = $1
+          AND observed_at >= $2
+          AND observed_at <= $3
+        ORDER BY observed_at ASC
+      `,
+      [String(organizationId), dayStart, dayEnd]
+    ),
+    pool.query(
+      `
+        SELECT
+          employee_id AS "employeeId",
+          employee_name AS "employeeName",
+          started_at AS "startedAt",
+          ended_at AS "endedAt",
+          active_seconds AS "activeSeconds"
+        FROM monitor_app_usage_sessions
+        WHERE organization_id = $1
+          AND started_at <= $3
+          AND ended_at >= $2
+        ORDER BY started_at ASC, ended_at ASC
+      `,
+      [String(organizationId), dayStart, dayEnd]
     )
-    SELECT COALESCE(p.employee_id, d.employee_id) AS "employeeId",
-      COALESCE(p.employee_name, d.employee_name) AS "employeeName",
-      CASE WHEN COALESCE(p.is_active, false) THEN 'active' ELSE 'offline' END AS status,
-      p.last_seen_at AS "lastSeenAt",
-      COALESCE(d.productive_seconds, 0) AS "productiveSeconds"
-    FROM daily d FULL OUTER JOIN presence p ON p.employee_id = d.employee_id
-    ORDER BY status DESC, "employeeName" NULLS LAST, "employeeId"`,
-    [String(organizationId), dayStart, dayEnd, ACTIVE_PRESENCE_WINDOW_SECONDS]
-  );
+  ]);
+
+  const rows = [
+    ...activityResult.rows.map((row) => ({ ...row, source: "activity" })),
+    ...sessionResult.rows.map((row) => ({ ...row, source: "session" }))
+  ].sort((a, b) => {
+    const aTime = toMillis(a.observedAt || a.endedAt || a.startedAt) ?? 0;
+    const bTime = toMillis(b.observedAt || b.endedAt || b.startedAt) ?? 0;
+    return aTime - bTime;
+  });
 
   const employeeIds = Array.from(new Set(rows.map((row) => String(row.employeeId)).filter(Boolean)));
   const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
@@ -305,37 +365,106 @@ exports.listEmployees = async ({ organizationId, date }) => {
   for (const row of rows) {
     const employee = employeeMap.get(String(row.employeeId)) || {};
     const canonicalEmployeeId = employee.employeeId || String(row.employeeId);
-    const key = canonicalEmployeeId;
-    const current = groupedRows.get(key) || {
+    const current = groupedRows.get(canonicalEmployeeId) || {
       employeeId: canonicalEmployeeId,
       employeeName: row.employeeName || employee.name || null,
       employeeCode: employee.code || null,
       status: "offline",
       lastSeenAt: null,
-      productiveSeconds: 0
+      lastActiveAt: null,
+      productiveIntervals: [],
+      presenceIntervals: []
     };
-
-    const rowLastSeen = row.lastSeenAt ? new Date(row.lastSeenAt).getTime() : 0;
-    const currentLastSeen = current.lastSeenAt ? new Date(current.lastSeenAt).getTime() : 0;
 
     current.employeeName = current.employeeName || row.employeeName || employee.name || null;
     current.employeeCode = current.employeeCode || employee.code || null;
-    current.productiveSeconds += Number(row.productiveSeconds || 0);
-    if (row.status === "active") {
-      current.status = "active";
-    }
-    if (row.lastSeenAt && rowLastSeen >= currentLastSeen) {
-      current.lastSeenAt = row.lastSeenAt;
+
+    if (row.source === "activity") {
+      const observedMs = toMillis(row.observedAt);
+      const activeSeconds = Math.max(Number(row.activeSeconds || 0), 0);
+      const idleSeconds = Math.max(Number(row.idleSeconds || 0), 0);
+      const status = String(row.status || "").toLowerCase();
+
+      if (observedMs) {
+        current.lastSeenAt = Math.max(current.lastSeenAt || 0, observedMs);
+      }
+
+      if (observedMs && activeSeconds > 0) {
+        const activeInterval = clampInterval(observedMs - activeSeconds * 1000, observedMs, dayStartMs, dayEndMs);
+        if (activeInterval) {
+          current.productiveIntervals.push(activeInterval);
+          current.presenceIntervals.push(activeInterval);
+          current.lastActiveAt = Math.max(current.lastActiveAt || 0, observedMs);
+        }
+      }
+
+      if (observedMs && idleSeconds > 0) {
+        const idleInterval = clampInterval(observedMs - idleSeconds * 1000, observedMs, dayStartMs, dayEndMs);
+        if (idleInterval) {
+          current.presenceIntervals.push(idleInterval);
+        }
+      }
+
+      if (status === "active" && observedMs) {
+        current.lastActiveAt = Math.max(current.lastActiveAt || 0, observedMs);
+      }
+    } else {
+      const startedMs = toMillis(row.startedAt);
+      const endedMs = toMillis(row.endedAt) || startedMs;
+      const activeSeconds = Math.max(Number(row.activeSeconds || 0), 0);
+      const interval = clampInterval(startedMs || 0, endedMs || 0, dayStartMs, dayEndMs);
+      if (interval) {
+        current.productiveIntervals.push(interval);
+        current.presenceIntervals.push(interval);
+      } else if (startedMs && activeSeconds > 0) {
+        const fallbackInterval = clampInterval(startedMs, startedMs + activeSeconds * 1000, dayStartMs, dayEndMs);
+        if (fallbackInterval) {
+          current.productiveIntervals.push(fallbackInterval);
+          current.presenceIntervals.push(fallbackInterval);
+        }
+      }
+
+      if (endedMs) {
+        current.lastSeenAt = Math.max(current.lastSeenAt || 0, endedMs);
+        current.lastActiveAt = Math.max(current.lastActiveAt || 0, endedMs);
+      }
     }
 
-    groupedRows.set(key, current);
+    groupedRows.set(canonicalEmployeeId, current);
   }
+
+  const employees = Array.from(groupedRows.values()).map((item) => {
+    const productiveSeconds = sumMergedIntervalSeconds(item.productiveIntervals);
+    const totalSeconds = sumMergedIntervalSeconds(item.presenceIntervals);
+    const idleSeconds = Math.max(totalSeconds - productiveSeconds, 0);
+    const lastSeenMs = item.lastSeenAt || 0;
+    const lastActiveMs = item.lastActiveAt || 0;
+    let status = "offline";
+
+    if (lastActiveMs && nowMs - lastActiveMs <= ACTIVE_WINDOW_MS) {
+      status = "online";
+    } else if (lastSeenMs && nowMs - lastSeenMs <= AWAY_WINDOW_MS) {
+      status = "away";
+    }
+
+    return {
+      employeeId: item.employeeId,
+      employeeName: item.employeeName,
+      employeeCode: item.employeeCode,
+      status,
+      lastSeenAt: item.lastSeenAt ? new Date(item.lastSeenAt).toISOString() : null,
+      productiveSeconds,
+      idleSeconds,
+      totalSeconds
+    };
+  });
 
   return {
     date: normalizedDate,
     timezone: timeZone,
-    employees: Array.from(groupedRows.values()).sort((a, b) => {
-      if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+    employees: employees.sort((a, b) => {
+      const statusRank = { online: 0, away: 1, offline: 2 };
+      if (a.status !== b.status) return (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3);
       return String(a.employeeName || "").localeCompare(String(b.employeeName || ""));
     })
   };
