@@ -9,8 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getMonitorEmployeeActivity, MonitorEmployeeActivity } from "@/services/monitorActivity";
 import { toast } from "sonner";
 
-const ACTIVE_WINDOW_MS = 75_000;
-
 const today = () => new Date().toISOString().slice(0, 10);
 
 const formatDuration = (seconds: number) => {
@@ -19,18 +17,13 @@ const formatDuration = (seconds: number) => {
   return `${hours}h ${minutes}m`;
 };
 
-const getDisplayStatus = (employee: MonitorEmployeeActivity, now: number) => {
-  if (employee.status !== "active" || !employee.lastSeenAt) return "offline";
-  const lastSeenAt = new Date(employee.lastSeenAt).getTime();
-  return Number.isFinite(lastSeenAt) && now - lastSeenAt <= ACTIVE_WINDOW_MS ? "active" : "offline";
-};
+const getDisplayStatus = (employee: MonitorEmployeeActivity) => employee.status;
 
 const MonitorActivity = () => {
   const [date, setDate] = useState(today);
   const [employees, setEmployees] = useState<MonitorEmployeeActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async (manual = false) => {
     manual ? setRefreshing(true) : setLoading(true);
@@ -48,18 +41,12 @@ const MonitorActivity = () => {
 
   useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => void load(), 30_000);
-    return () => window.clearInterval(interval);
-  }, [load]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const activeCount = employees.filter((employee) => getDisplayStatus(employee, now) === "active").length;
+  const onlineCount = employees.filter((employee) => getDisplayStatus(employee) === "online").length;
+  const awayCount = employees.filter((employee) => getDisplayStatus(employee) === "away").length;
+  const offlineCount = employees.filter((employee) => getDisplayStatus(employee) === "offline").length;
   const productiveSeconds = employees.reduce((total, employee) => total + Number(employee.productiveSeconds || 0), 0);
+  const idleSeconds = employees.reduce((total, employee) => total + Number(employee.idleSeconds || 0), 0);
+  const totalSeconds = employees.reduce((total, employee) => total + Number(employee.totalSeconds || 0), 0);
 
   return (
     <MainLayout title="Mouse Movement" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Mouse Movement" }]}>
@@ -68,7 +55,7 @@ const MonitorActivity = () => {
           <div>
             <h2 className="text-2xl font-semibold">Employee mouse movement</h2>
             <p className="text-sm text-muted-foreground">
-              Updates automatically every 30 seconds. An employee is active only while fresh desktop activity is being reported.
+              Refresh manually to load the latest desktop activity. Online status now reflects both mouse and keyboard activity.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -79,9 +66,11 @@ const MonitorActivity = () => {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tracked employees</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{employees.length}</CardContent></Card>
-          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Active now</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-2xl font-bold text-emerald-600"><Circle className="h-3 w-3 fill-current" />{activeCount}</CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Online now</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-2xl font-bold text-emerald-600"><Circle className="h-3 w-3 fill-current" />{onlineCount}</CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Away now</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-amber-500">{awayCount}</CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Offline now</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-slate-600">{offlineCount}</CardContent></Card>
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Productive time</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatDuration(productiveSeconds)}</CardContent></Card>
         </div>
 
@@ -92,12 +81,18 @@ const MonitorActivity = () => {
               <TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Employee ID</TableHead><TableHead>Status</TableHead><TableHead>Last seen</TableHead><TableHead className="text-right">Productive time</TableHead></TableRow></TableHeader>
               <TableBody>
                 {!loading && employees.map((employee) => {
-                  const status = getDisplayStatus(employee, now);
+                  const status = getDisplayStatus(employee);
+                  const statusLabel = status === "online" ? "Online" : status === "away" ? "Away" : "Offline";
+                  const statusClass = status === "online"
+                    ? "bg-emerald-600 hover:bg-emerald-600"
+                    : status === "away"
+                      ? "bg-amber-500 hover:bg-amber-500"
+                      : "bg-slate-500 hover:bg-slate-500";
                   return (
                     <TableRow key={employee.employeeId}>
                       <TableCell className="font-medium">{employee.employeeName || "Employee"}</TableCell>
                       <TableCell>{employee.employeeId}</TableCell>
-                      <TableCell><Badge className={status === "active" ? "bg-emerald-600 hover:bg-emerald-600" : "bg-slate-500 hover:bg-slate-500"}>{status === "active" ? "Active" : "Offline"}</Badge></TableCell>
+                      <TableCell><Badge className={statusClass}>{statusLabel}</Badge></TableCell>
                       <TableCell>{employee.lastSeenAt ? new Date(employee.lastSeenAt).toLocaleString() : "-"}</TableCell>
                       <TableCell className="text-right">{formatDuration(Number(employee.productiveSeconds || 0))}</TableCell>
                     </TableRow>

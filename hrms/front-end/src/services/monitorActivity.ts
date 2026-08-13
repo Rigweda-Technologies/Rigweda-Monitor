@@ -4,9 +4,11 @@ export type MonitorEmployeeActivity = {
   employeeId: string;
   employeeName: string | null;
   employeeCode?: string | null;
-  status: "active" | "offline";
+  status: "online" | "away" | "offline";
   lastSeenAt: string | null;
   productiveSeconds: number;
+  idleSeconds: number;
+  totalSeconds: number;
 };
 
 export type MonitorScreenshot = {

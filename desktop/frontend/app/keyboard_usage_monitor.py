@@ -32,6 +32,7 @@ LOCK_FILE = DATA_ROOT / "keyboard_monitor.lock"
 LOG_FILE = LOG_DIR / "keyboard_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 0.05
+SESSION_SNAPSHOT_SECONDS = 15
 DESKTOP_BACKEND_URL = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
 TARGET_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}
 
@@ -192,8 +193,10 @@ class KeyboardUsageMonitor:
 
         self._current_app: tuple[str, str] | None = None
         self._current_title: str = ""
+        self._current_session_id: str | None = None
         self._session_started_at: datetime | None = None
         self._session_last_event_at: datetime | None = None
+        self._session_last_snapshot_at: datetime | None = None
         self._session_key_presses = 0
         self._session_key_names: list[str] = []
         self._session_typed_chars: list[str] = []
@@ -290,6 +293,7 @@ class KeyboardUsageMonitor:
     def _queue_session(
         self,
         *,
+        session_id: str,
         app_name: str,
         process_name: str,
         started_at: str,
@@ -307,9 +311,23 @@ class KeyboardUsageMonitor:
                   session_id, device_id, observed_at, app_name, process_name,
                   started_at, ended_at, active_seconds, key_press_count, key_names, typed_text, key_stream_text
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                  observed_at = excluded.observed_at,
+                  app_name = excluded.app_name,
+                  process_name = excluded.process_name,
+                  started_at = excluded.started_at,
+                  ended_at = excluded.ended_at,
+                  active_seconds = excluded.active_seconds,
+                  key_press_count = excluded.key_press_count,
+                  key_names = excluded.key_names,
+                  typed_text = excluded.typed_text,
+                  key_stream_text = excluded.key_stream_text,
+                  sync_status = 'pending',
+                  retry_count = 0,
+                  last_error = NULL
                 """,
                 (
-                    f"app_{uuid.uuid4().hex}",
+                    session_id,
                     self._device_id,
                     utc_now(),
                     app_name,
@@ -436,13 +454,48 @@ class KeyboardUsageMonitor:
     def _start_new_session(self, app_context: tuple[str, str, str], event_time: datetime) -> None:
         self._current_app = (app_context[0], app_context[1])
         self._current_title = app_context[2]
+        self._current_session_id = f"app_{uuid.uuid4().hex}"
         self._session_started_at = event_time
         self._session_last_event_at = event_time
+        self._session_last_snapshot_at = None
         self._session_key_presses = 0
         self._session_key_names = []
         self._session_typed_chars = []
         self._session_key_stream = []
         self._session_header_written = False
+
+    def _persist_current_session(self, *, force: bool = False) -> bool:
+        if not self._current_app or not self._current_session_id or not self._session_started_at or not self._session_last_event_at:
+            return False
+
+        if not force and self._session_last_snapshot_at is not None:
+            elapsed = (self._session_last_event_at - self._session_last_snapshot_at).total_seconds()
+            if elapsed < SESSION_SNAPSHOT_SECONDS:
+                return False
+
+        started_at_text = self._session_started_at.isoformat().replace("+00:00", "Z")
+        ended_at_text = self._session_last_event_at.isoformat().replace("+00:00", "Z")
+        active_seconds = max(int((self._session_last_event_at - self._session_started_at).total_seconds()), 0)
+        key_press_count = max(int(self._session_key_presses), 0)
+        key_names = list(dict.fromkeys(self._session_key_names))
+        typed_text = "".join(self._session_typed_chars)
+        key_stream_text = "".join(self._session_key_stream)
+
+        self._queue_session(
+            session_id=self._current_session_id,
+            app_name=self._current_app[0],
+            process_name=self._current_app[1],
+            started_at=started_at_text,
+            ended_at=ended_at_text,
+            active_seconds=active_seconds,
+            key_press_count=key_press_count,
+            key_names=key_names,
+            typed_text=typed_text,
+            key_stream_text=key_stream_text,
+        )
+        self._session_last_snapshot_at = self._session_last_event_at
+        self._sync_pending_sessions()
+        return True
 
     def _flush_session(self, *, ended_reason: str) -> None:
         if not self._current_app or not self._session_started_at or not self._session_last_event_at:
@@ -469,6 +522,7 @@ class KeyboardUsageMonitor:
             return
 
         self._queue_session(
+            session_id=self._current_session_id,
             app_name=self._current_app[0],
             process_name=self._current_app[1],
             started_at=started_at_text,
@@ -487,8 +541,10 @@ class KeyboardUsageMonitor:
 
         self._current_app = None
         self._current_title = ""
+        self._current_session_id = None
         self._session_started_at = None
         self._session_last_event_at = None
+        self._session_last_snapshot_at = None
         self._session_key_presses = 0
         self._session_key_names = []
         self._session_typed_chars = []
@@ -555,6 +611,7 @@ class KeyboardUsageMonitor:
                         self._session_typed_chars.pop()
                 elif typed_text is not None:
                     self._session_typed_chars.append(typed_text)
+                self._persist_current_session()
             if header_to_write is not None:
                 self._write_header(app_name=header_to_write[0], process_name=header_to_write[1], title=header_to_write[2])
             self._write_key(log_text)
