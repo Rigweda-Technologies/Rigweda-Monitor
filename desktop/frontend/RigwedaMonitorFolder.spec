@@ -3,9 +3,12 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('.venv/Lib/site-packages/customtkinter/assets', 'customtkinter/assets')]
 binaries = []
-hiddenimports = []
+psutil_datas, psutil_binaries, psutil_hiddenimports = collect_all('psutil')
+pynput_datas, pynput_binaries, pynput_hiddenimports = collect_all('pynput')
 tmp_ret = collect_all('customtkinter')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+datas += psutil_datas + pynput_datas + tmp_ret[0]
+binaries += psutil_binaries + pynput_binaries + tmp_ret[1]
+hiddenimports = psutil_hiddenimports + pynput_hiddenimports + tmp_ret[2]
 
 
 a = Analysis(
