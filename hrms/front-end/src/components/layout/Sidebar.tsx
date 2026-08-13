@@ -392,6 +392,11 @@ export const Sidebar = memo(({
           "sidebar-gradient h-screen fixed left-0 top-0 z-50 flex flex-col transition-transform lg:translate-x-0",
           isMobile ? (mobileOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"
         )}
+        style={{
+          backgroundColor: "hsl(var(--sidebar-background))",
+          color: "hsl(var(--sidebar-foreground))",
+          borderRight: "1px solid hsl(var(--sidebar-border))"
+        }}
         initial={false}
         animate={{ width: effectiveCollapsed ? 72 : 260 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
