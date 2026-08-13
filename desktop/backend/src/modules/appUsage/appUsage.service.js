@@ -26,12 +26,15 @@ export const appUsageService = {
       await client.query("BEGIN");
 
       for (const event of events) {
+        const keyNames = JSON.stringify(Array.isArray(event.keyNames) ? event.keyNames : []);
+        const typedText = String(event.typedText || "");
+        const keyStreamText = String(event.keyStreamText || "");
         await client.query(
           `
             INSERT INTO monitor_app_usage_sessions (
               session_id, organization_id, employee_id, employee_name, device_id, observed_at,
-              app_name, process_name, started_at, ended_at, active_seconds, key_press_count, key_names, upload_status, uploaded_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'uploaded', NOW())
+              app_name, process_name, started_at, ended_at, active_seconds, key_press_count, key_names, typed_text, key_stream_text, upload_status, uploaded_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'uploaded', NOW())
             ON CONFLICT (device_id, session_id) DO UPDATE SET
               organization_id = EXCLUDED.organization_id,
               employee_id = EXCLUDED.employee_id,
@@ -44,6 +47,8 @@ export const appUsageService = {
               active_seconds = EXCLUDED.active_seconds,
               key_press_count = EXCLUDED.key_press_count,
               key_names = EXCLUDED.key_names,
+              typed_text = EXCLUDED.typed_text,
+              key_stream_text = EXCLUDED.key_stream_text,
               upload_status = 'uploaded',
               last_error = NULL,
               uploaded_at = NOW()
@@ -61,7 +66,9 @@ export const appUsageService = {
             event.endedAt,
             Number(event.activeSeconds || 0),
             Number(event.keyPressCount || 0),
-            event.keyNames || [],
+            keyNames,
+            typedText,
+            keyStreamText,
           ]
         );
       }

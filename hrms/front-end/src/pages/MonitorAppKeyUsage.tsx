@@ -103,7 +103,7 @@ const MonitorAppKeyUsage = () => {
                   <TableHead className="text-right">Sessions</TableHead>
                   <TableHead className="text-right">Time</TableHead>
                   <TableHead className="text-right">Keys</TableHead>
-                  <TableHead>Key names</TableHead>
+                  <TableHead>Typed text</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -117,8 +117,9 @@ const MonitorAppKeyUsage = () => {
                     <TableCell className="text-right">{formatDuration(row.totalSeconds)}</TableCell>
                     <TableCell className="text-right">{row.keyPressCount}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {row.keyNames?.slice(0, 20).join(", ") || "-"}
-                      {row.keyNames?.length > 20 ? "..." : ""}
+                      <div className="max-w-[32rem] whitespace-break-spaces break-words font-mono text-xs leading-5">
+                        {row.typedText || "-"}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

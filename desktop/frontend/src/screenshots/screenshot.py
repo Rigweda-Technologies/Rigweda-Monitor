@@ -723,11 +723,26 @@ def commit_batch(
     duplicates: list[dict],
     token: str,
 ) -> None:
-    post_json(
-        f"{get_backend_base_url()}/screenshot-batches/{batch_id}/complete",
-        {"deviceId": device_id, "uploaded": uploaded, "duplicates": duplicates},
-        token=token,
-        timeout=60,
+    payload = {"deviceId": device_id, "uploaded": uploaded, "duplicates": duplicates}
+    errors: list[str] = []
+
+    for backend_url in get_backend_base_url_candidates():
+        try:
+            post_json(
+                f"{backend_url}/screenshot-batches/{batch_id}/complete",
+                payload,
+                token=token,
+                timeout=60,
+            )
+            if backend_url != get_backend_base_url():
+                log_message(f"Screenshot batch {batch_id} committed via fallback backend {backend_url}.")
+            return
+        except Exception as error:
+            errors.append(f"{backend_url}: {error}")
+
+    raise RuntimeError(
+        "Could not commit screenshot batch to any backend. "
+        + ("Tried: " + " | ".join(errors[:3]) if errors else "")
     )
 
     completed_ids = [item["clientScreenshotId"] for item in uploaded]

@@ -130,6 +130,8 @@ export const initializeDatabase = async () => {
       active_seconds INTEGER NOT NULL DEFAULT 0,
       key_press_count INTEGER NOT NULL DEFAULT 0,
       key_names JSONB NOT NULL DEFAULT '[]',
+      typed_text TEXT NOT NULL DEFAULT '',
+      key_stream_text TEXT NOT NULL DEFAULT '',
       upload_status TEXT NOT NULL DEFAULT 'uploaded',
       retry_count INTEGER NOT NULL DEFAULT 0,
       last_error TEXT,
@@ -147,6 +149,16 @@ export const initializeDatabase = async () => {
   await pool.query(`
     ALTER TABLE monitor_app_usage_sessions
     ADD COLUMN IF NOT EXISTS key_names JSONB NOT NULL DEFAULT '[]'
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_app_usage_sessions
+    ADD COLUMN IF NOT EXISTS typed_text TEXT NOT NULL DEFAULT ''
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_app_usage_sessions
+    ADD COLUMN IF NOT EXISTS key_stream_text TEXT NOT NULL DEFAULT ''
   `);
 
   await pool.query(`

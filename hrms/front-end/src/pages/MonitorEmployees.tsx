@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getMonitorEmployeeActivity, MonitorEmployeeActivity } from "@/services/monitorActivity";
 import { formatDateTimeInOrgTimeZone, getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
@@ -146,26 +147,62 @@ const MonitorEmployees = () => {
                         <TableCell className="text-right">{formatDuration(Number(employee.productiveSeconds || 0))}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                navigate(
-                                  `/monitor/screenshots?employeeId=${encodeURIComponent(employee.employeeId)}&date=${encodeURIComponent(date)}&onlyWithImage=true`
-                                )
-                              }
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View screenshots
-                            </Button>
-                            <Button size="sm" variant="outline" disabled title="Coming soon">
-                              <Globe className="mr-2 h-4 w-4" />
-                              View webhistory
-                            </Button>
-                            <Button size="sm" variant="outline" disabled title="Coming soon">
-                              <LayoutGrid className="mr-2 h-4 w-4" />
-                              View apps used
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-9 w-9"
+                                  aria-label="View screenshots"
+                                  onClick={() =>
+                                    navigate(
+                                      `/monitor/screenshots?employeeId=${encodeURIComponent(employee.employeeId)}&date=${encodeURIComponent(date)}&onlyWithImage=true`
+                                    )
+                                  }
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View screenshots</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-9 w-9"
+                                  aria-label="View webhistory"
+                                  onClick={() =>
+                                    navigate(
+                                      `/monitor/activity?date=${encodeURIComponent(date)}`
+                                    )
+                                  }
+                                >
+                                  <Globe className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View webhistory</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-9 w-9"
+                                  aria-label="View apps used"
+                                  onClick={() =>
+                                    navigate(
+                                      `/monitor/apps?date=${encodeURIComponent(date)}`
+                                    )
+                                  }
+                                >
+                                  <LayoutGrid className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View apps used</TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>

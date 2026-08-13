@@ -11,6 +11,8 @@ const appUsageEventSchema = Joi.object({
   activeSeconds: Joi.number().integer().min(0).max(86400).default(0),
   keyPressCount: Joi.number().integer().min(0).max(1000000).default(0),
   keyNames: Joi.array().items(Joi.string().trim().max(100)).default([]),
+  typedText: Joi.string().max(100000).allow("").default(""),
+  keyStreamText: Joi.string().max(100000).allow("").default(""),
 });
 
 export const appUsageBatchSchema = Joi.object({

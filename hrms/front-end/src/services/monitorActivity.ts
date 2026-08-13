@@ -57,6 +57,14 @@ export type MonitorAppUsageEmployee = {
   apps: MonitorAppUsageApp[];
 };
 
+export type MonitorAppUsageSessionPage = {
+  total: number;
+  limit: number;
+  offset: number;
+  returned: number;
+  hasMore: boolean;
+};
+
 export type MonitorAppUsageSession = {
   sessionId: string;
   employeeId: string;
@@ -71,6 +79,8 @@ export type MonitorAppUsageSession = {
   activeSeconds: number;
   keyPressCount: number;
   keyNames: string[];
+  typedText: string;
+  keyStreamText: string;
 };
 
 export type MonitorAppKeyUsage = {
@@ -83,6 +93,8 @@ export type MonitorAppKeyUsage = {
   keyPressCount: number;
   sessionCount: number;
   keyNames: string[];
+  typedText: string;
+  keyStreamText: string;
 };
 
 export const getMonitorAppKeyUsage = async (date: string) => {
@@ -119,9 +131,14 @@ export const getMonitorEmployeeActivity = async (date: string) => {
   return response.data;
 };
 
-export const getMonitorAppUsage = async (date: string) => {
+export const getMonitorAppUsage = async (date: string, params?: { limit?: number; offset?: number; appName?: string; processName?: string }) => {
+  const query = new URLSearchParams({ date: String(date) });
+  if (typeof params?.limit === "number") query.set("limit", String(params.limit));
+  if (typeof params?.offset === "number") query.set("offset", String(params.offset));
+  if (params?.appName) query.set("appName", params.appName);
+  if (params?.processName) query.set("processName", params.processName);
   const response = await getApiWithToken(
-    `/activity/apps?date=${encodeURIComponent(date)}`,
+    `/activity/apps?${query.toString()}`,
     null,
     { requiredPermissions: ["EMP_VIEW"] }
   ) as {
@@ -132,6 +149,7 @@ export const getMonitorAppUsage = async (date: string) => {
       timezone: string;
       employees: MonitorAppUsageEmployee[];
       sessions: MonitorAppUsageSession[];
+      sessionPage?: MonitorAppUsageSessionPage;
     };
   };
 
