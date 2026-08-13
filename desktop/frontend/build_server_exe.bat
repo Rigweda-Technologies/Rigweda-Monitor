@@ -17,6 +17,7 @@ set "APP_DIST_DIR=%DIST_DIR%\%APP_NAME%"
 set "APP_ZIP=%DIST_DIR%\%APP_NAME%.zip"
 set "SHARE_DIR=%DIST_DIR%\%APP_NAME%Share"
 set "SHARE_ZIP=%DIST_DIR%\%APP_NAME%Share.zip"
+set "SHARE_STAGE=%TEMP%\%APP_NAME%ShareStage"
 set "INSTALL_SCRIPT_PS1=..\..\scripts\install-fresh-rigweda-monitor.ps1"
 set "INSTALL_SCRIPT_BAT=..\..\scripts\install-fresh-rigweda-monitor.bat"
 
@@ -28,6 +29,7 @@ if exist "%DIST_DIR%\RigwedaMonitorFolder" rmdir /s /q "%DIST_DIR%\RigwedaMonito
 if exist "%DIST_DIR%\RigwedaMonitorDebug" rmdir /s /q "%DIST_DIR%\RigwedaMonitorDebug"
 if exist "%SHARE_DIR%" rmdir /s /q "%SHARE_DIR%"
 if exist "%SHARE_ZIP%" del /q "%SHARE_ZIP%"
+if exist "%SHARE_STAGE%" rmdir /s /q "%SHARE_STAGE%"
 
 (
   echo HRMS_BACKEND_URL=https://rigweda-hrms-backend.onrender.com/api
@@ -44,6 +46,9 @@ if exist "%SHARE_ZIP%" del /q "%SHARE_ZIP%"
   echo ACTIVITY_HEARTBEAT_SECONDS=30
 ) > "%SERVER_ENV_FILE%"
 
+"%~dp0.venv\Scripts\python.exe" -m pip install -r requirements.txt
+if not "%errorlevel%"=="0" exit /b %errorlevel%
+
 ".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean RigwedaMonitor.spec
 set "BUILD_EXIT_CODE=%errorlevel%"
 del "%SERVER_ENV_FILE%" >nul 2>nul
@@ -52,14 +57,20 @@ if not "%BUILD_EXIT_CODE%"=="0" exit /b %BUILD_EXIT_CODE%
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%APP_DIST_DIR%' -DestinationPath '%APP_ZIP%' -Force"
 if not "%errorlevel%"=="0" exit /b %errorlevel%
 
-mkdir "%SHARE_DIR%" >nul 2>nul
-if exist "%SHARE_DIR%" rmdir /s /q "%SHARE_DIR%"
-mkdir "%SHARE_DIR%"
-xcopy "%APP_DIST_DIR%" "%SHARE_DIR%\%APP_NAME%\" /E /I /H /Y >nul
-copy /Y "%INSTALL_SCRIPT_PS1%" "%SHARE_DIR%\" >nul
-copy /Y "%INSTALL_SCRIPT_BAT%" "%SHARE_DIR%\" >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%SHARE_DIR%' -DestinationPath '%SHARE_ZIP%' -Force"
+mkdir "%SHARE_STAGE%" >nul 2>nul
+mkdir "%SHARE_STAGE%\%APP_NAME%" >nul 2>nul
+robocopy "%APP_DIST_DIR%" "%SHARE_STAGE%\%APP_NAME%" /E /NFL /NDL /NJH /NJS /NP >nul
+set "ROBOCOPY_EXIT=%errorlevel%"
+if %ROBOCOPY_EXIT% GEQ 8 exit /b %ROBOCOPY_EXIT%
+copy /Y "%INSTALL_SCRIPT_PS1%" "%SHARE_STAGE%\" >nul
+copy /Y "%INSTALL_SCRIPT_BAT%" "%SHARE_STAGE%\" >nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%SHARE_STAGE%\*' -DestinationPath '%SHARE_ZIP%' -Force"
 if not "%errorlevel%"=="0" exit /b %errorlevel%
+if exist "%SHARE_DIR%" rmdir /s /q "%SHARE_DIR%"
+robocopy "%SHARE_STAGE%" "%SHARE_DIR%" /E /NFL /NDL /NJH /NJS /NP >nul
+set "ROBOCOPY_SHARE_EXIT=%errorlevel%"
+if %ROBOCOPY_SHARE_EXIT% GEQ 8 exit /b %ROBOCOPY_SHARE_EXIT%
+rmdir /s /q "%SHARE_STAGE%"
 
 echo.
 echo Build complete.
