@@ -445,7 +445,7 @@ class LoginApp:
 
         self.signin_button.configure(state="normal", text="Monitoring Active")
         self._show_employee_details(session)
-        self._set_status("Login successful. Screenshot and activity monitoring are running.", COLORS["success"])
+        self._set_status("Login successful. Screenshot, activity, and keyboard monitoring are running.", COLORS["success"])
         self.root.update_idletasks()
         self._start_hide_countdown(30)
         return True

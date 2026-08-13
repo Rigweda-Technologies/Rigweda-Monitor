@@ -201,6 +201,24 @@ def _hrms_api_url(path: str) -> str:
     return f"{base_url}/api{normalized_path}"
 
 
+def _login_url_candidates() -> list[str]:
+    """Prefer the configured backend, but fall back to hosted login for offline local dev."""
+    configured_base = _hrms_backend_url()
+    candidates = [configured_base]
+    if configured_base != DEFAULT_HRMS_BACKEND_URL:
+        candidates.append(DEFAULT_HRMS_BACKEND_URL)
+
+    login_urls: list[str] = []
+    for base_url in candidates:
+        base = base_url.rstrip("/")
+        if base.endswith("/api"):
+            login_urls.append(f"{base}/users/login")
+        else:
+            login_urls.append(f"{base}/api/users/login")
+
+    return list(dict.fromkeys(login_urls))
+
+
 def _extract_employee_details(email: str, payload: dict) -> dict:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     user = data.get("user") if isinstance(data.get("user"), dict) else {}
@@ -367,36 +385,42 @@ def register_startup() -> tuple[bool, str]:
 
 def login_to_hrms(email: str, password: str) -> tuple[bool, str, dict | None]:
     """Authenticate against HRMS and persist the returned access token."""
-    login_url = os.getenv("HRMS_BACKEND_URL", DEFAULT_HRMS_BACKEND_URL).rstrip("/")
-    if login_url.endswith("/api"):
-        login_url = f"{login_url}/users/login"
-    else:
-        login_url = f"{login_url}/api/users/login"
-
     request_body = json.dumps({"email": email, "password": password}).encode("utf-8")
-    request = urllib.request.Request(
-        login_url,
-        data=request_body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    last_network_error: Exception | None = None
+    payload: dict = {}
+    token: str | None = None
 
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            response_text = response.read().decode("utf-8")
-            payload = json.loads(response_text) if response_text else {}
-            token = _extract_token(response.headers, payload)
-    except urllib.error.HTTPError as error:
+    for login_url in _login_url_candidates():
+        request = urllib.request.Request(
+            login_url,
+            data=request_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
         try:
-            payload = json.loads(error.read().decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
-            payload = {}
-        message = payload.get("message") or payload.get("error") or f"Login failed with HTTP {error.code}"
-        return False, str(message), None
-    except (urllib.error.URLError, TimeoutError) as error:
-        return False, f"Could not reach login API: {error}", None
-    except ValueError:
-        return False, "Login API returned an invalid response.", None
+            with urllib.request.urlopen(request, timeout=30) as response:
+                response_text = response.read().decode("utf-8")
+                payload = json.loads(response_text) if response_text else {}
+                token = _extract_token(response.headers, payload)
+                break
+        except urllib.error.HTTPError as error:
+            try:
+                payload = json.loads(error.read().decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                payload = {}
+            message = payload.get("message") or payload.get("error") or f"Login failed with HTTP {error.code}"
+            return False, str(message), None
+        except (urllib.error.URLError, TimeoutError) as error:
+            last_network_error = error
+            continue
+        except ValueError:
+            return False, "Login API returned an invalid response.", None
+
+    if token is None:
+        if last_network_error is not None:
+            return False, f"Could not reach login API: {last_network_error}", None
+        return False, "Could not reach login API.", None
 
     if not token:
         return False, "Login succeeded but no access token was returned.", None

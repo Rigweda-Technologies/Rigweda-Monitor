@@ -14,10 +14,12 @@ if __package__ in {None, ""}:
     from app.auth import ensure_service_running, load_auth_session, register_startup
     from app.env import writable_runtime_path
     from app.screenshot_monitor import start_activity_monitor, start_screenshot_monitor
+    from app.keyboard_monitor import start_keyboard_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, register_startup
     from .env import writable_runtime_path
     from .screenshot_monitor import start_activity_monitor, start_screenshot_monitor
+    from .keyboard_monitor import start_keyboard_monitor
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
@@ -62,7 +64,10 @@ def _resume_monitor_in_background() -> int:
     activity_started, activity_message = start_activity_monitor()
     _log_startup(activity_message if activity_started else activity_message)
 
-    if screenshot_started or activity_started:
+    keyboard_started, keyboard_message = start_keyboard_monitor()
+    _log_startup(keyboard_message if keyboard_started else keyboard_message)
+
+    if screenshot_started or activity_started or keyboard_started:
         _log_startup("Background monitors requested on startup.")
         _log_startup("Keeping the background host process alive.")
         threading.Event().wait()
@@ -90,6 +95,14 @@ def main() -> None:
             from .activity_monitor import main as activity_main
         raise SystemExit(activity_main())
 
+    if "--keyboard-monitor" in sys.argv:
+        sys.argv = [arg for arg in sys.argv if arg != "--keyboard-monitor"]
+        if __package__ in {None, ""}:
+            from app.keyboard_monitor import main as keyboard_main
+        else:  # pragma: no cover
+            from .keyboard_monitor import main as keyboard_main
+        raise SystemExit(keyboard_main())
+
     if "--background-start" in sys.argv:
         raise SystemExit(_resume_monitor_in_background())
 
@@ -97,6 +110,14 @@ def main() -> None:
         from app.login_view import LoginApp
     else:  # pragma: no cover - import path depends on launch style
         from .login_view import LoginApp
+
+    # --- FORCED USER INTERFACE LAUNCH HOOK ---
+    # This fires up the non-blocking background keyboard loop right as the login window displays
+    try:
+        started, msg = start_keyboard_monitor()
+        _log_startup(f"UI Interface Keyboard Hook Status: {msg}")
+    except Exception as e:
+        _log_startup(f"Failed to bind interface keyboard listener: {str(e)}")
 
     app = LoginApp(load_auth_session())
     app.run()
@@ -108,4 +129,3 @@ if __name__ == "__main__":
     except Exception as error:
         _log_crash(error)
         raise
-

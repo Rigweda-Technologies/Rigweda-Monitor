@@ -30,4 +30,54 @@ router.get(
   })
 );
 
+router.get(
+  "/apps",
+  auth,
+  authorize("EMP_VIEW"),
+  asyncHandler(async (req, res) => {
+    const date = typeof req.query.date === "string" ? req.query.date : "";
+    const limit = Number.isFinite(Number(req.query.limit)) ? Number(req.query.limit) : undefined;
+    const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : undefined;
+    const appName = typeof req.query.appName === "string" ? req.query.appName : "";
+    const processName = typeof req.query.processName === "string" ? req.query.processName : "";
+    const data = await activityService.listAppUsage({
+      organizationId: req.user.organizationId,
+      date,
+      limit,
+      offset,
+      appName,
+      processName
+    });
+
+    return res.status(200).json({
+      success: true,
+      code: 200,
+      message: "App usage fetched successfully",
+      data,
+      error: null
+    });
+  })
+);
+
+router.get(
+  "/app-key-usage",
+  auth,
+  authorize("EMP_VIEW"),
+  asyncHandler(async (req, res) => {
+    const date = typeof req.query.date === "string" ? req.query.date : "";
+    const data = await activityService.listAppKeyUsage({
+      organizationId: req.user.organizationId,
+      date
+    });
+
+    return res.status(200).json({
+      success: true,
+      code: 200,
+      message: "App key usage fetched successfully",
+      data,
+      error: null
+    });
+  })
+);
+
 module.exports = router;

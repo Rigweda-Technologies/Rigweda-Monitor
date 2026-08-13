@@ -114,5 +114,56 @@ export const initializeDatabase = async () => {
     CREATE INDEX IF NOT EXISTS idx_monitor_device_presence_organization_seen
     ON monitor_device_presence (organization_id, last_seen_at DESC)
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_app_usage_sessions (
+      session_id TEXT PRIMARY KEY,
+      organization_id TEXT,
+      employee_id TEXT NOT NULL,
+      employee_name TEXT,
+      device_id TEXT NOT NULL,
+      observed_at TIMESTAMPTZ NOT NULL,
+      app_name TEXT NOT NULL,
+      process_name TEXT NOT NULL,
+      started_at TIMESTAMPTZ NOT NULL,
+      ended_at TIMESTAMPTZ NOT NULL,
+      active_seconds INTEGER NOT NULL DEFAULT 0,
+      key_press_count INTEGER NOT NULL DEFAULT 0,
+      key_names JSONB NOT NULL DEFAULT '[]',
+      typed_text TEXT NOT NULL DEFAULT '',
+      key_stream_text TEXT NOT NULL DEFAULT '',
+      upload_status TEXT NOT NULL DEFAULT 'uploaded',
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      uploaded_at TIMESTAMPTZ,
+      UNIQUE (device_id, session_id)
+    )
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_app_usage_sessions
+    ADD COLUMN IF NOT EXISTS key_press_count INTEGER NOT NULL DEFAULT 0
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_app_usage_sessions
+    ADD COLUMN IF NOT EXISTS key_names JSONB NOT NULL DEFAULT '[]'
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_app_usage_sessions
+    ADD COLUMN IF NOT EXISTS typed_text TEXT NOT NULL DEFAULT ''
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_app_usage_sessions
+    ADD COLUMN IF NOT EXISTS key_stream_text TEXT NOT NULL DEFAULT ''
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_app_usage_sessions_employee_time
+    ON monitor_app_usage_sessions (organization_id, employee_id, started_at DESC)
+  `);
 };
 

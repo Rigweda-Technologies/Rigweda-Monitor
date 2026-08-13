@@ -10,17 +10,25 @@ const buildHrmsApiUrl = (path) => {
 };
 
 const fetchProfileCandidate = async ({ token, path }) => {
-  const response = await fetch(buildHrmsApiUrl(path), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const response = await fetch(buildHrmsApiUrl(path), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  if (!response.ok) {
-    return { ok: false, status: response.status, text: await response.text() };
+    if (!response.ok) {
+      return { ok: false, status: response.status, text: await response.text() };
+    }
+
+    return { ok: true, payload: await response.json() };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "NETWORK_ERROR",
+      text: error instanceof Error ? error.message : String(error),
+    };
   }
-
-  return { ok: true, payload: await response.json() };
 };
 
 export const getEmployeeProfileFromRigweda = async ({ token }) => {
@@ -31,8 +39,7 @@ export const getEmployeeProfileFromRigweda = async ({ token }) => {
 
   const success = attempts.find((attempt) => attempt.ok);
   if (!success) {
-    const last = attempts.at(-1);
-    throw new Error(`Failed to resolve employee profile: ${last?.status} ${last?.text}`);
+    return null;
   }
 
   const data = success.payload?.data ?? null;
