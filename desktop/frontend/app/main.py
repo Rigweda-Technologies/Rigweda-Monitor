@@ -14,14 +14,12 @@ if __package__ in {None, ""}:
     sys.path.append(str(Path(__file__).resolve().parents[0]))
     from app.auth import ensure_service_running, load_auth_session, register_startup
     from app.env import writable_runtime_path
-    from app.screenshot_monitor import start_activity_monitor, start_screenshot_monitor
-    from app.keyboard_monitor import start_keyboard_monitor
+    from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
     from app.browser_history_monitor import start_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, register_startup
     from .env import writable_runtime_path
-    from .screenshot_monitor import start_activity_monitor, start_screenshot_monitor
-    from .keyboard_monitor import start_keyboard_monitor
+    from .monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
     from .browser_history_monitor import start_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -61,14 +59,13 @@ def _resume_monitor_in_background() -> int:
     startup_registered, startup_message = register_startup()
     _log_startup(startup_message if startup_registered else startup_message)
 
-    screenshot_started, screenshot_message = start_screenshot_monitor()
-    _log_startup(screenshot_message if screenshot_started else screenshot_message)
-
-    activity_started, activity_message = start_activity_monitor()
-    _log_startup(activity_message if activity_started else activity_message)
-
-    keyboard_started, keyboard_message = start_keyboard_monitor()
-    _log_startup(keyboard_message if keyboard_started else keyboard_message)
+    flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+    _log_startup(
+        "Monitor settings listener started with "
+        f"screenshots={flags.get('screenshotsEnabled', True)} "
+        f"mouse={flags.get('mouseEnabled', True)} "
+        f"keyboard={flags.get('keyboardEnabled', True)}"
+    )
 
     # Added automated browser monitor tracking to background startup routines too
     try:
@@ -77,14 +74,10 @@ def _resume_monitor_in_background() -> int:
     except Exception as e:
         _log_startup(f"Failed to start browser monitor in background: {str(e)}")
 
-    if screenshot_started or activity_started or keyboard_started or browser_started:
-        _log_startup("Background monitors requested on startup.")
-        _log_startup("Keeping the background host process alive.")
-        threading.Event().wait()
-        return 0
-
-    _log_startup("No background monitors could be started.")
-    return 1
+    _log_startup("Background monitor controller is active.")
+    _log_startup("Keeping the background host process alive.")
+    threading.Event().wait()
+    return 0
 
 
 def main() -> None:
@@ -116,6 +109,19 @@ def main() -> None:
     if "--background-start" in sys.argv:
         raise SystemExit(_resume_monitor_in_background())
 
+    startup_session = load_auth_session()
+    if startup_session:
+        try:
+            flags = start_monitor_settings_listener(startup_session, on_change=apply_monitor_feature_flags)
+            _log_startup(
+                "Initial monitor settings loaded: "
+                f"screenshots={flags.get('screenshotsEnabled', True)} "
+                f"mouse={flags.get('mouseEnabled', True)} "
+                f"keyboard={flags.get('keyboardEnabled', True)}"
+            )
+        except Exception as error:
+            _log_startup(f"Failed to initialize monitor settings listener: {str(error)}")
+
     if __package__ in {None, ""}:
         from app.login_view import LoginApp
     else:  # pragma: no cover - import path depends on launch style
@@ -123,8 +129,7 @@ def main() -> None:
 
     # --- FORCED USER INTERFACE LAUNCH HOOK ---
     try:
-        started, msg = start_keyboard_monitor()
-        _log_startup(f"UI Interface Keyboard Hook Status: {msg}")
+        _log_startup("UI Interface keyboard hook is managed by monitor settings.")
     except Exception as e:
         _log_startup(f"Failed to bind interface keyboard listener: {str(e)}")
 

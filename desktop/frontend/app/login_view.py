@@ -11,7 +11,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from app.auth import ensure_service_running, login_to_hrms, register_startup
-from app.screenshot_monitor import start_activity_monitor, start_screenshot_monitor
+from app.monitor_settings import apply_monitor_feature_flags, get_monitor_feature_flags, start_monitor_settings_listener
 
 COLORS = {
     "window_bg": "#1a1a2e",
@@ -427,24 +427,28 @@ class LoginApp:
             self._set_status(message, COLORS["error"])
             return False
 
-        screenshot_started, screenshot_message = start_screenshot_monitor()
-        if not screenshot_started:
-            self.signin_button.configure(state="normal", text="Sign In")
-            self._set_status(screenshot_message, COLORS["error"])
-            return False
-
-        activity_started, activity_message = start_activity_monitor()
-        if not activity_started:
-            self.signin_button.configure(state="normal", text="Sign In")
-            self._set_status(activity_message, COLORS["error"])
-            return False
+        flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
 
         if register_windows_startup:
             register_startup()
 
         self.signin_button.configure(state="normal", text="Monitoring Active")
         self._show_employee_details(session)
-        self._set_status("Login successful. Screenshot, activity, and keyboard monitoring are running.", COLORS["success"])
+        enabled_labels = []
+        if flags.get("screenshotsEnabled", True):
+            enabled_labels.append("screenshots")
+        if flags.get("mouseEnabled", True):
+            enabled_labels.append("mouse activity")
+        if flags.get("keyboardEnabled", True):
+            enabled_labels.append("keyboard")
+
+        if enabled_labels:
+            self._set_status(
+                f"Login successful. {', '.join(enabled_labels).capitalize()} monitoring is active.",
+                COLORS["success"],
+            )
+        else:
+            self._set_status("Login successful. Monitoring is disabled by Employee Monitor settings.", COLORS["success"])
         self.root.update_idletasks()
         self._start_hide_countdown(30)
         return True

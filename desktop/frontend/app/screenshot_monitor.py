@@ -11,6 +11,7 @@ from pathlib import Path
 from app.env import writable_runtime_path
 from app.activity_monitor import main as activity_main
 from app.foreground_app_monitor import run_monitor as app_usage_run_monitor
+from app.monitor_settings import get_monitor_feature_flags
 from src.screenshots.screenshot import run_monitor as screenshot_run_monitor
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -70,6 +71,10 @@ def start_screenshot_monitor() -> tuple[bool, str]:
     """Launch screenshot capture in the current desktop process."""
     global _SCREENSHOT_THREAD
 
+    flags = get_monitor_feature_flags()
+    if not flags.get("screenshotsEnabled", True):
+        return False, "Screenshot monitor is disabled by Employee Monitor settings."
+
     with _STATE_LOCK:
         if _thread_is_running(_SCREENSHOT_THREAD):
             return True, "Screenshot monitor is already running."
@@ -84,6 +89,10 @@ def start_screenshot_monitor() -> tuple[bool, str]:
 def start_activity_monitor() -> tuple[bool, str]:
     """Launch the durable mouse activity agent in the current desktop process."""
     global _ACTIVITY_THREAD
+
+    flags = get_monitor_feature_flags()
+    if not flags.get("mouseEnabled", True):
+        return False, "Mouse activity monitor is disabled by Employee Monitor settings."
 
     with _STATE_LOCK:
         if _thread_is_running(_ACTIVITY_THREAD):
@@ -109,3 +118,19 @@ def start_app_usage_monitor() -> tuple[bool, str]:
         thread.start()
 
     return True, "App usage monitor started."
+
+
+def stop_screenshot_monitor() -> None:
+    try:
+        from src.screenshots.screenshot import stop_screenshot_monitor as _stop
+        _stop()
+    except Exception:
+        pass
+
+
+def stop_activity_monitor() -> None:
+    try:
+        from app.activity_monitor import stop_activity_monitor as _stop
+        _stop()
+    except Exception:
+        pass

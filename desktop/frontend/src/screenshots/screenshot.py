@@ -27,9 +27,11 @@ from PIL import ImageGrab
 
 try:
     from app.env import load_app_env, writable_runtime_path
+    from app.monitor_settings import load_monitor_feature_flags
 except ImportError:
     load_dotenv()
     writable_runtime_path = None
+    load_monitor_feature_flags = None
 else:
     load_app_env()
 
@@ -175,6 +177,34 @@ def get_backend_base_url_candidates() -> list[str]:
     if configured != hosted:
         candidates.append(hosted)
     return list(dict.fromkeys(candidates))
+
+
+def _resolve_monitor_settings(token: str) -> dict | None:
+    settings_response = None
+    for backend_url in get_backend_base_url_candidates():
+        try:
+            candidate_response = get_json(
+                f"{backend_url}/cloudinary/upload-config",
+                token=token,
+                timeout=30,
+            )
+        except Exception:
+            continue
+
+        if candidate_response.get("success") and candidate_response.get("data"):
+            settings_response = candidate_response
+            break
+
+    return settings_response["data"] if settings_response else None
+
+
+def _cached_monitor_flags() -> dict[str, bool]:
+    if load_monitor_feature_flags is None:
+        return {"screenshotsEnabled": True, "mouseEnabled": True, "keyboardEnabled": True}
+    try:
+        return load_monitor_feature_flags()
+    except Exception:
+        return {"screenshotsEnabled": True, "mouseEnabled": True, "keyboardEnabled": True}
 
 
 def get_screenshot_scan_roots() -> list[Path]:
@@ -913,31 +943,15 @@ def upload_pending_screenshots() -> None:
         if not token:
             return
 
-        settings_response = None
-        backend_errors: list[str] = []
-        backend_url_used: str | None = None
-        for backend_url in get_backend_base_url_candidates():
-            try:
-                candidate_response = get_json(
-                    f"{backend_url}/cloudinary/upload-config",
-                    token=token,
-                    timeout=30,
-                )
-            except Exception as error:
-                backend_errors.append(f"{backend_url}: {error}")
-                continue
+        if not _cached_monitor_flags().get("screenshotsEnabled", True):
+            log_message("Screenshot monitoring is disabled by Employee Monitor settings.")
+            return
 
-            if candidate_response.get("success") and candidate_response.get("data"):
-                settings_response = candidate_response
-                backend_url_used = backend_url
-                break
-
-            backend_errors.append(f"{backend_url}: Cloudinary settings unavailable")
-
-        if not settings_response or not backend_url_used:
+        settings = _resolve_monitor_settings(token)
+        if not settings:
             log_message(
                 "Cloudinary settings are unavailable yet; screenshots will stay queued."
-                + (f" Tried: {' | '.join(backend_errors[:3])}" if backend_errors else ""),
+                + " Tried: Cloudinary upload config endpoints were unavailable.",
                 error=True,
             )
             return
@@ -1086,6 +1100,10 @@ def upload_pending_screenshots() -> None:
 
 
 def start_screenshot_monitor() -> None:
+    if not _cached_monitor_flags().get("screenshotsEnabled", True):
+        log_message("Screenshot monitor is disabled by Employee Monitor settings.")
+        return
+
     interval_seconds = get_interval_ms() / 1000
     log_message("Screenshot monitor started")
     log_message(f"Data root: {DATA_ROOT}")
@@ -1094,10 +1112,19 @@ def start_screenshot_monitor() -> None:
 
     queue_existing_screenshots()
     upload_pending_screenshots()
+    if not _cached_monitor_flags().get("screenshotsEnabled", True):
+        log_message("Screenshot monitor stopped before capture because Employee Monitor settings disabled it.")
+        return
     capture_screenshot()
     upload_pending_screenshots()
     while not stop_event.wait(interval_seconds):
+        if not _cached_monitor_flags().get("screenshotsEnabled", True):
+            log_message("Screenshot monitor stopped because Employee Monitor settings disabled it.")
+            return
         upload_pending_screenshots()
+        if not _cached_monitor_flags().get("screenshotsEnabled", True):
+            log_message("Screenshot monitor stopped before capture because Employee Monitor settings disabled it.")
+            return
         capture_screenshot()
         upload_pending_screenshots()
 
@@ -1118,6 +1145,10 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="Capture one screenshot and exit.")
     parser.add_argument("--upload-once", action="store_true", help="Upload one pending screenshot batch and exit.")
     args = parser.parse_args()
+
+    if not _cached_monitor_flags().get("screenshotsEnabled", True):
+        log_message("Screenshot monitor is disabled by Employee Monitor settings.")
+        return 0
 
     if args.once:
         if not acquire_process_lock():

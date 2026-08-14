@@ -11,6 +11,9 @@ const TABLE_SQL = `
     api_secret_iv TEXT NOT NULL,
     api_secret_auth_tag TEXT NOT NULL,
     upload_folder_root TEXT NOT NULL DEFAULT 'rigweda-monitor',
+    screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
@@ -46,9 +49,47 @@ const decryptSecret = (row) => {
   ]).toString("utf8");
 };
 
+const normalizeBoolean = (value, fallback = true) => {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+};
+
 const getPoolOrThrow = async () => {
   const pool = await getMonitorPgPool();
   await pool.query(TABLE_SQL);
+
+  const columnsResult = await pool.query(
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'monitor_cloudinary_settings'"
+  );
+  const columns = new Set(columnsResult.rows.map((row) => row.column_name));
+  const alterStatements = [];
+  if (!columns.has("screenshots_enabled")) {
+    alterStatements.push("ADD COLUMN screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
+  if (!columns.has("mouse_enabled")) {
+    alterStatements.push("ADD COLUMN mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
+  if (!columns.has("keyboard_enabled")) {
+    alterStatements.push("ADD COLUMN keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
+  if (alterStatements.length > 0) {
+    await pool.query(`ALTER TABLE monitor_cloudinary_settings ${alterStatements.join(", ")}`);
+  }
+
   return pool;
 };
 
@@ -69,6 +110,9 @@ const toPublicSettings = (row, secret) => row && ({
   apiKey: row.api_key,
   apiSecretMasked: maskSecret(secret),
   uploadFolderRoot: row.upload_folder_root || "rigweda-monitor",
+  screenshotsEnabled: row.screenshots_enabled ?? true,
+  mouseEnabled: row.mouse_enabled ?? true,
+  keyboardEnabled: row.keyboard_enabled ?? true,
   updatedAt: row.updated_at
 });
 
@@ -85,6 +129,9 @@ const getRawSettings = async (organizationId) => {
     apiKey: row.api_key,
     apiSecret: decryptSecret(row),
     uploadFolderRoot: row.upload_folder_root || "rigweda-monitor",
+    screenshotsEnabled: row.screenshots_enabled ?? true,
+    mouseEnabled: row.mouse_enabled ?? true,
+    keyboardEnabled: row.keyboard_enabled ?? true,
     updatedAt: row.updated_at
   };
 };
@@ -102,14 +149,24 @@ const getPublicSettings = async (organizationId) => {
 
 const saveSettings = async (organizationId, payload) => {
   const pool = await getPoolOrThrow();
-  const encrypted = encryptSecret(payload.apiSecret);
+  const existingResult = await pool.query(
+    "SELECT * FROM monitor_cloudinary_settings WHERE organization_id = $1",
+    [String(organizationId)]
+  );
+  const existing = existingResult.rows[0] || null;
+  const resolvedSecret = String(payload.apiSecret || "").trim() || (existing ? decryptSecret(existing) : "");
+  if (!resolvedSecret) {
+    throw { code: 400, message: "API secret is required when creating monitor settings." };
+  }
+  const encrypted = encryptSecret(resolvedSecret);
   const result = await pool.query(
     `
       INSERT INTO monitor_cloudinary_settings (
         organization_id, cloud_name, api_key, api_secret_ciphertext,
-        api_secret_iv, api_secret_auth_tag, upload_folder_root
+        api_secret_iv, api_secret_auth_tag, upload_folder_root,
+        screenshots_enabled, mouse_enabled, keyboard_enabled
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (organization_id)
       DO UPDATE SET
         cloud_name = EXCLUDED.cloud_name,
@@ -118,6 +175,9 @@ const saveSettings = async (organizationId, payload) => {
         api_secret_iv = EXCLUDED.api_secret_iv,
         api_secret_auth_tag = EXCLUDED.api_secret_auth_tag,
         upload_folder_root = EXCLUDED.upload_folder_root,
+        screenshots_enabled = EXCLUDED.screenshots_enabled,
+        mouse_enabled = EXCLUDED.mouse_enabled,
+        keyboard_enabled = EXCLUDED.keyboard_enabled,
         updated_at = NOW()
       RETURNING *
     `,
@@ -128,10 +188,13 @@ const saveSettings = async (organizationId, payload) => {
       encrypted.ciphertext,
       encrypted.iv,
       encrypted.authTag,
-      normalizeFolderRoot(payload.uploadFolderRoot)
+      normalizeFolderRoot(payload.uploadFolderRoot),
+      normalizeBoolean(payload.screenshotsEnabled, true),
+      normalizeBoolean(payload.mouseEnabled, true),
+      normalizeBoolean(payload.keyboardEnabled, true)
     ]
   );
-  return toPublicSettings(result.rows[0], payload.apiSecret);
+  return toPublicSettings(result.rows[0], resolvedSecret);
 };
 
 const testSettings = async (settings) => {

@@ -15,6 +15,9 @@ const TABLE_SQL = `
     api_secret_iv TEXT NOT NULL,
     api_secret_auth_tag TEXT NOT NULL,
     upload_folder_root TEXT NOT NULL DEFAULT 'rigweda-monitor',
+    screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
 `;
@@ -22,6 +25,25 @@ const TABLE_SQL = `
 const getPoolOrThrow = async () => {
   const pool = getPool();
   await pool.query(TABLE_SQL);
+
+  const columnsResult = await pool.query(
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'monitor_cloudinary_settings'"
+  );
+  const columns = new Set(columnsResult.rows.map((row) => row.column_name));
+  const alterStatements = [];
+  if (!columns.has("screenshots_enabled")) {
+    alterStatements.push("ADD COLUMN screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
+  if (!columns.has("mouse_enabled")) {
+    alterStatements.push("ADD COLUMN mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
+  if (!columns.has("keyboard_enabled")) {
+    alterStatements.push("ADD COLUMN keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
+  if (alterStatements.length > 0) {
+    await pool.query(`ALTER TABLE monitor_cloudinary_settings ${alterStatements.join(", ")}`);
+  }
+
   return pool;
 };
 
@@ -58,6 +80,9 @@ const toPublicSettings = (row, apiSecret) => row ? ({
   apiKey: row.api_key,
   apiSecret,
   uploadFolderRoot: row.upload_folder_root || "rigweda-monitor",
+  screenshotsEnabled: row.screenshots_enabled ?? true,
+  mouseEnabled: row.mouse_enabled ?? true,
+  keyboardEnabled: row.keyboard_enabled ?? true,
   updatedAt: row.updated_at
 }) : null;
 
@@ -81,9 +106,10 @@ const saveLocalSettings = async (organizationId, settings) => {
     `
       INSERT INTO monitor_cloudinary_settings (
         organization_id, cloud_name, api_key, api_secret_ciphertext,
-        api_secret_iv, api_secret_auth_tag, upload_folder_root
+        api_secret_iv, api_secret_auth_tag, upload_folder_root,
+        screenshots_enabled, mouse_enabled, keyboard_enabled
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (organization_id)
       DO UPDATE SET
         cloud_name = EXCLUDED.cloud_name,
@@ -92,6 +118,9 @@ const saveLocalSettings = async (organizationId, settings) => {
         api_secret_iv = EXCLUDED.api_secret_iv,
         api_secret_auth_tag = EXCLUDED.api_secret_auth_tag,
         upload_folder_root = EXCLUDED.upload_folder_root,
+        screenshots_enabled = EXCLUDED.screenshots_enabled,
+        mouse_enabled = EXCLUDED.mouse_enabled,
+        keyboard_enabled = EXCLUDED.keyboard_enabled,
         updated_at = NOW()
     `,
     [
@@ -101,7 +130,10 @@ const saveLocalSettings = async (organizationId, settings) => {
       encrypted.ciphertext,
       encrypted.iv,
       encrypted.authTag,
-      normalizeFolderRoot(settings.uploadFolderRoot)
+      normalizeFolderRoot(settings.uploadFolderRoot),
+      settings.screenshotsEnabled ?? true,
+      settings.mouseEnabled ?? true,
+      settings.keyboardEnabled ?? true
     ]
   );
   return settings;

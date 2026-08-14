@@ -17,6 +17,7 @@ from pathlib import Path
 
 from app.auth import load_auth_session
 from app.env import writable_runtime_path
+from app.monitor_settings import get_monitor_feature_flags
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 QUEUE_DB = DATA_ROOT / "activity_queue.db"
@@ -26,6 +27,7 @@ DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
 HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
 POLL_SECONDS = 1
+STOP_EVENT = threading.Event()
 
 
 def log_message(message: object, *, exc_info: bool = False) -> None:
@@ -218,8 +220,9 @@ def start_activity_monitor() -> None:
     current_status = "offline"
 
     try:
-        while True:
-            time.sleep(POLL_SECONDS)
+        while not STOP_EVENT.is_set():
+            if STOP_EVENT.wait(POLL_SECONDS):
+                break
             now = time.monotonic()
             elapsed = max(now - last_tick, 0)
             last_tick = now
@@ -258,7 +261,17 @@ def start_activity_monitor() -> None:
         pass
 
 
+def stop_activity_monitor() -> None:
+    STOP_EVENT.set()
+
+
 def main() -> int:
+    STOP_EVENT.clear()
+    flags = get_monitor_feature_flags()
+    if not flags.get("mouseEnabled", True):
+        log_message("Activity monitor is disabled by Employee Monitor settings.")
+        return 0
+
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     try:
         lock_handle = LOCK_FILE.open("x", encoding="utf-8")
