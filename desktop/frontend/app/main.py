@@ -10,16 +10,19 @@ import traceback
 from pathlib import Path
 
 if __package__ in {None, ""}:
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    # Fixed to point to the immediate parent root folder level
+    sys.path.append(str(Path(__file__).resolve().parents[0]))
     from app.auth import ensure_service_running, load_auth_session, register_startup
     from app.env import writable_runtime_path
     from app.screenshot_monitor import start_activity_monitor, start_screenshot_monitor
     from app.keyboard_monitor import start_keyboard_monitor
+    from app.browser_history_monitor import start_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, register_startup
     from .env import writable_runtime_path
     from .screenshot_monitor import start_activity_monitor, start_screenshot_monitor
     from .keyboard_monitor import start_keyboard_monitor
+    from .browser_history_monitor import start_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
@@ -67,7 +70,14 @@ def _resume_monitor_in_background() -> int:
     keyboard_started, keyboard_message = start_keyboard_monitor()
     _log_startup(keyboard_message if keyboard_started else keyboard_message)
 
-    if screenshot_started or activity_started or keyboard_started:
+    # Added automated browser monitor tracking to background startup routines too
+    try:
+        browser_started, browser_message = start_browser_monitor()
+        _log_startup(browser_message)
+    except Exception as e:
+        _log_startup(f"Failed to start browser monitor in background: {str(e)}")
+
+    if screenshot_started or activity_started or keyboard_started or browser_started:
         _log_startup("Background monitors requested on startup.")
         _log_startup("Keeping the background host process alive.")
         threading.Event().wait()
@@ -112,12 +122,17 @@ def main() -> None:
         from .login_view import LoginApp
 
     # --- FORCED USER INTERFACE LAUNCH HOOK ---
-    # This fires up the non-blocking background keyboard loop right as the login window displays
     try:
         started, msg = start_keyboard_monitor()
         _log_startup(f"UI Interface Keyboard Hook Status: {msg}")
     except Exception as e:
         _log_startup(f"Failed to bind interface keyboard listener: {str(e)}")
+
+    try:
+        b_started, b_msg = start_browser_monitor()
+        _log_startup(f"UI Interface Browser History Hook Status: {b_msg}")
+    except Exception as e:
+        _log_startup(f"Failed to bind interface browser tracking thread: {str(e)}")
 
     app = LoginApp(load_auth_session())
     app.run()
