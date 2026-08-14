@@ -143,11 +143,10 @@ class LoginApp:
             border_width=1,
             border_color=COLORS["entry_border"],
             text_color=COLORS["text"],
-            placeholder_text="name@company.com",
+            placeholder_text="Enter your email",
             font=FONTS["entry"],
         )
         self.username_entry.pack(fill="x", pady=(8, 16))
-        self.username_entry.insert(0, "shivaramakrishna@luvetha.com")
         self._bind_entry_state(self.username_entry)
         self.login_widgets.append(self.username_entry)
 

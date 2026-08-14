@@ -35,6 +35,7 @@ POLL_SECONDS = 0.05
 SESSION_SNAPSHOT_SECONDS = 15
 DESKTOP_BACKEND_URL = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
 TARGET_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}
+ENABLE_LOCAL_KEY_TRACE = os.getenv("RIGWEDA_MONITOR_LOCAL_KEY_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def utc_now() -> str:
@@ -425,11 +426,17 @@ class KeyboardUsageMonitor:
             log_exception("Keyboard app usage sync failed.", error)
             return False
 
-        self._mark_sessions(session_ids, status="synced")
+        try:
+            self._mark_sessions(session_ids, status="synced")
+        except Exception as error:
+            log_exception("Keyboard app usage sync succeeded but local cleanup failed.", error)
+            return False
         log_message(f"Keyboard app usage sync completed: {len(session_ids)} session(s).")
         return True
 
     def _write_header(self, *, app_name: str, process_name: str, title: str) -> None:
+        if not ENABLE_LOCAL_KEY_TRACE:
+            return
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         header = "\n\n========================================\n"
         header += f"[{timestamp}] APP: {process_name.upper()}\n"
@@ -444,6 +451,8 @@ class KeyboardUsageMonitor:
             pass
 
     def _write_key(self, key_text: str) -> None:
+        if not ENABLE_LOCAL_KEY_TRACE:
+            return
         try:
             LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
             with LOG_FILE.open("a", encoding="utf-8") as log_file:

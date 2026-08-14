@@ -311,7 +311,11 @@ def sync_pending_sessions() -> bool:
         log_exception("App usage sync failed.", error)
         return False
 
-    mark_sessions(ids, status="synced")
+    try:
+        mark_sessions(ids, status="synced")
+    except Exception as error:
+        log_exception("App usage sync succeeded but local cleanup failed.", error)
+        return False
     log_message(f"App usage sync completed: {len(ids)} session(s).")
     return True
 

@@ -12,6 +12,7 @@ import sqlite3
 import sys
 import threading
 import traceback
+import subprocess
 import urllib.error
 import urllib.request
 import uuid
@@ -50,6 +51,8 @@ LEGACY_SCREENSHOT_ROOT = Path(r"C:\Rigweda_monitor\screenshots")
 LEGACY_DATA_ROOT = Path(r"C:\Rigweda_monitor\data")
 MONITOR_LOCK_FILE = DATA_ROOT / "screenshot_monitor.lock"
 AGENT_LOG_FILE = LOG_DIR / "screenshot_agent.log"
+MONITOR_LOCK_OWNER = "rigweda-screenshot-monitor"
+MONITOR_LOCK_INSTANCE_ID = uuid.uuid4().hex
 
 stop_event = threading.Event()
 capture_lock = threading.Lock()
@@ -241,49 +244,165 @@ def get_access_token() -> str | None:
     return token
 
 
+def _normalize_process_path(path: str | None) -> str:
+    if not path:
+        return ""
+    try:
+        return str(Path(path).resolve()).lower()
+    except OSError:
+        return str(path).strip().lower()
+
+
+def _get_process_signature(pid: int) -> dict[str, str] | None:
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            (
+                f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
+                "if ($p) { "
+                "$start = $null; "
+                "try { $start = $p.StartTime.ToUniversalTime().ToString('o') } catch { } ; "
+                "[Console]::Out.WriteLine((@{ Path = $p.Path; StartTime = $start } | ConvertTo-Json -Compress)) "
+                "}"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    payload = result.stdout.strip()
+    if not payload:
+        return None
+
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+
+    return {
+        "pid": str(pid),
+        "path": _normalize_process_path(data.get("Path")),
+        "start_time": str(data.get("StartTime") or "").strip(),
+    }
+
+
+def _read_lock_metadata() -> dict[str, str] | None:
+    try:
+        raw = MONITOR_LOCK_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+    if not raw:
+        return None
+
+    if raw.startswith("{"):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+        pid = str(data.get("pid") or "").strip()
+        if not pid.isdigit():
+            return None
+        return {
+            "owner": str(data.get("owner") or data.get("app") or "").strip(),
+            "instance_id": str(data.get("instance_id") or data.get("instanceId") or "").strip(),
+            "pid": pid,
+            "path": _normalize_process_path(data.get("path") or data.get("executable")),
+            "start_time": str(data.get("start_time") or data.get("started_at") or "").strip()
+        }
+
+    if raw.isdigit():
+        return {"owner": "", "instance_id": "", "pid": raw, "path": "", "start_time": ""}
+
+    return None
+
+
+def _serialize_lock_metadata(pid: int) -> str:
+    signature = _get_process_signature(pid) or {}
+    payload = {
+        "owner": MONITOR_LOCK_OWNER,
+        "instance_id": MONITOR_LOCK_INSTANCE_ID,
+        "pid": pid,
+        "path": signature.get("path") or _normalize_process_path(sys.executable),
+        "start_time": signature.get("start_time") or "",
+    }
+    return json.dumps(payload)
+
+
+def _process_paths_match(existing_path: str, live_path: str, current_path: str) -> bool:
+    if existing_path and live_path:
+        return existing_path == live_path
+    if existing_path:
+        return existing_path == current_path
+    return bool(live_path) and live_path == current_path
+
+
 def acquire_process_lock() -> bool:
     global process_lock_handle
 
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     try:
         process_lock_handle = MONITOR_LOCK_FILE.open("x", encoding="utf-8")
-        process_lock_handle.write(str(os.getpid()))
+        process_lock_handle.write(_serialize_lock_metadata(os.getpid()))
         process_lock_handle.flush()
         return True
     except FileExistsError:
-        try:
-            pid = int(MONITOR_LOCK_FILE.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
-            pid = 0
+        existing = _read_lock_metadata()
+        if existing and existing.get("pid", "").isdigit():
+            pid = int(existing["pid"])
+            live = _get_process_signature(pid)
+            current_path = _normalize_process_path(sys.executable)
+            if live:
+                live_path = live.get("path", "")
+                existing_path = existing.get("path", "")
+                existing_start = existing.get("start_time", "")
+                live_start = live.get("start_time", "")
+                existing_owner = existing.get("owner", "")
 
-        if pid:
-            result = subprocess_run_process_exists(pid)
-            if result:
-                log_message(f"Screenshot monitor is already running with PID {pid}.")
-                return False
+                if (
+                    existing_owner == MONITOR_LOCK_OWNER
+                    and _process_paths_match(existing_path, live_path, current_path)
+                    and (not existing_start or not live_start or live_start == existing_start)
+                ):
+                    log_message(f"Screenshot monitor is already running with PID {pid}.")
+                    return False
+
+                if existing_owner and existing_owner != MONITOR_LOCK_OWNER:
+                    log_message(
+                        "Replacing lock owned by another app "
+                        f"({existing_owner}) with a new screenshot monitor PID."
+                    )
+                elif existing_path and (live_path != existing_path or (existing_start and live_start and live_start != existing_start)):
+                    log_message(
+                        "Clearing stale screenshot monitor lock "
+                        f"(pid={pid}, path={live_path or 'unknown'})."
+                    )
+                elif not existing_path and live_path and live_path != current_path:
+                    log_message(
+                        "Clearing stale screenshot monitor lock "
+                        f"(pid={pid}, path={live_path or 'unknown'})."
+                    )
+                else:
+                    log_message(
+                        "Claiming screenshot monitor lock with a fresh PID "
+                        f"after detecting an unrelated live process at PID {pid}."
+                    )
+            else:
+                log_message(
+                    "Clearing stale screenshot monitor lock "
+                    f"(pid={pid}, no live process found)."
+                )
 
         MONITOR_LOCK_FILE.unlink(missing_ok=True)
+
         process_lock_handle = MONITOR_LOCK_FILE.open("x", encoding="utf-8")
-        process_lock_handle.write(str(os.getpid()))
+        process_lock_handle.write(_serialize_lock_metadata(os.getpid()))
         process_lock_handle.flush()
         return True
-
-
-def subprocess_run_process_exists(pid: int) -> bool:
-    import subprocess
-
-    result = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p) {{ 'yes' }}",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return "yes" in result.stdout.lower()
 
 
 def release_process_lock() -> None:
@@ -736,51 +855,51 @@ def commit_batch(
             )
             if backend_url != get_backend_base_url():
                 log_message(f"Screenshot batch {batch_id} committed via fallback backend {backend_url}.")
-            return
+            break
         except Exception as error:
             errors.append(f"{backend_url}: {error}")
 
-    raise RuntimeError(
-        "Could not commit screenshot batch to any backend. "
-        + ("Tried: " + " | ".join(errors[:3]) if errors else "")
-    )
+    else:
+        raise RuntimeError(
+            "Could not commit screenshot batch to any backend. "
+            + ("Tried: " + " | ".join(errors[:3]) if errors else "")
+        )
 
     completed_ids = [item["clientScreenshotId"] for item in uploaded]
     completed_ids.extend(item["clientScreenshotId"] for item in duplicates)
+    if not completed_ids:
+        return
 
     with get_connection() as connection:
         local_rows = connection.execute(
             f"SELECT id, local_path FROM screenshots WHERE id IN ({','.join('?' for _ in completed_ids)})",
             completed_ids,
-        ).fetchall() if completed_ids else []
-
-        connection.executemany(
-            "UPDATE screenshots SET status = 'uploaded', last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            [(item_id,) for item_id in completed_ids],
-        )
+        ).fetchall()
 
         for row in local_rows:
             try:
                 Path(row["local_path"]).unlink(missing_ok=True)
-                connection.execute(
-                    """
-                    UPDATE screenshots
-                    SET local_deleted_at = CURRENT_TIMESTAMP,
-                        local_delete_error = NULL,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (row["id"],),
-                )
+                connection.execute("DELETE FROM screenshots WHERE id = ?", (row["id"],))
+                log_message(f"Deleted local screenshot after sync: {row['local_path']}")
             except OSError as error:
                 connection.execute(
                     """
                     UPDATE screenshots
-                    SET local_delete_error = ?,
+                    SET status = 'failed',
+                        last_error = ?,
+                        local_delete_error = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                     """,
-                    (str(error)[:1000], row["id"]),
+                    (
+                        f"Local cleanup failed: {type(error).__name__}: {error}"[:1000],
+                        str(error)[:1000],
+                        row["id"],
+                    ),
+                )
+                log_exception(
+                    f"Failed to delete local screenshot {row['local_path']} after upload.",
+                    error,
                 )
 
 

@@ -14,22 +14,24 @@ set "SERVER_ENV_FILE=.env.server"
 set "APP_NAME=RigwedaMonitor"
 set "DIST_DIR=dist"
 set "APP_DIST_DIR=%DIST_DIR%\%APP_NAME%"
-set "APP_ZIP=%DIST_DIR%\%APP_NAME%.zip"
-set "SHARE_DIR=%DIST_DIR%\%APP_NAME%Share"
-set "SHARE_ZIP=%DIST_DIR%\%APP_NAME%Share.zip"
-set "SHARE_STAGE=%TEMP%\%APP_NAME%ShareStage"
+set "BUNDLE_NAME=%APP_NAME%FreshInstall"
+set "BUNDLE_DIR=%DIST_DIR%\%BUNDLE_NAME%"
+set "BUNDLE_ZIP=%DIST_DIR%\%BUNDLE_NAME%.zip"
+set "BUNDLE_STAGE=%TEMP%\%BUNDLE_NAME%Stage"
 set "INSTALL_SCRIPT_PS1=..\..\scripts\install-fresh-rigweda-monitor.ps1"
 set "INSTALL_SCRIPT_BAT=..\..\scripts\install-fresh-rigweda-monitor.bat"
+set "STOP_PROCESSES_PS1=..\..\scripts\stop-rigweda-monitor-processes.ps1"
 
-if exist "%APP_DIST_DIR%" rmdir /s /q "%APP_DIST_DIR%"
-if exist "%APP_ZIP%" del /q "%APP_ZIP%"
-if exist "%DIST_DIR%\%APP_NAME%.exe" del /q "%DIST_DIR%\%APP_NAME%.exe"
-if exist "%DIST_DIR%\RigwedaMonitor-folder-build.zip" del /q "%DIST_DIR%\RigwedaMonitor-folder-build.zip"
-if exist "%DIST_DIR%\RigwedaMonitorFolder" rmdir /s /q "%DIST_DIR%\RigwedaMonitorFolder"
-if exist "%DIST_DIR%\RigwedaMonitorDebug" rmdir /s /q "%DIST_DIR%\RigwedaMonitorDebug"
-if exist "%SHARE_DIR%" rmdir /s /q "%SHARE_DIR%"
-if exist "%SHARE_ZIP%" del /q "%SHARE_ZIP%"
-if exist "%SHARE_STAGE%" rmdir /s /q "%SHARE_STAGE%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%STOP_PROCESSES_PS1%"
+if not "%errorlevel%"=="0" exit /b %errorlevel%
+
+if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%"
+if exist "build" rmdir /s /q "build"
+mkdir "%DIST_DIR%" >nul 2>nul
+
+if exist "%BUNDLE_DIR%" rmdir /s /q "%BUNDLE_DIR%"
+if exist "%BUNDLE_ZIP%" del /q "%BUNDLE_ZIP%"
+if exist "%BUNDLE_STAGE%" rmdir /s /q "%BUNDLE_STAGE%"
 
 (
   echo HRMS_BACKEND_URL=https://rigweda-hrms-backend.onrender.com/api
@@ -54,29 +56,27 @@ set "BUILD_EXIT_CODE=%errorlevel%"
 del "%SERVER_ENV_FILE%" >nul 2>nul
 if not "%BUILD_EXIT_CODE%"=="0" exit /b %BUILD_EXIT_CODE%
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%APP_DIST_DIR%' -DestinationPath '%APP_ZIP%' -Force"
+mkdir "%BUNDLE_STAGE%" >nul 2>nul
+mkdir "%BUNDLE_STAGE%\%APP_NAME%" >nul 2>nul
+robocopy "%APP_DIST_DIR%" "%BUNDLE_STAGE%\%APP_NAME%" /E /NFL /NDL /NJH /NJS /NP >nul
+set "ROBOCOPY_BUNDLE_EXIT=%errorlevel%"
+if %ROBOCOPY_BUNDLE_EXIT% GEQ 8 exit /b %ROBOCOPY_BUNDLE_EXIT%
+copy /Y "%INSTALL_SCRIPT_PS1%" "%BUNDLE_STAGE%\" >nul
+copy /Y "%INSTALL_SCRIPT_BAT%" "%BUNDLE_STAGE%\" >nul
 if not "%errorlevel%"=="0" exit /b %errorlevel%
+if exist "%BUNDLE_DIR%" rmdir /s /q "%BUNDLE_DIR%"
+robocopy "%BUNDLE_STAGE%" "%BUNDLE_DIR%" /E /NFL /NDL /NJH /NJS /NP >nul
+set "ROBOCOPY_BUNDLE_DIR_EXIT=%errorlevel%"
+if %ROBOCOPY_BUNDLE_DIR_EXIT% GEQ 8 exit /b %ROBOCOPY_BUNDLE_DIR_EXIT%
+rmdir /s /q "%BUNDLE_STAGE%"
+if exist "%APP_DIST_DIR%" rmdir /s /q "%APP_DIST_DIR%"
 
-mkdir "%SHARE_STAGE%" >nul 2>nul
-mkdir "%SHARE_STAGE%\%APP_NAME%" >nul 2>nul
-robocopy "%APP_DIST_DIR%" "%SHARE_STAGE%\%APP_NAME%" /E /NFL /NDL /NJH /NJS /NP >nul
-set "ROBOCOPY_EXIT=%errorlevel%"
-if %ROBOCOPY_EXIT% GEQ 8 exit /b %ROBOCOPY_EXIT%
-copy /Y "%INSTALL_SCRIPT_PS1%" "%SHARE_STAGE%\" >nul
-copy /Y "%INSTALL_SCRIPT_BAT%" "%SHARE_STAGE%\" >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%SHARE_STAGE%\*' -DestinationPath '%SHARE_ZIP%' -Force"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%BUNDLE_DIR%\*' -DestinationPath '%BUNDLE_ZIP%' -Force"
 if not "%errorlevel%"=="0" exit /b %errorlevel%
-if exist "%SHARE_DIR%" rmdir /s /q "%SHARE_DIR%"
-robocopy "%SHARE_STAGE%" "%SHARE_DIR%" /E /NFL /NDL /NJH /NJS /NP >nul
-set "ROBOCOPY_SHARE_EXIT=%errorlevel%"
-if %ROBOCOPY_SHARE_EXIT% GEQ 8 exit /b %ROBOCOPY_SHARE_EXIT%
-rmdir /s /q "%SHARE_STAGE%"
 
 echo.
 echo Build complete.
-echo Copy this ZIP to another laptop: %APP_ZIP%
-echo Or copy this whole folder: %APP_DIST_DIR%
-echo Shared install folder: %SHARE_DIR%
-echo Shared install ZIP: %SHARE_ZIP%
-echo Run installer: %SHARE_DIR%\install-fresh-rigweda-monitor.bat
-echo Or run app directly: %SHARE_DIR%\%APP_NAME%\RigwedaMonitor.exe
+echo Fresh install folder: %BUNDLE_DIR%
+echo Fresh install zip: %BUNDLE_ZIP%
+echo Run installer: %BUNDLE_DIR%\install-fresh-rigweda-monitor.bat
+echo Or run app directly: %BUNDLE_DIR%\%APP_NAME%\RigwedaMonitor.exe

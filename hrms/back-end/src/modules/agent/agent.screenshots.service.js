@@ -183,7 +183,7 @@ exports.getScreenshots = async (req) => {
         upload_status, processing_status, created_at, uploaded_at
       FROM monitor_screenshots
       WHERE ${baseWhere}
-      ORDER BY captured_at DESC
+      ORDER BY captured_at ASC, created_at ASC, id ASC
       LIMIT $${values.length + 1}
       OFFSET $${values.length + 2}
     `,

@@ -162,7 +162,11 @@ def sync_pending_events() -> bool:
         mark_events(ids, status="failed", error=str(error)[:1000])
         log_exception("Activity sync failed.", error)
         return False
-    mark_events(ids, status="synced")
+    try:
+        mark_events(ids, status="synced")
+    except Exception as error:
+        log_exception("Activity sync succeeded but local cleanup failed.", error)
+        return False
     log_message(f"Activity sync completed: {len(ids)} event(s).")
     return True
 
