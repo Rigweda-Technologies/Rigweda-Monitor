@@ -14,13 +14,16 @@ def load_app_env() -> None:
     frozen_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else None
     bundle_dir = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "_MEIPASS", None) else None
 
-    candidates = [
-        Path.cwd() / ".env",
-        base_dir / ".env",
-    ]
-
     if getattr(sys, "frozen", False):
-        candidates.extend(path / ".env" for path in (frozen_dir, bundle_dir) if path)
+        # Packaged builds must not inherit the workspace .env, otherwise a local
+        # checkout can override the URLs bundled into the EXE.
+        candidates = [path / ".env" for path in (frozen_dir, bundle_dir) if path]
+        candidates.extend(path / ".env.server" for path in (frozen_dir, bundle_dir) if path)
+    else:
+        candidates = [
+            Path.cwd() / ".env",
+            base_dir / ".env",
+        ]
 
     for path in candidates:
         if path.exists():
