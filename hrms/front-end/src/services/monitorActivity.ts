@@ -38,6 +38,9 @@ export type MonitorCloudinarySettings = {
   apiSecretMasked?: string;
   apiSecret?: string;
   uploadFolderRoot: string;
+  screenshotsEnabled?: boolean;
+  mouseEnabled?: boolean;
+  keyboardEnabled?: boolean;
   updatedAt?: string;
 };
 

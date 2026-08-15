@@ -12,6 +12,7 @@ const normalizeToken = (token) => {
 };
 
 const buildUserRoom = (organizationId, userId) => `attendance:${organizationId}:${userId}`;
+const buildMonitorSettingsRoom = (organizationId) => `monitor-settings:${organizationId}`;
 
 const resolveAuthenticatedUser = async (token) => {
   const normalizedToken = normalizeToken(token);
@@ -104,6 +105,9 @@ const initRealtime = async (httpServer, { allowedOrigins = [] } = {}) => {
     if (identity?.organizationId && identity?.userId) {
       socket.join(buildUserRoom(identity.organizationId, identity.userId));
     }
+    if (identity?.organizationId) {
+      socket.join(buildMonitorSettingsRoom(identity.organizationId));
+    }
     if (identity?.expiresAt) {
       const expiresInMs = Math.max(0, identity.expiresAt - Date.now());
       const expiryTimer = setTimeout(
@@ -129,8 +133,16 @@ const emitNotification = ({ organizationId, userId }, payload) => {
     .emit("notification:new", payload);
 };
 
+const emitMonitorSettingsUpdate = ({ organizationId }, payload) => {
+  if (!ioInstance || !organizationId || !payload) return;
+  ioInstance
+    .to(buildMonitorSettingsRoom(String(organizationId)))
+    .emit("monitor-settings:updated", payload);
+};
+
 module.exports = {
   initRealtime,
   emitAttendanceUpdate,
-  emitNotification
+  emitNotification,
+  emitMonitorSettingsUpdate
 };

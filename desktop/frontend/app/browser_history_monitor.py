@@ -7,8 +7,8 @@ import win32gui
 import win32process
 import win32api
 import win32con
+import win32clipboard
 import psutil
-import pyperclip
 
 # Pull the path framework matching the rest of your app
 from app.env import writable_runtime_path
@@ -25,6 +25,36 @@ STATUS_LOG_FILE = Path(LOG_DIR) / "browser_monitor.log"  # Thread status logs he
 last_active_app = None
 last_active_title = None
 last_active_url = None
+
+
+def _get_clipboard_text() -> str:
+    try:
+        win32clipboard.OpenClipboard()
+        try:
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                return win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_TEXT):
+                data = win32clipboard.GetClipboardData(win32clipboard.CF_TEXT)
+                if isinstance(data, bytes):
+                    return data.decode("utf-8", "ignore")
+                return str(data)
+        finally:
+            win32clipboard.CloseClipboard()
+    except Exception:
+        return ""
+    return ""
+
+
+def _set_clipboard_text(value: str) -> None:
+    try:
+        win32clipboard.OpenClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(value, win32clipboard.CF_UNICODETEXT)
+        finally:
+            win32clipboard.CloseClipboard()
+    except Exception:
+        pass
 
 
 def get_active_window_info() -> tuple[str, str, int]:
@@ -47,8 +77,8 @@ def fetch_full_url_via_shortcut(hwnd) -> str:
     """
     try:
         # Save whatever text the user currently has in their clipboard
-        old_clipboard = pyperclip.paste()
-        pyperclip.copy("")  # Flush buffer
+        old_clipboard = _get_clipboard_text()
+        _set_clipboard_text("")  # Flush buffer
 
         # 1. Focus the browser address bar (Ctrl + L)
         win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
@@ -70,10 +100,10 @@ def fetch_full_url_via_shortcut(hwnd) -> str:
         win32api.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
 
         # 4. Extract the literal text string caught inside the clipboard buffer
-        copied_url = pyperclip.paste().strip()
+        copied_url = _get_clipboard_text().strip()
 
         # Restore the user's original clipboard content immediately
-        pyperclip.copy(old_clipboard)
+        _set_clipboard_text(old_clipboard)
 
         if copied_url and ("http" in copied_url or "." in copied_url or "/" in copied_url):
             if not copied_url.startswith(("http://", "https://")):

@@ -53,6 +53,10 @@ if not "%errorlevel%"=="0" exit /b %errorlevel%
 
 ".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean RigwedaMonitor.spec
 set "BUILD_EXIT_CODE=%errorlevel%"
+if "%BUILD_EXIT_CODE%"=="0" (
+  copy /Y "%SERVER_ENV_FILE%" "%APP_DIST_DIR%\.env" >nul
+  if not "%errorlevel%"=="0" exit /b %errorlevel%
+)
 del "%SERVER_ENV_FILE%" >nul 2>nul
 if not "%BUILD_EXIT_CODE%"=="0" exit /b %BUILD_EXIT_CODE%
 

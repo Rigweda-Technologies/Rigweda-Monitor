@@ -21,6 +21,7 @@ from pynput import keyboard
 
 from app.auth import load_auth_session
 from app.env import writable_runtime_path
+from app.monitor_settings import get_monitor_feature_flags
 
 DATA_ROOT = writable_runtime_path(
     os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"),
@@ -645,6 +646,10 @@ _keyboard_monitor: KeyboardUsageMonitor | None = None
 def start_keyboard_monitor() -> tuple[bool, str]:
     global _keyboard_monitor
 
+    flags = get_monitor_feature_flags()
+    if not flags.get("keyboardEnabled", True):
+        return False, "Keyboard monitor is disabled by Employee Monitor settings."
+
     if _keyboard_monitor is not None and _keyboard_monitor._listener is not None and _keyboard_monitor._listener.is_alive():
         return True, "Keyboard monitor is already running."
 
@@ -654,8 +659,25 @@ def start_keyboard_monitor() -> tuple[bool, str]:
     return False, "Keyboard monitor failed to start."
 
 
+def stop_keyboard_monitor() -> None:
+    global _keyboard_monitor
+
+    monitor = _keyboard_monitor
+    if monitor is None:
+        return
+    try:
+        monitor.stop()
+    except Exception:
+        pass
+
+
 def main() -> int:
     global _keyboard_monitor
+
+    flags = get_monitor_feature_flags()
+    if not flags.get("keyboardEnabled", True):
+        log_message("Keyboard monitor is disabled by Employee Monitor settings.")
+        return 0
 
     _keyboard_monitor = KeyboardUsageMonitor()
     if not _keyboard_monitor.start():
