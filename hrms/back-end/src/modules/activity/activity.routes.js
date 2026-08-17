@@ -80,4 +80,33 @@ router.get(
   })
 );
 
+router.get(
+  "/browser-history",
+  auth,
+  authorize("EMP_VIEW"),
+  asyncHandler(async (req, res) => {
+    const date = typeof req.query.date === "string" ? req.query.date : "";
+    const limit = Number.isFinite(Number(req.query.limit)) ? Number(req.query.limit) : undefined;
+    const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : undefined;
+    const employeeId = typeof req.query.employeeId === "string" ? req.query.employeeId : "";
+    const browser = typeof req.query.browser === "string" ? req.query.browser : "";
+    const data = await activityService.listBrowserHistory({
+      organizationId: req.user.organizationId,
+      date,
+      limit,
+      offset,
+      employeeId,
+      browser
+    });
+
+    return res.status(200).json({
+      success: true,
+      code: 200,
+      message: "Browser history fetched successfully",
+      data,
+      error: null
+    });
+  })
+);
+
 module.exports = router;

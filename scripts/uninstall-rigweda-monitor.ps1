@@ -1,6 +1,7 @@
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor"),
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor"),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\data"),
+    [string]$LogRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\logs"),
     [string]$LegacyDataRoot = "C:\Rigweda_monitor"
 )
 
@@ -143,6 +144,11 @@ function Remove-LocalData {
         Remove-Item -LiteralPath $safeDataRoot -Recurse -Force
     }
 
+    if (Test-Path $LogRoot) {
+        $safeLogRoot = Assert-SafeTarget $LogRoot $env:LOCALAPPDATA 'Local log root'
+        Remove-Item -LiteralPath $safeLogRoot -Recurse -Force
+    }
+
     if (Test-Path $LegacyDataRoot) {
         Write-Info "Removing legacy data root..."
         Remove-Item -LiteralPath $LegacyDataRoot -Recurse -Force
@@ -152,6 +158,7 @@ function Remove-LocalData {
 Write-Info "Rigweda Monitor uninstall starting..."
 Write-Info "InstallDir: $InstallDir"
 Write-Info "DataRoot: $DataRoot"
+Write-Info "LogRoot: $LogRoot"
 
 Stop-RigwedaMonitorProcesses
 Remove-RigwedaMonitorService

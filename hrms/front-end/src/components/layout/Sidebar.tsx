@@ -23,6 +23,7 @@ import {
   MousePointer2,
   UsersRound,
   Keyboard,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -174,6 +175,7 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <MousePointer2 size={18} />, label: "Mouse Movement", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
       { icon: <Monitor size={18} />, label: "App Usage", to: "/monitor/apps", permissions: ["EMP_VIEW"] },
       { icon: <Keyboard size={18} />, label: "Key Presses", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
+      { icon: <Globe size={18} />, label: "Browser History", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
       { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
       { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] }
     ]

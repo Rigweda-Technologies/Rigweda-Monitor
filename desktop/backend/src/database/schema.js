@@ -165,5 +165,33 @@ export const initializeDatabase = async () => {
     CREATE INDEX IF NOT EXISTS idx_monitor_app_usage_sessions_employee_time
     ON monitor_app_usage_sessions (organization_id, employee_id, started_at DESC)
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_browser_history (
+      entry_id TEXT PRIMARY KEY,
+      organization_id TEXT,
+      employee_id TEXT NOT NULL,
+      employee_name TEXT,
+      device_id TEXT NOT NULL,
+      observed_at TIMESTAMPTZ NOT NULL,
+      browser TEXT NOT NULL,
+      url TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      active_window_title TEXT,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (device_id, entry_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_browser_history_employee_time
+    ON monitor_browser_history (organization_id, employee_id, observed_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_browser_history_browser_time
+    ON monitor_browser_history (organization_id, browser, observed_at DESC)
+  `);
 };
 
