@@ -60,6 +60,16 @@ def log_exception(message: object, error: BaseException | None = None) -> None:
         pass
 
 
+def _summarize_sessions(rows: list[sqlite3.Row]) -> str:
+    if not rows:
+        return "count=0"
+    app_counts: dict[str, int] = {}
+    for row in rows:
+        app_name = str(row["app_name"] or "unknown")
+        app_counts[app_name] = app_counts.get(app_name, 0) + 1
+    return f"count={len(rows)} app_counts={app_counts}"
+
+
 def get_device_id() -> str:
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     try:
@@ -267,6 +277,7 @@ def sync_pending_sessions() -> bool:
         return False
 
     backend_url = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+    endpoint = f"{backend_url}/app-usage/batch"
     payload = {
         "events": [
             {
@@ -285,7 +296,7 @@ def sync_pending_sessions() -> bool:
         ]
     }
     request = urllib.request.Request(
-        f"{backend_url}/app-usage/batch",
+        endpoint,
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
         method="POST",
@@ -297,18 +308,24 @@ def sync_pending_sessions() -> bool:
     except urllib.error.HTTPError as error:
         error_body = ""
         try:
-          error_body = error.read().decode("utf-8", "replace").strip()
+            error_body = error.read().decode("utf-8", "replace").strip()
         except Exception:
-          error_body = ""
+            error_body = ""
         detail = f"{error} {error_body}".strip()
         mark_sessions(ids, status="failed", error=detail[:1000])
-        log_exception("App usage sync failed.", error)
+        log_exception(
+            f"App usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
+            error,
+        )
         if error_body:
             log_message(f"App usage sync response body: {error_body[:2000]}")
         return False
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         mark_sessions(ids, status="failed", error=str(error)[:1000])
-        log_exception("App usage sync failed.", error)
+        log_exception(
+            f"App usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
+            error,
+        )
         return False
 
     try:

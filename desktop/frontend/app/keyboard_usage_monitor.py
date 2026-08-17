@@ -179,8 +179,28 @@ def _key_to_stream_text(key: object) -> str:
 
 
 def _append_unique(values: list[str], item: str) -> None:
-    if item and item not in values:
-        values.append(item)
+    normalized = str(item or "").strip()
+    if normalized and normalized not in values:
+        values.append(normalized)
+
+
+def _sanitize_key_names(key_names: object) -> list[str]:
+    cleaned: list[str] = []
+    for raw_name in key_names if isinstance(key_names, list) else []:
+        normalized = str(raw_name or "").strip()
+        if normalized and normalized not in cleaned:
+            cleaned.append(normalized)
+    return cleaned
+
+
+def _summarize_sessions(rows: list[sqlite3.Row]) -> str:
+    if not rows:
+        return "count=0"
+    app_counts: dict[str, int] = {}
+    for row in rows:
+        app_name = str(row["app_name"] or "unknown")
+        app_counts[app_name] = app_counts.get(app_name, 0) + 1
+    return f"count={len(rows)} app_counts={app_counts}"
 
 
 class KeyboardUsageMonitor:
@@ -379,6 +399,7 @@ class KeyboardUsageMonitor:
             log_message("Keyboard app usage sync skipped: no saved token.")
             return False
 
+        endpoint = f"{DESKTOP_BACKEND_URL}/app-usage/batch"
         payload = {
             "events": [
                 {
@@ -391,7 +412,7 @@ class KeyboardUsageMonitor:
                     "endedAt": row["ended_at"],
                     "activeSeconds": row["active_seconds"],
                     "keyPressCount": row["key_press_count"],
-                    "keyNames": json.loads(row["key_names"] or "[]"),
+                    "keyNames": _sanitize_key_names(json.loads(row["key_names"] or "[]")),
                     "typedText": row["typed_text"] or "",
                     "keyStreamText": row["key_stream_text"] or "",
                 }
@@ -400,7 +421,7 @@ class KeyboardUsageMonitor:
         }
 
         request = urllib.request.Request(
-            f"{DESKTOP_BACKEND_URL}/app-usage/batch",
+            endpoint,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
             method="POST",
@@ -418,13 +439,19 @@ class KeyboardUsageMonitor:
                 error_body = ""
             detail = f"{error} {error_body}".strip()
             self._mark_sessions(session_ids, status="failed", error=detail[:1000])
-            log_exception("Keyboard app usage sync failed.", error)
+            log_exception(
+                f"Keyboard app usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
+                error,
+            )
             if error_body:
                 log_message(f"Keyboard app usage sync response body: {error_body[:2000]}")
             return False
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             self._mark_sessions(session_ids, status="failed", error=str(error)[:1000])
-            log_exception("Keyboard app usage sync failed.", error)
+            log_exception(
+                f"Keyboard app usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
+                error,
+            )
             return False
 
         try:

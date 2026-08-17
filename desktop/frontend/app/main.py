@@ -48,8 +48,20 @@ def _resume_monitor_in_background() -> int:
     _log_startup("Background startup requested.")
     session = load_auth_session()
     if not session:
-        _log_startup("No saved auth token found.")
-        return 1
+        _log_startup("No valid saved auth token found. Showing sign-in window.")
+        if __package__ in {None, ""}:
+            from app.login_view import LoginApp
+        else:  # pragma: no cover - import path depends on launch style
+            from .login_view import LoginApp
+
+        app = LoginApp(
+            None,
+            hide_after_resume=False,
+            auto_resume_saved_session=False,
+            startup_notice="Your session is missing or expired. Please sign in again.",
+        )
+        app.run()
+        return 0
 
     service_started, _service_message = ensure_service_running()
     if not service_started:
