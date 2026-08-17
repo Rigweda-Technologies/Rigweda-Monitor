@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { getMonitorPgPool } = require("../../config/monitorDb");
 const Employee = require("../employees/employee.model");
 const OrgSettings = require("../orgSettings/orgSettings.model");
@@ -741,5 +743,94 @@ exports.listAppKeyUsage = async ({ organizationId, date }) => {
     date: normalizedDate,
     timezone: timeZone,
     appKeys
+  };
+};
+
+exports.listBrowserHistory = async ({ organizationId, date, limit = 50, offset = 0, employeeId = "", browser = "" }) => {
+  const timeZone = await getOrganizationTimeZone(organizationId);
+  const normalizedDate = toDateKeyInTimeZone(date || new Date(), timeZone);
+  const dayStart = startOfDayInTimeZone(normalizedDate, timeZone);
+  const dayEnd = endOfDayInTimeZone(normalizedDate, timeZone);
+  const pool = await getMonitorPgPool();
+  const safeLimit = Math.max(Math.min(Number(limit) || 50, 500), 1);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+
+  const queryArgs = [String(organizationId), dayStart, dayEnd];
+  const filters = [];
+
+  if (String(employeeId || "").trim()) {
+    queryArgs.push(String(employeeId).trim());
+    filters.push(`AND employee_id = $${queryArgs.length}`);
+  }
+
+  if (String(browser || "").trim()) {
+    queryArgs.push(`%${String(browser).trim().toLowerCase()}%`);
+    filters.push(`AND LOWER(browser) LIKE $${queryArgs.length}`);
+  }
+
+  const filterSql = filters.length > 0 ? `\n        ${filters.join("\n        ")}` : "";
+
+  const { rows: countRows } = await pool.query(
+    `
+      SELECT COUNT(*)::integer AS total
+      FROM monitor_browser_history
+      WHERE organization_id = $1
+        AND observed_at >= $2
+        AND observed_at <= $3${filterSql}
+    `,
+    queryArgs
+  );
+
+  const { rows } = await pool.query(
+    `
+      SELECT
+        entry_id AS "entryId",
+        employee_id AS "employeeId",
+        employee_name AS "employeeName",
+        device_id AS "deviceId",
+        observed_at AS "observedAt",
+        browser,
+        url,
+        title,
+        active_window_title AS "activeWindowTitle",
+        duration_ms AS "durationMs"
+      FROM monitor_browser_history
+      WHERE organization_id = $1
+        AND observed_at >= $2
+        AND observed_at <= $3${filterSql}
+      ORDER BY observed_at DESC, entry_id DESC
+      LIMIT $${queryArgs.length + 1}
+      OFFSET $${queryArgs.length + 2}
+    `,
+    [...queryArgs, safeLimit, safeOffset]
+  );
+
+  const employeeIds = Array.from(
+    new Set(rows.map((row) => String(row.employeeId)).filter(Boolean))
+  );
+  const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
+
+  const historiesWithIds = rows.map((row) => {
+    const employee = employeeMap.get(String(row.employeeId)) || {};
+    return {
+      id: row.entryId,
+      employeeId: employee.employeeId || String(row.employeeId),
+      employeeName: employee.name || row.employeeName || null,
+      employeeCode: employee.code || null,
+      deviceId: row.deviceId,
+      browser: row.browser,
+      url: row.url,
+      title: row.title,
+      timestamp: row.observedAt,
+      duration: Number(row.durationMs || 0),
+      activeWindowTitle: row.activeWindowTitle || null
+    };
+  });
+
+  return {
+    date: normalizedDate,
+    timezone: timeZone,
+    histories: historiesWithIds,
+    total: Number(countRows[0]?.total || 0)
   };
 };

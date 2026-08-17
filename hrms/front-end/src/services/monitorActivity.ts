@@ -103,6 +103,49 @@ export type MonitorAppKeyUsage = {
   keyStreamText: string;
 };
 
+export type MonitorBrowserHistory = {
+  id: string;
+  employeeId: string;
+  employeeName: string | null;
+  employeeCode?: string | null;
+  browser: string;
+  url: string;
+  title: string;
+  timestamp: string;
+  duration?: number;
+  activeWindowTitle?: string;
+};
+
+export type MonitorBrowserHistoryData = {
+  date: string;
+  timezone: string;
+  histories: MonitorBrowserHistory[];
+  total: number;
+};
+
+export const getMonitorBrowserHistory = async (date: string, params?: { limit?: number; offset?: number; employeeId?: string; browser?: string }) => {
+  const query = new URLSearchParams({ date: String(date) });
+  if (typeof params?.limit === "number") query.set("limit", String(params.limit));
+  if (typeof params?.offset === "number") query.set("offset", String(params.offset));
+  if (params?.employeeId) query.set("employeeId", params.employeeId);
+  if (params?.browser) query.set("browser", params.browser);
+
+  const response = await getApiWithToken(
+    `/activity/browser-history?${query.toString()}`,
+    null,
+    { requiredPermissions: ["EMP_VIEW"] }
+  ) as {
+    success?: boolean;
+    message?: string;
+    data?: MonitorBrowserHistoryData;
+  };
+
+  if (!response.success || !response.data) {
+    throw new Error(response.message || "Could not load browser history.");
+  }
+  return response.data;
+};
+
 export const getMonitorAppKeyUsage = async (date: string) => {
   const response = await getApiWithToken(
     `/activity/app-key-usage?date=${encodeURIComponent(date)}`,

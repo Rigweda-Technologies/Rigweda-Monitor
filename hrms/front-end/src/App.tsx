@@ -65,6 +65,7 @@ const MonitorEmployees = lazyWithRetry(() => import("./pages/MonitorEmployees"),
 const MonitorActivity = lazyWithRetry(() => import("./pages/MonitorActivity"), "MonitorActivity");
 const MonitorAppUsage = lazyWithRetry(() => import("./pages/MonitorAppUsage"), "MonitorAppUsage");
 const MonitorAppKeyUsage = lazyWithRetry(() => import("./pages/MonitorAppKeyUsage"), "MonitorAppKeyUsage");
+const MonitorBrowserHistory = lazyWithRetry(() => import("./pages/MonitorBrowserHistory"), "MonitorBrowserHistory");
 const MonitorScreenshots = lazyWithRetry(() => import("./pages/MonitorScreenshots"), "MonitorScreenshots");
 const MonitorSettings = lazyWithRetry(() => import("./pages/MonitorSettings"), "MonitorSettings");
 
@@ -599,6 +600,16 @@ const App = () => (
                 <RequireAuth permissions={["EMP_VIEW"]}>
                   <RequireProfile>
                     <MonitorAppKeyUsage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/browser-history"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorBrowserHistory />
                   </RequireProfile>
                 </RequireAuth>
               }

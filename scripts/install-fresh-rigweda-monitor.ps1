@@ -1,6 +1,8 @@
 param(
     [string]$Source = "",
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor")
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor"),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\data"),
+    [string]$LogRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\logs")
 )
 
 $ErrorActionPreference = "Stop"
@@ -138,13 +140,17 @@ function Remove-StartupEntry {
 }
 
 function Remove-LocalData {
-    $dataRoot = Join-Path $env:LOCALAPPDATA 'rigweda-monitor'
     $legacyDataRoot = 'C:\Rigweda_monitor'
 
     Write-Info "Removing local app data..."
-    if (Test-Path $dataRoot) {
-        $safeDataRoot = Assert-SafeTarget $dataRoot $env:LOCALAPPDATA 'Local data root'
+    if (Test-Path $DataRoot) {
+        $safeDataRoot = Assert-SafeTarget $DataRoot $env:LOCALAPPDATA 'Local data root'
         Remove-Item -LiteralPath $safeDataRoot -Recurse -Force
+    }
+
+    if (Test-Path $LogRoot) {
+        $safeLogRoot = Assert-SafeTarget $LogRoot $env:LOCALAPPDATA 'Local log root'
+        Remove-Item -LiteralPath $safeLogRoot -Recurse -Force
     }
 
     if (Test-Path $legacyDataRoot) {
@@ -220,6 +226,8 @@ $installedVersion = Get-InstalledVersion
 Write-Info "Rigweda Monitor fresh install starting..."
 Write-Info "Source: $resolvedSource"
 Write-Info "InstallDir: $InstallDir"
+Write-Info "DataRoot: $DataRoot"
+Write-Info "LogRoot: $LogRoot"
 
 if ($sourceVersion) {
     Write-Info "Source version: $sourceVersion"
