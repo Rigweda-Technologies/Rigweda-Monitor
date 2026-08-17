@@ -14,6 +14,7 @@ const TABLE_SQL = `
     screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
@@ -86,6 +87,9 @@ const getPoolOrThrow = async () => {
   if (!columns.has("keyboard_enabled")) {
     alterStatements.push("ADD COLUMN keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE");
   }
+  if (!columns.has("browser_history_enabled")) {
+    alterStatements.push("ADD COLUMN browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE");
+  }
   if (alterStatements.length > 0) {
     await pool.query(`ALTER TABLE monitor_cloudinary_settings ${alterStatements.join(", ")}`);
   }
@@ -113,6 +117,7 @@ const toPublicSettings = (row, secret) => row && ({
   screenshotsEnabled: row.screenshots_enabled ?? true,
   mouseEnabled: row.mouse_enabled ?? true,
   keyboardEnabled: row.keyboard_enabled ?? true,
+  browserHistoryEnabled: row.browser_history_enabled ?? false,
   updatedAt: row.updated_at
 });
 
@@ -132,6 +137,7 @@ const getRawSettings = async (organizationId) => {
     screenshotsEnabled: row.screenshots_enabled ?? true,
     mouseEnabled: row.mouse_enabled ?? true,
     keyboardEnabled: row.keyboard_enabled ?? true,
+    browserHistoryEnabled: row.browser_history_enabled ?? false,
     updatedAt: row.updated_at
   };
 };
@@ -164,9 +170,9 @@ const saveSettings = async (organizationId, payload) => {
       INSERT INTO monitor_cloudinary_settings (
         organization_id, cloud_name, api_key, api_secret_ciphertext,
         api_secret_iv, api_secret_auth_tag, upload_folder_root,
-        screenshots_enabled, mouse_enabled, keyboard_enabled
+        screenshots_enabled, mouse_enabled, keyboard_enabled, browser_history_enabled
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (organization_id)
       DO UPDATE SET
         cloud_name = EXCLUDED.cloud_name,
@@ -178,6 +184,7 @@ const saveSettings = async (organizationId, payload) => {
         screenshots_enabled = EXCLUDED.screenshots_enabled,
         mouse_enabled = EXCLUDED.mouse_enabled,
         keyboard_enabled = EXCLUDED.keyboard_enabled,
+        browser_history_enabled = EXCLUDED.browser_history_enabled,
         updated_at = NOW()
       RETURNING *
     `,
@@ -191,7 +198,8 @@ const saveSettings = async (organizationId, payload) => {
       normalizeFolderRoot(payload.uploadFolderRoot),
       normalizeBoolean(payload.screenshotsEnabled, true),
       normalizeBoolean(payload.mouseEnabled, true),
-      normalizeBoolean(payload.keyboardEnabled, true)
+      normalizeBoolean(payload.keyboardEnabled, true),
+      normalizeBoolean(payload.browserHistoryEnabled, false)
     ]
   );
   return toPublicSettings(result.rows[0], resolvedSecret);

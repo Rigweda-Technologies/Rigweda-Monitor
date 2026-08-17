@@ -15,12 +15,12 @@ if __package__ in {None, ""}:
     from app.auth import ensure_service_running, load_auth_session, register_startup
     from app.env import writable_runtime_path
     from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
-    from app.browser_history_monitor import start_browser_monitor
+    from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, register_startup
     from .env import writable_runtime_path
     from .monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
-    from .browser_history_monitor import start_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
+    from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")

@@ -41,6 +41,7 @@ export type MonitorCloudinarySettings = {
   screenshotsEnabled?: boolean;
   mouseEnabled?: boolean;
   keyboardEnabled?: boolean;
+  browserHistoryEnabled?: boolean;
   updatedAt?: string;
 };
 

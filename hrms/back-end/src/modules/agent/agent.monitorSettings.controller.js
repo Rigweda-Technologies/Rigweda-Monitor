@@ -23,12 +23,13 @@ const validatePayload = (body) => {
   const screenshotsEnabled = parseBoolean(body.screenshotsEnabled, true);
   const mouseEnabled = parseBoolean(body.mouseEnabled, true);
   const keyboardEnabled = parseBoolean(body.keyboardEnabled, true);
+  const browserHistoryEnabled = parseBoolean(body.browserHistoryEnabled, false);
 
   if (!cloudName || !apiKey) {
     throw { code: 400, message: "Cloud name and API key are required." };
   }
 
-  return { cloudName, apiKey, apiSecret, uploadFolderRoot, screenshotsEnabled, mouseEnabled, keyboardEnabled };
+  return { cloudName, apiKey, apiSecret, uploadFolderRoot, screenshotsEnabled, mouseEnabled, keyboardEnabled, browserHistoryEnabled };
 };
 
 const validateTestPayload = (body) => {

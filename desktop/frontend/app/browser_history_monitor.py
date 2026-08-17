@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from pathlib import Path
 
 # Low-level Windows hooks for processes and keyboard simulation
@@ -12,6 +13,7 @@ import psutil
 
 # Pull the path framework matching the rest of your app
 from app.env import writable_runtime_path
+from app.monitor_settings import get_monitor_feature_flags
 
 # Separate path targets exactly matching your project architecture
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -25,6 +27,8 @@ STATUS_LOG_FILE = Path(LOG_DIR) / "browser_monitor.log"  # Thread status logs he
 last_active_app = None
 last_active_title = None
 last_active_url = None
+_STOP_EVENT = threading.Event()
+_MONITOR_THREAD: threading.Thread | None = None
 
 
 def _get_clipboard_text() -> str:
@@ -178,18 +182,42 @@ def check_browser_history():
 def start_browser_monitor() -> tuple[bool, str]:
     """Runs a background thread monitoring browser urls while keeping separation boundaries clean."""
     try:
+        flags = get_monitor_feature_flags()
+        if not flags.get("browserHistoryEnabled", False):
+            return False, "Browser history monitor is disabled by Employee Monitor settings."
+
+        global _MONITOR_THREAD
+        if _MONITOR_THREAD is not None and _MONITOR_THREAD.is_alive():
+            return True, "Browser monitor is already running."
+
+        _STOP_EVENT.clear()
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         write_to_log_folder(f"\n[{timestamp}] --- Complete URL Extraction Monitor Thread Initialized ---\n")
         
         def monitor_loop():
-            while True:
+            while not _STOP_EVENT.is_set():
                 check_browser_history()
-                time.sleep(0.5)
+                _STOP_EVENT.wait(0.5)
 
-        import threading
-        t = threading.Thread(target=monitor_loop, daemon=True)
-        t.start()
+        _MONITOR_THREAD = threading.Thread(target=monitor_loop, name="BrowserHistoryMonitor", daemon=True)
+        _MONITOR_THREAD.start()
         return True, "Browser monitor started successfully."
     except Exception as e:
         return False, f"Failed to start browser monitor: {str(e)}"
+
+
+def stop_browser_monitor() -> None:
+    global _MONITOR_THREAD, last_active_app, last_active_title, last_active_url
+
+    _STOP_EVENT.set()
+    thread = _MONITOR_THREAD
+    if thread is not None and thread.is_alive():
+        try:
+            thread.join(timeout=2)
+        except Exception:
+            pass
+    _MONITOR_THREAD = None
+    last_active_app = None
+    last_active_title = None
+    last_active_url = None
 

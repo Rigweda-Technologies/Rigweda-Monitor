@@ -208,6 +208,7 @@ class KeyboardUsageMonitor:
         self._stop_event = threading.Event()
         self._state_lock = threading.Lock()
         self._listener: keyboard.Listener | None = None
+        self._writer_thread: threading.Thread | None = None
         self._foreground_lock = threading.Lock()
         self._foreground_context: tuple[str, str, str] | None = None
         self._foreground_thread: threading.Thread | None = None
@@ -236,6 +237,8 @@ class KeyboardUsageMonitor:
             self._listener.start()
             self._foreground_thread = threading.Thread(target=self._track_foreground_window, daemon=True)
             self._foreground_thread.start()
+            self._writer_thread = threading.Thread(target=self._flush_loop, daemon=True)
+            self._writer_thread.start()
             log_message(f"Keyboard app usage monitor started. device={self._device_id}")
             return True
         except Exception as error:
@@ -262,6 +265,14 @@ class KeyboardUsageMonitor:
         if foreground_thread is not None and foreground_thread.is_alive():
             try:
                 foreground_thread.join(timeout=2)
+            except Exception:
+                pass
+
+        writer_thread = self._writer_thread
+        self._writer_thread = None
+        if writer_thread is not None and writer_thread.is_alive():
+            try:
+                writer_thread.join(timeout=2)
             except Exception:
                 pass
 
@@ -608,6 +619,15 @@ class KeyboardUsageMonitor:
                     self._foreground_context = app_context
             time.sleep(POLL_SECONDS)
 
+    def _flush_loop(self) -> None:
+        while not self._stop_event.wait(2):
+            try:
+                with self._state_lock:
+                    if self._current_app is not None:
+                        self._persist_current_session()
+            except Exception as error:
+                log_exception("Keyboard app usage background flush error.", error)
+
     def _get_foreground_context(self) -> tuple[str, str, str] | None:
         with self._foreground_lock:
             return self._foreground_context
@@ -648,7 +668,6 @@ class KeyboardUsageMonitor:
                         self._session_typed_chars.pop()
                 elif typed_text is not None:
                     self._session_typed_chars.append(typed_text)
-                self._persist_current_session()
             if header_to_write is not None:
                 self._write_header(app_name=header_to_write[0], process_name=header_to_write[1], title=header_to_write[2])
             self._write_key(log_text)
