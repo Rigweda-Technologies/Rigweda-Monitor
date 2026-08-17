@@ -15,7 +15,7 @@ myapp/env/
 build/
 dist/
 desktop/frontend/build_try/
-desktop/frontend/dist_try/
+desktop/frontend/build_build/
 *.egg-info/
 myapp/build/
 myapp/dist/

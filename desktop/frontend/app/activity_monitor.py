@@ -26,6 +26,7 @@ LOG_FILE = DATA_ROOT.parent / "logs" / "activity_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
 HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
+MAX_ACTIVITY_SECONDS = 3600
 POLL_SECONDS = 1
 STOP_EVENT = threading.Event()
 
@@ -108,6 +109,8 @@ def get_connection() -> sqlite3.Connection:
 
 
 def queue_event(*, device_id: str, status: str, active_seconds: int, idle_seconds: int) -> None:
+    active_seconds = max(0, min(int(active_seconds), MAX_ACTIVITY_SECONDS))
+    idle_seconds = max(0, min(int(idle_seconds), MAX_ACTIVITY_SECONDS))
     with get_connection() as connection:
         connection.execute(
             """
@@ -116,6 +119,30 @@ def queue_event(*, device_id: str, status: str, active_seconds: int, idle_second
             """,
             (f"act_{uuid.uuid4().hex}", device_id, utc_now(), status, active_seconds, idle_seconds),
         )
+
+
+def _sanitize_event_row(row: sqlite3.Row) -> dict[str, object]:
+    """Keep legacy local rows compatible with the backend validation rules."""
+    return {
+        "eventId": row["event_id"],
+        "deviceId": row["device_id"],
+        "observedAt": row["observed_at"],
+        "status": row["status"],
+        "activeSeconds": max(0, min(int(row["active_seconds"] or 0), MAX_ACTIVITY_SECONDS)),
+        "idleSeconds": max(0, min(int(row["idle_seconds"] or 0), MAX_ACTIVITY_SECONDS)),
+    }
+
+
+def _summarize_events(rows: list[sqlite3.Row]) -> str:
+    if not rows:
+        return "count=0"
+    status_counts: dict[str, int] = {}
+    for row in rows:
+        status = str(row["status"] or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    first_seen = rows[0]["observed_at"]
+    last_seen = rows[-1]["observed_at"]
+    return f"count={len(rows)} status_counts={status_counts} observed_range={first_seen}..{last_seen}"
 
 
 def pending_events(limit: int = 100) -> list[sqlite3.Row]:
@@ -148,21 +175,37 @@ def sync_pending_events() -> bool:
         log_message("Activity sync skipped: no saved token.")
         return False
     backend_url = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    payload = {"events": [{
-        "eventId": row["event_id"], "deviceId": row["device_id"], "observedAt": row["observed_at"],
-        "status": row["status"], "activeSeconds": row["active_seconds"], "idleSeconds": row["idle_seconds"],
-    } for row in rows]}
+    endpoint = f"{backend_url}/activity-events/batch"
+    payload = {"events": [_sanitize_event_row(row) for row in rows]}
     request = urllib.request.Request(
-        f"{backend_url}/activity-events/batch", data=json.dumps(payload).encode("utf-8"),
+        endpoint, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"}, method="POST",
     )
     ids = [row["event_id"] for row in rows]
     try:
         with urllib.request.urlopen(request, timeout=30):
             pass
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as error:
+    except urllib.error.HTTPError as error:
+        response_body = ""
+        try:
+            response_body = error.read().decode("utf-8", "replace").strip()
+        except Exception:
+            response_body = ""
+        detail = f"{error} {response_body}".strip()
+        mark_events(ids, status="failed", error=detail[:1000])
+        log_exception(
+            f"Activity sync failed for {len(rows)} event(s) to {endpoint}. {_summarize_events(rows)}",
+            error,
+        )
+        if response_body:
+            log_message(f"Activity sync response body: {response_body[:2000]}")
+        return False
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
         mark_events(ids, status="failed", error=str(error)[:1000])
-        log_exception("Activity sync failed.", error)
+        log_exception(
+            f"Activity sync failed for {len(rows)} event(s) to {endpoint}. {_summarize_events(rows)}",
+            error,
+        )
         return False
     try:
         mark_events(ids, status="synced")

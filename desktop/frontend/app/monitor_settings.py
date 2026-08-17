@@ -21,6 +21,7 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     "screenshotsEnabled": True,
     "mouseEnabled": True,
     "keyboardEnabled": True,
+    "browserHistoryEnabled": False,
 }
 FEATURE_FLAGS_FILE = DATA_ROOT / "monitor_feature_flags.json"
 
@@ -91,6 +92,7 @@ def _load_cached_flags() -> dict[str, bool] | None:
         "screenshotsEnabled": bool(payload.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(payload.get("mouseEnabled", True)),
         "keyboardEnabled": bool(payload.get("keyboardEnabled", True)),
+        "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", False)),
     }
 
 
@@ -116,6 +118,7 @@ def _normalize_flags(payload: Any) -> dict[str, bool] | None:
         "screenshotsEnabled": bool(settings.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(settings.get("mouseEnabled", True)),
         "keyboardEnabled": bool(settings.get("keyboardEnabled", True)),
+        "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", False)),
     }
 
 
@@ -134,6 +137,7 @@ def _set_current_flags(flags: dict[str, bool]) -> bool:
         "screenshotsEnabled": bool(flags.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(flags.get("mouseEnabled", True)),
         "keyboardEnabled": bool(flags.get("keyboardEnabled", True)),
+        "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", False)),
     }
     with _state_lock:
         changed = normalized != _current_flags
@@ -213,6 +217,17 @@ def apply_monitor_feature_flags(flags: dict[str, bool] | None = None) -> dict[st
         start_keyboard_monitor()
     else:
         stop_keyboard_monitor()
+
+    try:
+        from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
+    except Exception:
+        start_browser_monitor = None  # type: ignore[assignment]
+        stop_browser_monitor = None  # type: ignore[assignment]
+
+    if flags.get("browserHistoryEnabled", False) and start_browser_monitor is not None:
+        start_browser_monitor()
+    elif stop_browser_monitor is not None:
+        stop_browser_monitor()
 
     return flags
 

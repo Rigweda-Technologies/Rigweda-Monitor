@@ -825,7 +825,9 @@ def upload_to_cloudinary(upload_instruction: dict, local_path: Path) -> dict:
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Cloudinary upload failed with HTTP {error.code}: {body}") from error
+        raise RuntimeError(
+            f"Cloudinary upload failed with HTTP {error.code} for {local_path} to {upload_instruction['uploadUrl']}: {body}"
+        ) from error
 
     return {
         "clientScreenshotId": upload_instruction["clientScreenshotId"],
@@ -1055,7 +1057,7 @@ def upload_pending_screenshots() -> None:
                         upload_result = future.result()
                     except Exception as error:
                         log_exception(
-                            f"Cloudinary upload failed for screenshot {instruction['clientScreenshotId']}.",
+                            f"Cloudinary upload failed for screenshot {instruction['clientScreenshotId']} in batch {batch_id}.",
                             error,
                         )
                         if "Invalid image file" in str(error):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import threading
 import tkinter as tk
 import urllib.error
 import urllib.request
@@ -45,16 +46,26 @@ PADDING_X = 42
 
 
 class LoginApp:
-    def __init__(self, saved_session: dict | None = None, *, hide_after_resume: bool = False) -> None:
+    def __init__(
+        self,
+        saved_session: dict | None = None,
+        *,
+        hide_after_resume: bool = False,
+        auto_resume_saved_session: bool = True,
+        startup_notice: str | None = None,
+    ) -> None:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
         self.saved_session = saved_session
         self.hide_after_resume = hide_after_resume
+        self.auto_resume_saved_session = auto_resume_saved_session
+        self.startup_notice = startup_notice
         self.profile_photo_image: ctk.CTkImage | None = None
         self.login_widgets: list[tk.Widget] = []
         self.hide_countdown_seconds = 30
         self.hide_countdown_after_id: str | None = None
+        self._login_in_progress = False
 
         self.root = ctk.CTk()
         self.root.title("MyApp Sign In")
@@ -65,7 +76,14 @@ class LoginApp:
 
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
-        if self.saved_session:
+        if self.startup_notice:
+            self.subtitle_label.configure(text=self.startup_notice)
+
+        if self.saved_session and self.saved_session.get("email") and not self.auto_resume_saved_session:
+            self.username_entry.delete(0, tk.END)
+            self.username_entry.insert(0, str(self.saved_session.get("email")))
+
+        if self.saved_session and self.auto_resume_saved_session:
             self.root.after(250, self._resume_saved_session)
 
     def _center_geometry(self) -> str:
@@ -459,19 +477,36 @@ class LoginApp:
             self._start_hide_countdown(1)
 
     def _handle_login(self) -> None:
+        if self._login_in_progress:
+            return
+
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
 
-        self.signin_button.configure(state="disabled", text="Signing in...")
-        self.root.update_idletasks()
-
-        logged_in, login_message, session = login_to_hrms(username, password)
-        if not logged_in:
-            self.signin_button.configure(state="normal", text="Sign In")
-            self._set_status(login_message, COLORS["error"])
+        if not username or not password:
+            self._set_status("Please enter both email and password.", COLORS["error"])
             return
 
-        self._start_monitoring(session, register_windows_startup=True)
+        self._login_in_progress = True
+        self.signin_button.configure(state="disabled", text="Signing in...")
+        self._set_status("Contacting login service...", COLORS["text_muted"])
+        self.root.update_idletasks()
+
+        def worker() -> None:
+            logged_in, login_message, session = login_to_hrms(username, password)
+
+            def finalize() -> None:
+                self._login_in_progress = False
+                if not logged_in:
+                    self.signin_button.configure(state="normal", text="Sign In")
+                    self._set_status(login_message, COLORS["error"])
+                    return
+
+                self._start_monitoring(session, register_windows_startup=True)
+
+            self.root.after(0, finalize)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def run(self) -> None:
         self.root.mainloop()

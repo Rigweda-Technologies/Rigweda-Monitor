@@ -26,6 +26,10 @@ function Test-RigwedaProcess {
         return $true
     }
 
+    if ($Process.Name -notin @('cmd.exe', 'python.exe', 'pythonw.exe', 'RigwedaMonitor.exe')) {
+        return $false
+    }
+
     foreach ($pattern in $patterns) {
         if ($Process.CommandLine -match [regex]::Escape($pattern)) {
             return $true
@@ -35,8 +39,18 @@ function Test-RigwedaProcess {
     return $false
 }
 
+function Get-RigwedaProcessMatches {
+    try {
+        return Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { Test-RigwedaProcess -Process $_ }
+    } catch {
+        return Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProcessName -like 'RigwedaMonitor*' } |
+            Select-Object @{ Name = 'ProcessId'; Expression = { $_.Id } }, @{ Name = 'Name'; Expression = { $_.ProcessName } }
+    }
+}
+
 for ($attempt = 1; $attempt -le 5; $attempt++) {
-    $matches = Get-CimInstance Win32_Process | Where-Object { Test-RigwedaProcess -Process $_ }
+    $matches = Get-RigwedaProcessMatches
     if (-not $matches) {
         break
     }
@@ -56,11 +70,12 @@ if ($WaitSeconds -gt 0) {
     Start-Sleep -Seconds $WaitSeconds
 }
 
-$remaining = Get-CimInstance Win32_Process | Where-Object { Test-RigwedaProcess -Process $_ }
+$remaining = Get-RigwedaProcessMatches
 if ($remaining) {
     Write-Host "Rigweda Monitor processes are still running:"
     $remaining | ForEach-Object {
-        Write-Host ("  PID {0} {1}" -f $_.ProcessId, $_.Name)
+        $processName = if ($_.Name) { $_.Name } else { $_.ProcessName }
+        Write-Host ("  PID {0} {1}" -f $_.ProcessId, $processName)
     }
     exit 1
 }

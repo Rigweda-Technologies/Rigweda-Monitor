@@ -13,7 +13,10 @@ set "RIGWEDA_MONITOR_DEFAULT_ENV=server"
 set "SERVER_ENV_FILE=.env.server"
 set "APP_NAME=RigwedaMonitor"
 set "DIST_DIR=dist"
-set "APP_DIST_DIR=%DIST_DIR%\%APP_NAME%"
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss_fff"') do set "BUILD_TOKEN=%%i"
+set "BUILD_DIST_DIR=%TEMP%\RigwedaMonitorBuild-%BUILD_TOKEN%"
+set "BUILD_WORK_DIR=%TEMP%\RigwedaMonitorWork-%BUILD_TOKEN%"
+set "APP_DIST_DIR=%BUILD_DIST_DIR%\%APP_NAME%"
 set "BUNDLE_NAME=%APP_NAME%FreshInstall"
 set "BUNDLE_DIR=%DIST_DIR%\%BUNDLE_NAME%"
 set "BUNDLE_ZIP=%DIST_DIR%\%BUNDLE_NAME%.zip"
@@ -25,7 +28,6 @@ set "STOP_PROCESSES_PS1=..\..\scripts\stop-rigweda-monitor-processes.ps1"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%STOP_PROCESSES_PS1%"
 if not "%errorlevel%"=="0" exit /b %errorlevel%
 
-if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%"
 if exist "build" rmdir /s /q "build"
 mkdir "%DIST_DIR%" >nul 2>nul
 
@@ -51,10 +53,12 @@ if exist "%BUNDLE_STAGE%" rmdir /s /q "%BUNDLE_STAGE%"
 "%~dp0.venv\Scripts\python.exe" -m pip install -r requirements.txt
 if not "%errorlevel%"=="0" exit /b %errorlevel%
 
-".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean RigwedaMonitor.spec
+".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --distpath "%BUILD_DIST_DIR%" --workpath "%BUILD_WORK_DIR%" RigwedaMonitor.spec
 set "BUILD_EXIT_CODE=%errorlevel%"
 if "%BUILD_EXIT_CODE%"=="0" (
   copy /Y "%SERVER_ENV_FILE%" "%APP_DIST_DIR%\.env" >nul
+  if not "%errorlevel%"=="0" exit /b %errorlevel%
+  copy /Y "VERSION" "%APP_DIST_DIR%\VERSION" >nul
   if not "%errorlevel%"=="0" exit /b %errorlevel%
 )
 del "%SERVER_ENV_FILE%" >nul 2>nul
@@ -72,11 +76,11 @@ if exist "%BUNDLE_DIR%" rmdir /s /q "%BUNDLE_DIR%"
 robocopy "%BUNDLE_STAGE%" "%BUNDLE_DIR%" /E /NFL /NDL /NJH /NJS /NP >nul
 set "ROBOCOPY_BUNDLE_DIR_EXIT=%errorlevel%"
 if %ROBOCOPY_BUNDLE_DIR_EXIT% GEQ 8 exit /b %ROBOCOPY_BUNDLE_DIR_EXIT%
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%BUNDLE_STAGE%\*' -DestinationPath '%BUNDLE_ZIP%' -Force"
+if not "%errorlevel%"=="0" exit /b %errorlevel%
+
 rmdir /s /q "%BUNDLE_STAGE%"
 if exist "%APP_DIST_DIR%" rmdir /s /q "%APP_DIST_DIR%"
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%BUNDLE_DIR%\*' -DestinationPath '%BUNDLE_ZIP%' -Force"
-if not "%errorlevel%"=="0" exit /b %errorlevel%
 
 echo.
 echo Build complete.

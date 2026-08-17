@@ -10,6 +10,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import base64
 from ctypes import wintypes
 from pathlib import Path
 
@@ -128,6 +129,23 @@ def _extract_token(headers: object, payload: dict) -> str | None:
             return token
 
     return None
+
+
+def _decode_jwt_payload(token: str) -> dict:
+    try:
+        payload_part = token.split(".")[1]
+        payload_part += "=" * (-len(payload_part) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload_part.encode("ascii")).decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def _token_expiry(token: str) -> int:
+    payload = _decode_jwt_payload(token)
+    try:
+        return int(payload.get("exp") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _pick_first_text(*values: object) -> str | None:
@@ -317,7 +335,7 @@ def _save_auth_session(session: dict) -> None:
     AUTH_FILE.write_text(json.dumps(session, indent=2), encoding="utf-8")
 
 
-def load_auth_session() -> dict | None:
+def load_auth_session(*, validate_token: bool = True) -> dict | None:
     """Load a saved login session and expose its token to child monitor processes."""
     try:
         session = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
@@ -329,6 +347,12 @@ def load_auth_session() -> dict | None:
         token = token.split(" ", 1)[1].strip()
     if not token:
         return None
+
+    if validate_token:
+        expiry = _token_expiry(token)
+        if expiry and expiry <= int(time.time()) + 30:
+            os.environ.pop("MONITOR_ACCESS_TOKEN", None)
+            return None
 
     session["token"] = token
     os.environ["MONITOR_ACCESS_TOKEN"] = token

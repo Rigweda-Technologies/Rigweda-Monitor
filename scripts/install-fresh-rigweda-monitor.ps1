@@ -9,6 +9,20 @@ function Write-Info([string]$Message) {
     Write-Host $Message
 }
 
+function Show-Dialog([string]$Message, [string]$Title = "Rigweda Monitor") {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop | Out-Null
+        [System.Windows.Forms.MessageBox]::Show(
+            $Message,
+            $Title,
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+    } catch {
+        Write-Info $Message
+    }
+}
+
 function Assert-SafeTarget([string]$TargetPath, [string]$RootPath, [string]$Label) {
     $resolvedTarget = [System.IO.Path]::GetFullPath($TargetPath)
     $resolvedRoot = [System.IO.Path]::GetFullPath($RootPath).TrimEnd('\') + '\'
@@ -16,6 +30,59 @@ function Assert-SafeTarget([string]$TargetPath, [string]$RootPath, [string]$Labe
         throw "$Label is outside the allowed root: $resolvedTarget"
     }
     return $resolvedTarget
+}
+
+function Get-AppVersionFromFile([string]$VersionPath) {
+    $candidatePaths = @(
+        $VersionPath,
+        (Join-Path (Split-Path -Parent $VersionPath) "_internal\VERSION")
+    )
+
+    foreach ($candidatePath in $candidatePaths) {
+        if (-not (Test-Path $candidatePath)) {
+            continue
+        }
+
+        $rawVersion = (Get-Content -LiteralPath $candidatePath -Raw -ErrorAction SilentlyContinue).Trim()
+        if (-not $rawVersion) {
+            continue
+        }
+
+        try {
+            return [version]$rawVersion
+        } catch {
+            continue
+        }
+    }
+
+    return $null
+}
+
+function Get-SourceVersion([string]$ResolvedSource) {
+    $sourceItem = Get-Item -LiteralPath $ResolvedSource -ErrorAction Stop
+    $sourceDir = if ($sourceItem.PSIsContainer) { $sourceItem.FullName } else { Split-Path -Parent $sourceItem.FullName }
+    return Get-AppVersionFromFile (Join-Path $sourceDir 'VERSION')
+}
+
+function Get-InstalledVersion {
+    $installedVersion = Get-AppVersionFromFile (Join-Path $InstallDir 'VERSION')
+    if ($installedVersion) {
+        return $installedVersion
+    }
+
+    $exePath = Join-Path $InstallDir 'RigwedaMonitor.exe'
+    if (Test-Path $exePath) {
+        $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath).FileVersion
+        if ($fileVersion) {
+            try {
+                return [version]($fileVersion.Split(' ')[0])
+            } catch {
+                return $null
+            }
+        }
+    }
+
+    return $null
 }
 
 function Get-DefaultSource {
@@ -39,6 +106,7 @@ function Stop-RigwedaMonitorProcesses {
     Get-CimInstance Win32_Process |
         Where-Object {
             $_.ProcessId -ne $PID -and
+            $_.Name -in @('cmd.exe', 'python.exe', 'pythonw.exe', 'RigwedaMonitor.exe') -and
             $_.CommandLine -and (
                 $_.CommandLine -match 'RigwedaMonitor' -or
                 $_.CommandLine -match 'app\.main' -or
@@ -117,16 +185,12 @@ function Remove-InstallDir {
 
 function Copy-FreshBuild([string]$ResolvedSource) {
     $sourceItem = Get-Item -LiteralPath $ResolvedSource -ErrorAction Stop
+    $sourceDir = if ($sourceItem.PSIsContainer) { $sourceItem.FullName } else { Split-Path -Parent $sourceItem.FullName }
 
-    Write-Info "Installing fresh build from: $ResolvedSource"
+    Write-Info "Installing build from: $sourceDir"
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
-    if ($sourceItem.PSIsContainer) {
-        Get-ChildItem -LiteralPath $sourceItem.FullName -Force | Copy-Item -Destination $InstallDir -Recurse -Force
-        return
-    }
-
-    Copy-Item -LiteralPath $sourceItem.FullName -Destination (Join-Path $InstallDir $sourceItem.Name) -Force
+    Get-ChildItem -LiteralPath $sourceDir -Force | Copy-Item -Destination $InstallDir -Recurse -Force
 }
 
 function Register-Startup {
@@ -141,11 +205,43 @@ function Register-Startup {
     Write-Info "Registered startup command: $command"
 }
 
+function Start-InstalledApp {
+    $exePath = Join-Path $InstallDir 'RigwedaMonitor.exe'
+    if (Test-Path $exePath) {
+        Write-Info "Starting installed app..."
+        Start-Process -FilePath $exePath -ArgumentList '--background-start' -WorkingDirectory $InstallDir | Out-Null
+    }
+}
+
 $resolvedSource = if ($Source) { $Source } else { Get-DefaultSource }
+$sourceVersion = Get-SourceVersion $resolvedSource
+$installedVersion = Get-InstalledVersion
 
 Write-Info "Rigweda Monitor fresh install starting..."
 Write-Info "Source: $resolvedSource"
 Write-Info "InstallDir: $InstallDir"
+
+if ($sourceVersion) {
+    Write-Info "Source version: $sourceVersion"
+}
+if ($installedVersion) {
+    Write-Info "Installed version: $installedVersion"
+}
+
+if ($installedVersion -and $sourceVersion -and $installedVersion -eq $sourceVersion) {
+    $alreadyInstalledMessage = "Rigweda Monitor is already installed.`nVersion: $(if ($installedVersion) { $installedVersion } else { 'unknown' })"
+    Write-Info "Already installed: version $installedVersion"
+    Show-Dialog $alreadyInstalledMessage "Rigweda Monitor"
+    exit 0
+}
+
+if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVersion) {
+    Write-Info "Update available: $installedVersion -> $sourceVersion"
+} elseif ($installedVersion -and $sourceVersion -and $installedVersion -gt $sourceVersion) {
+    Write-Info "Installed version $installedVersion is newer than source version $sourceVersion. Reinstalling source build."
+} elseif (-not $installedVersion) {
+    Write-Info "No installed version detected. Installing fresh build."
+}
 
 Stop-RigwedaMonitorProcesses
 Remove-StartupEntry
@@ -153,6 +249,13 @@ Remove-LocalData
 Remove-InstallDir
 Copy-FreshBuild -ResolvedSource $resolvedSource
 Register-Startup
+Start-InstalledApp
 
-Write-Info "Install complete."
+if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVersion) {
+    Write-Info "Update complete."
+    Show-Dialog "Rigweda Monitor has been updated.`nInstalled version: $(if ($sourceVersion) { $sourceVersion } else { 'unknown' })" "Rigweda Monitor Update"
+} else {
+    Write-Info "Install complete."
+    Show-Dialog "Rigweda Monitor has been installed.`nVersion: $(if ($sourceVersion) { $sourceVersion } else { 'unknown' })" "Rigweda Monitor"
+}
 Write-Info "Launch the app from: $(Join-Path $InstallDir 'RigwedaMonitor.exe')"

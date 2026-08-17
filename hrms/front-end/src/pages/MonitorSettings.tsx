@@ -4,6 +4,7 @@ import {
   Camera,
   CloudCog,
   FolderTree,
+  Globe,
   Keyboard,
   MousePointer2,
   RefreshCw,
@@ -26,7 +27,7 @@ import {
 } from "@/services/monitorActivity";
 import { toast } from "sonner";
 
-type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled";
+type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled" | "browserHistoryEnabled";
 
 type MonitorSettingsForm = {
   cloudName: string;
@@ -37,6 +38,7 @@ type MonitorSettingsForm = {
   screenshotsEnabled: boolean;
   mouseEnabled: boolean;
   keyboardEnabled: boolean;
+  browserHistoryEnabled: boolean;
 };
 
 const MONITOR_CONTROLS: Array<{
@@ -59,6 +61,11 @@ const MONITOR_CONTROLS: Array<{
     label: "Keyboard activity",
     description: "Track app-scoped key usage sessions.",
   },
+  {
+    key: "browserHistoryEnabled",
+    label: "Browser history",
+    description: "Record approved browser navigation activity.",
+  },
 ];
 
 const MonitorSettings = () => {
@@ -70,13 +77,14 @@ const MonitorSettings = () => {
     uploadFolderRoot: "rigweda-monitor",
     screenshotsEnabled: true,
     mouseEnabled: true,
-    keyboardEnabled: true
+    keyboardEnabled: true,
+    browserHistoryEnabled: false
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const hasSecret = Boolean(form.apiSecret.trim() || form.apiSecretMasked);
-  const enabledCount = [form.screenshotsEnabled, form.mouseEnabled, form.keyboardEnabled].filter(Boolean).length;
+  const enabledCount = [form.screenshotsEnabled, form.mouseEnabled, form.keyboardEnabled, form.browserHistoryEnabled].filter(Boolean).length;
   const totalControls = MONITOR_CONTROLS.length;
 
   useEffect(() => {
@@ -92,7 +100,8 @@ const MonitorSettings = () => {
             uploadFolderRoot: settings.uploadFolderRoot || "rigweda-monitor",
             screenshotsEnabled: settings.screenshotsEnabled ?? true,
             mouseEnabled: settings.mouseEnabled ?? true,
-            keyboardEnabled: settings.keyboardEnabled ?? true
+            keyboardEnabled: settings.keyboardEnabled ?? true,
+            browserHistoryEnabled: settings.browserHistoryEnabled ?? false
           });
         }
       } catch (error) {
@@ -110,7 +119,8 @@ const MonitorSettings = () => {
     uploadFolderRoot: form.uploadFolderRoot.trim() || "rigweda-monitor",
     screenshotsEnabled: form.screenshotsEnabled,
     mouseEnabled: form.mouseEnabled,
-    keyboardEnabled: form.keyboardEnabled
+    keyboardEnabled: form.keyboardEnabled,
+    browserHistoryEnabled: form.browserHistoryEnabled
   });
 
   const handleTest = async () => {
@@ -167,7 +177,7 @@ const MonitorSettings = () => {
               </div>
               <div className="mt-2 text-lg font-semibold">{enabledCount} of {totalControls} signals enabled</div>
               <p className="mt-1 text-sm text-white/70">
-                Screenshot, mouse, and keyboard permissions are controlled from this page.
+                Screenshot, mouse, keyboard, and browser-history permissions are controlled from this page.
               </p>
             </div>
           </div>
@@ -244,7 +254,13 @@ const MonitorSettings = () => {
               </CardHeader>
               <CardContent className="space-y-3 pt-6">
                 {MONITOR_CONTROLS.map((item) => {
-                  const Icon = item.key === "screenshotsEnabled" ? Camera : item.key === "mouseEnabled" ? MousePointer2 : Keyboard;
+                  const Icon = item.key === "screenshotsEnabled"
+                    ? Camera
+                    : item.key === "mouseEnabled"
+                      ? MousePointer2
+                      : item.key === "keyboardEnabled"
+                        ? Keyboard
+                        : Globe;
                   return (
                     <div
                       key={item.key}
@@ -322,6 +338,7 @@ const MonitorSettings = () => {
                     { label: "Screenshots", enabled: form.screenshotsEnabled, helper: "Image uploads and review queue." },
                     { label: "Mouse activity", enabled: form.mouseEnabled, helper: "Idle vs active cursor tracking." },
                     { label: "Keyboard activity", enabled: form.keyboardEnabled, helper: "App-scoped key usage sessions." },
+                    { label: "Browser history", enabled: form.browserHistoryEnabled, helper: "Approved navigation activity." },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
                       <div>

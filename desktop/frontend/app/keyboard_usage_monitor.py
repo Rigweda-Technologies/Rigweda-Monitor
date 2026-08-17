@@ -179,8 +179,28 @@ def _key_to_stream_text(key: object) -> str:
 
 
 def _append_unique(values: list[str], item: str) -> None:
-    if item and item not in values:
-        values.append(item)
+    normalized = str(item or "").strip()
+    if normalized and normalized not in values:
+        values.append(normalized)
+
+
+def _sanitize_key_names(key_names: object) -> list[str]:
+    cleaned: list[str] = []
+    for raw_name in key_names if isinstance(key_names, list) else []:
+        normalized = str(raw_name or "").strip()
+        if normalized and normalized not in cleaned:
+            cleaned.append(normalized)
+    return cleaned
+
+
+def _summarize_sessions(rows: list[sqlite3.Row]) -> str:
+    if not rows:
+        return "count=0"
+    app_counts: dict[str, int] = {}
+    for row in rows:
+        app_name = str(row["app_name"] or "unknown")
+        app_counts[app_name] = app_counts.get(app_name, 0) + 1
+    return f"count={len(rows)} app_counts={app_counts}"
 
 
 class KeyboardUsageMonitor:
@@ -188,6 +208,7 @@ class KeyboardUsageMonitor:
         self._stop_event = threading.Event()
         self._state_lock = threading.Lock()
         self._listener: keyboard.Listener | None = None
+        self._writer_thread: threading.Thread | None = None
         self._foreground_lock = threading.Lock()
         self._foreground_context: tuple[str, str, str] | None = None
         self._foreground_thread: threading.Thread | None = None
@@ -216,6 +237,8 @@ class KeyboardUsageMonitor:
             self._listener.start()
             self._foreground_thread = threading.Thread(target=self._track_foreground_window, daemon=True)
             self._foreground_thread.start()
+            self._writer_thread = threading.Thread(target=self._flush_loop, daemon=True)
+            self._writer_thread.start()
             log_message(f"Keyboard app usage monitor started. device={self._device_id}")
             return True
         except Exception as error:
@@ -242,6 +265,14 @@ class KeyboardUsageMonitor:
         if foreground_thread is not None and foreground_thread.is_alive():
             try:
                 foreground_thread.join(timeout=2)
+            except Exception:
+                pass
+
+        writer_thread = self._writer_thread
+        self._writer_thread = None
+        if writer_thread is not None and writer_thread.is_alive():
+            try:
+                writer_thread.join(timeout=2)
             except Exception:
                 pass
 
@@ -379,6 +410,7 @@ class KeyboardUsageMonitor:
             log_message("Keyboard app usage sync skipped: no saved token.")
             return False
 
+        endpoint = f"{DESKTOP_BACKEND_URL}/app-usage/batch"
         payload = {
             "events": [
                 {
@@ -391,7 +423,7 @@ class KeyboardUsageMonitor:
                     "endedAt": row["ended_at"],
                     "activeSeconds": row["active_seconds"],
                     "keyPressCount": row["key_press_count"],
-                    "keyNames": json.loads(row["key_names"] or "[]"),
+                    "keyNames": _sanitize_key_names(json.loads(row["key_names"] or "[]")),
                     "typedText": row["typed_text"] or "",
                     "keyStreamText": row["key_stream_text"] or "",
                 }
@@ -400,7 +432,7 @@ class KeyboardUsageMonitor:
         }
 
         request = urllib.request.Request(
-            f"{DESKTOP_BACKEND_URL}/app-usage/batch",
+            endpoint,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
             method="POST",
@@ -418,13 +450,19 @@ class KeyboardUsageMonitor:
                 error_body = ""
             detail = f"{error} {error_body}".strip()
             self._mark_sessions(session_ids, status="failed", error=detail[:1000])
-            log_exception("Keyboard app usage sync failed.", error)
+            log_exception(
+                f"Keyboard app usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
+                error,
+            )
             if error_body:
                 log_message(f"Keyboard app usage sync response body: {error_body[:2000]}")
             return False
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             self._mark_sessions(session_ids, status="failed", error=str(error)[:1000])
-            log_exception("Keyboard app usage sync failed.", error)
+            log_exception(
+                f"Keyboard app usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
+                error,
+            )
             return False
 
         try:
@@ -581,6 +619,15 @@ class KeyboardUsageMonitor:
                     self._foreground_context = app_context
             time.sleep(POLL_SECONDS)
 
+    def _flush_loop(self) -> None:
+        while not self._stop_event.wait(2):
+            try:
+                with self._state_lock:
+                    if self._current_app is not None:
+                        self._persist_current_session()
+            except Exception as error:
+                log_exception("Keyboard app usage background flush error.", error)
+
     def _get_foreground_context(self) -> tuple[str, str, str] | None:
         with self._foreground_lock:
             return self._foreground_context
@@ -621,7 +668,6 @@ class KeyboardUsageMonitor:
                         self._session_typed_chars.pop()
                 elif typed_text is not None:
                     self._session_typed_chars.append(typed_text)
-                self._persist_current_session()
             if header_to_write is not None:
                 self._write_header(app_name=header_to_write[0], process_name=header_to_write[1], title=header_to_write[2])
             self._write_key(log_text)

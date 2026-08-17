@@ -15,12 +15,12 @@ if __package__ in {None, ""}:
     from app.auth import ensure_service_running, load_auth_session, register_startup
     from app.env import writable_runtime_path
     from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
-    from app.browser_history_monitor import start_browser_monitor
+    from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, register_startup
     from .env import writable_runtime_path
     from .monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
-    from .browser_history_monitor import start_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
+    from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
@@ -48,8 +48,20 @@ def _resume_monitor_in_background() -> int:
     _log_startup("Background startup requested.")
     session = load_auth_session()
     if not session:
-        _log_startup("No saved auth token found.")
-        return 1
+        _log_startup("No valid saved auth token found. Showing sign-in window.")
+        if __package__ in {None, ""}:
+            from app.login_view import LoginApp
+        else:  # pragma: no cover - import path depends on launch style
+            from .login_view import LoginApp
+
+        app = LoginApp(
+            None,
+            hide_after_resume=False,
+            auto_resume_saved_session=False,
+            startup_notice="Your session is missing or expired. Please sign in again.",
+        )
+        app.run()
+        return 0
 
     service_started, _service_message = ensure_service_running()
     if not service_started:
