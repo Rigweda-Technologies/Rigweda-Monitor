@@ -15,6 +15,8 @@ const TABLE_SQL = `
     mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    screenshot_interval_minutes INTEGER NOT NULL DEFAULT 1,
+    mouse_heartbeat_minutes INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
@@ -90,6 +92,12 @@ const getPoolOrThrow = async () => {
   if (!columns.has("browser_history_enabled")) {
     alterStatements.push("ADD COLUMN browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE");
   }
+  if (!columns.has("screenshot_interval_minutes")) {
+    alterStatements.push("ADD COLUMN screenshot_interval_minutes INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!columns.has("mouse_heartbeat_minutes")) {
+    alterStatements.push("ADD COLUMN mouse_heartbeat_minutes INTEGER NOT NULL DEFAULT 1");
+  }
   if (alterStatements.length > 0) {
     await pool.query(`ALTER TABLE monitor_cloudinary_settings ${alterStatements.join(", ")}`);
   }
@@ -109,6 +117,12 @@ const normalizeFolderRoot = (value) =>
     .replace(/^\/+|\/+$/g, "")
     .replace(/\/+/g, "/") || "rigweda-monitor";
 
+const normalizeMinutes = (value, fallback = 1, min = 1, max = 240) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.trunc(parsed), min), max);
+};
+
 const toPublicSettings = (row, secret) => row && ({
   cloudName: row.cloud_name,
   apiKey: row.api_key,
@@ -118,6 +132,8 @@ const toPublicSettings = (row, secret) => row && ({
   mouseEnabled: row.mouse_enabled ?? true,
   keyboardEnabled: row.keyboard_enabled ?? true,
   browserHistoryEnabled: row.browser_history_enabled ?? false,
+  screenshotIntervalMinutes: normalizeMinutes(row.screenshot_interval_minutes, 1),
+  mouseHeartbeatMinutes: normalizeMinutes(row.mouse_heartbeat_minutes, 1),
   updatedAt: row.updated_at
 });
 
@@ -138,6 +154,8 @@ const getRawSettings = async (organizationId) => {
     mouseEnabled: row.mouse_enabled ?? true,
     keyboardEnabled: row.keyboard_enabled ?? true,
     browserHistoryEnabled: row.browser_history_enabled ?? false,
+    screenshotIntervalMinutes: normalizeMinutes(row.screenshot_interval_minutes, 1),
+    mouseHeartbeatMinutes: normalizeMinutes(row.mouse_heartbeat_minutes, 1),
     updatedAt: row.updated_at
   };
 };
@@ -170,9 +188,10 @@ const saveSettings = async (organizationId, payload) => {
       INSERT INTO monitor_cloudinary_settings (
         organization_id, cloud_name, api_key, api_secret_ciphertext,
         api_secret_iv, api_secret_auth_tag, upload_folder_root,
-        screenshots_enabled, mouse_enabled, keyboard_enabled, browser_history_enabled
+        screenshots_enabled, mouse_enabled, keyboard_enabled, browser_history_enabled,
+        screenshot_interval_minutes, mouse_heartbeat_minutes
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT (organization_id)
       DO UPDATE SET
         cloud_name = EXCLUDED.cloud_name,
@@ -185,6 +204,8 @@ const saveSettings = async (organizationId, payload) => {
         mouse_enabled = EXCLUDED.mouse_enabled,
         keyboard_enabled = EXCLUDED.keyboard_enabled,
         browser_history_enabled = EXCLUDED.browser_history_enabled,
+        screenshot_interval_minutes = EXCLUDED.screenshot_interval_minutes,
+        mouse_heartbeat_minutes = EXCLUDED.mouse_heartbeat_minutes,
         updated_at = NOW()
       RETURNING *
     `,
@@ -199,7 +220,9 @@ const saveSettings = async (organizationId, payload) => {
       normalizeBoolean(payload.screenshotsEnabled, true),
       normalizeBoolean(payload.mouseEnabled, true),
       normalizeBoolean(payload.keyboardEnabled, true),
-      normalizeBoolean(payload.browserHistoryEnabled, false)
+      normalizeBoolean(payload.browserHistoryEnabled, false),
+      normalizeMinutes(payload.screenshotIntervalMinutes, 1),
+      normalizeMinutes(payload.mouseHeartbeatMinutes, 1)
     ]
   );
   return toPublicSettings(result.rows[0], resolvedSecret);

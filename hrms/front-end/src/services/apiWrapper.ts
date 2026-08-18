@@ -157,12 +157,20 @@ const rememberRecentGetResponse = (
   });
 };
 
-const syncOrgTimeZoneFromResponse = (response: AxiosResponse<ApiResponseEnvelope<{ timezone?: string; orgSettings?: { timezone?: string } }>>) => {
-  const data = response?.data?.data;
-  const timeZone = data?.timezone || data?.orgSettings?.timezone;
+const syncOrgTimeZoneFromPayload = (payload?: { timezone?: string; orgSettings?: { timezone?: string } } | null) => {
+  const timeZone = payload?.timezone || payload?.orgSettings?.timezone;
   if (typeof timeZone === "string" && timeZone) {
     setOrgTimeZone(timeZone);
   }
+};
+
+const syncOrgTimeZoneFromResponse = (response: AxiosResponse<ApiResponseEnvelope<{ timezone?: string; orgSettings?: { timezone?: string } }>>) => {
+  const data = response?.data?.data;
+  syncOrgTimeZoneFromPayload(data);
+};
+
+const syncOrgTimeZoneFromEnvelope = (envelope?: ApiResponseEnvelope<{ timezone?: string; orgSettings?: { timezone?: string } }> | null) => {
+  syncOrgTimeZoneFromPayload(envelope?.data);
 };
 
 const getHeaders = (headers: RequestHeaders): RawAxiosRequestHeaders =>
@@ -316,6 +324,7 @@ export const getApiWithToken = async (
     if (!options.forceRefresh) {
       const cachedResponse = readRecentGetResponse(cacheKey);
       if (cachedResponse !== null) {
+        syncOrgTimeZoneFromEnvelope(cachedResponse as ApiResponseEnvelope<{ timezone?: string; orgSettings?: { timezone?: string } }>);
         return cachedResponse;
       }
     }
@@ -327,6 +336,7 @@ export const getApiWithToken = async (
     const requestPromise = api
       .get(apiUrl, { headers })
       .then((response) => {
+        syncOrgTimeZoneFromResponse(response);
         rememberRecentGetResponse(cacheKey, response.data, cacheTtlMs);
         return response.data;
       })
@@ -391,6 +401,7 @@ export const getApiWithOutToken = async (apiUrl: string) => {
     const cacheKey = getRequestCacheKey(apiUrl, headers);
     const cachedResponse = readRecentGetResponse(cacheKey);
     if (cachedResponse !== null) {
+      syncOrgTimeZoneFromEnvelope(cachedResponse as ApiResponseEnvelope<{ timezone?: string; orgSettings?: { timezone?: string } }>);
       return cachedResponse;
     }
     const existingRequest = inflightGetRequests.get(cacheKey);

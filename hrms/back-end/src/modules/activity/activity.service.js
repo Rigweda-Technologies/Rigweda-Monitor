@@ -274,6 +274,29 @@ const toMillis = (value) => {
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
+const isExplicitDateTimeString = (value) => /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(?:\.\d{1,6})?)?$/.test(String(value || "").trim());
+
+const hasTimeZoneDesignator = (value) => /([zZ]|[+-]\d{2}:?\d{2})$/.test(String(value || "").trim());
+
+const toUtcIsoString = (value) => {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (isExplicitDateTimeString(trimmed) && !hasTimeZoneDesignator(trimmed)) {
+      const normalized = trimmed.replace(" ", "T");
+      const parsed = new Date(`${normalized}Z`);
+      return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+    }
+    const parsed = new Date(trimmed);
+    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+};
+
 const clampInterval = (startMs, endMs, dayStartMs, dayEndMs) => {
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
   const start = Math.max(startMs, dayStartMs);
@@ -454,7 +477,7 @@ exports.listEmployees = async ({ organizationId, date }) => {
       employeeName: item.employeeName,
       employeeCode: item.employeeCode,
       status,
-      lastSeenAt: item.lastSeenAt ? new Date(item.lastSeenAt).toISOString() : null,
+      lastSeenAt: toUtcIsoString(item.lastSeenAt),
       productiveSeconds,
       idleSeconds,
       totalSeconds
@@ -621,9 +644,9 @@ exports.listAppUsage = async ({ organizationId, date, limit = 15, offset = 0, ap
       deviceId: row.deviceId,
       appName: row.appName,
       processName: row.processName,
-      observedAt: row.observedAt,
-      startedAt: row.startedAt,
-      endedAt: row.endedAt,
+      observedAt: toUtcIsoString(row.observedAt),
+      startedAt: toUtcIsoString(row.startedAt),
+      endedAt: toUtcIsoString(row.endedAt),
       activeSeconds: Number(row.activeSeconds || 0),
       keyPressCount: Number(row.keyPressCount || 0),
       keyNames: Array.isArray(row.keyNames) ? row.keyNames : [],
@@ -821,7 +844,7 @@ exports.listBrowserHistory = async ({ organizationId, date, limit = 50, offset =
       browser: row.browser,
       url: row.url,
       title: row.title,
-      timestamp: row.observedAt,
+      timestamp: toUtcIsoString(row.observedAt),
       duration: Number(row.durationMs || 0),
       activeWindowTitle: row.activeWindowTitle || null
     };

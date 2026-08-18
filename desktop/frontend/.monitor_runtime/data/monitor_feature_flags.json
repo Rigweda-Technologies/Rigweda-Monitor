@@ -1,0 +1,8 @@
+{
+  "screenshotsEnabled": true,
+  "mouseEnabled": true,
+  "keyboardEnabled": false,
+  "browserHistoryEnabled": true,
+  "screenshotIntervalMinutes": 2,
+  "mouseHeartbeatMinutes": 5
+}

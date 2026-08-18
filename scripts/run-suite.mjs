@@ -1,25 +1,28 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [suite, mode] = process.argv.slice(2);
+const frontendVenvPython = path.join(workspaceRoot, "desktop", "frontend", ".venv", "Scripts", "python.exe");
+const frontendPython = process.env.PYTHON || (existsSync(frontendVenvPython) ? frontendVenvPython : "python");
 
 const commands = {
   // Local mode starts the local API plus its UI/agent.  Server mode starts
   // only the UI/agent, which uses the deployed URLs from .env.server.
   desktop: mode === "local"
     ? [
-        { label: "desktop backend", cwd: "desktop/backend", args: ["run", mode] },
-        { label: "desktop agent", cwd: "desktop/frontend", args: ["-m", "app.main"], python: true },
+        { label: "desktop backend", cwd: "desktop/backend", command: "node", args: ["src/server.js"] },
+        { label: "desktop agent", cwd: "desktop/frontend", command: frontendPython, args: ["-m", "app.main"] },
       ]
-    : [{ label: "desktop agent", cwd: "desktop/frontend", args: ["-m", "app.main"], python: true }],
+    : [{ label: "desktop agent", cwd: "desktop/frontend", command: frontendPython, args: ["-m", "app.main"] }],
   hrms: mode === "local"
     ? [
-        { label: "hrms backend", cwd: "hrms/back-end", args: ["run", mode] },
-        { label: "hrms frontend", cwd: "hrms/front-end", args: ["run", mode] },
+        { label: "hrms backend", cwd: "hrms/back-end", command: "node", args: ["app.js"] },
+        { label: "hrms frontend", cwd: "hrms/front-end", command: "node", args: ["node_modules/vite/bin/vite.js", "--configLoader", "native", "--mode", "development-local"] },
       ]
-    : [{ label: "hrms frontend", cwd: "hrms/front-end", args: ["run", mode] }],
+    : [{ label: "hrms frontend", cwd: "hrms/front-end", command: "node", args: ["node_modules/vite/bin/vite.js", "--configLoader", "native", "--mode", "server"] }],
 };
 
 if (!commands[suite] || !["local", "server"].includes(mode)) {
@@ -51,13 +54,11 @@ console.log(`\nStarting ${suite} in ${mode.toUpperCase()} mode`);
 for (const url of activeUrls[suite]) console.log(url);
 console.log("");
 
-const children = commands[suite].map(({ label, cwd, args, python }) => {
-  const command = python ? (process.env.PYTHON || "python") : "npm";
-  const childArgs = python ? args : args;
-  const child = spawn(command, childArgs, {
+const children = commands[suite].map(({ label, cwd, command, args }) => {
+  const child = spawn(command, args, {
     cwd: path.join(workspaceRoot, cwd),
     env: { ...process.env, APP_ENV: mode },
-    shell: process.platform === "win32",
+    shell: false,
     stdio: "inherit",
   });
   child.on("exit", (code) => {

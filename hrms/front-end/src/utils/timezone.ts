@@ -12,6 +12,11 @@ const isValidTimeZone = (timeZone?: string | null) => {
   }
 };
 
+const isExplicitDateTimeString = (value: string) =>
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(?:\.\d{1,3})?)?$/.test(value.trim());
+
+const hasTimeZoneDesignator = (value: string) => /([zZ]|[+-]\d{2}:?\d{2})$/.test(value.trim());
+
 export const setOrgTimeZone = (timeZone: string) => {
   if (!isValidTimeZone(timeZone)) return;
   const previousTimeZone = localStorage.getItem(ORG_TIMEZONE_KEY);
@@ -47,9 +52,16 @@ export const subscribeToOrgTimeZone = (listener: (timeZone: string) => void) => 
 };
 
 const toDate = (value: string | number | Date) =>
-  value instanceof Date ? value : new Date(value);
+  value instanceof Date
+    ? value
+    : typeof value === "string" && isExplicitDateTimeString(value) && !hasTimeZoneDesignator(value)
+      ? new Date(value.replace(" ", "T") + "Z")
+      : new Date(value);
 
 const isDateKey = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const resolveTimeZone = (timeZone?: string | null) =>
+  isValidTimeZone(timeZone) ? timeZone : getOrgTimeZone();
 
 export const toDateKeyInOrgTimeZone = (value: string | number | Date) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -67,11 +79,12 @@ export const toDateKeyInOrgTimeZone = (value: string | number | Date) => {
 
 export const formatDateInOrgTimeZone = (
   value: string | number | Date,
-  options: Intl.DateTimeFormatOptions = {}
+  options: Intl.DateTimeFormatOptions = {},
+  timeZone?: string | null
 ) => {
   return toDate(value).toLocaleDateString(undefined, {
-    timeZone: getOrgTimeZone(),
-    ...options
+    ...options,
+    timeZone: resolveTimeZone(timeZone)
   });
 };
 
@@ -82,32 +95,35 @@ export const toDateKeyInOrgCalendar = (value: string | number | Date) => {
 
 export const formatDateKeyInOrgCalendar = (
   value: string | number | Date,
-  options: Intl.DateTimeFormatOptions = {}
+  options: Intl.DateTimeFormatOptions = {},
+  timeZone?: string | null
 ) => {
   const dateKey = toDateKeyInOrgCalendar(value);
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Intl.DateTimeFormat(undefined, {
-    timeZone: getOrgTimeZone(),
-    ...options
+    ...options,
+    timeZone: resolveTimeZone(timeZone)
   }).format(new Date(Date.UTC(year, month - 1, day, 12, 0, 0)));
 };
 
 export const formatTimeInOrgTimeZone = (
   value: string | number | Date,
-  options: Intl.DateTimeFormatOptions = {}
+  options: Intl.DateTimeFormatOptions = {},
+  timeZone?: string | null
 ) => {
   return toDate(value).toLocaleTimeString(undefined, {
-    timeZone: getOrgTimeZone(),
-    ...options
+    ...options,
+    timeZone: resolveTimeZone(timeZone)
   });
 };
 
 export const formatDateTimeInOrgTimeZone = (
   value: string | number | Date,
-  options: Intl.DateTimeFormatOptions = {}
+  options: Intl.DateTimeFormatOptions = {},
+  timeZone?: string | null
 ) => {
   return toDate(value).toLocaleString(undefined, {
-    timeZone: getOrgTimeZone(),
-    ...options
+    ...options,
+    timeZone: resolveTimeZone(timeZone)
   });
 };

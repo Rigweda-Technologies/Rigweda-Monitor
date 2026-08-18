@@ -23,6 +23,7 @@ DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
 DEFAULT_LOGIN_URL = f"{DEFAULT_HRMS_BACKEND_URL}/users/login"
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 AUTH_FILE = DATA_ROOT / "auth.json"
+ALT_AUTH_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\rigweda-monitor\data\auth.json"))
 SERVICE_NAME = "MyAppBackendService"
 STARTUP_APP_NAME = "RigwedaMonitor"
 PROFILE_SCHEMA_VERSION = 4
@@ -326,20 +327,39 @@ def _store_auth_session(*, email: str, token: str, payload: dict) -> dict:
         "profileSchemaVersion": PROFILE_SCHEMA_VERSION,
         "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
-    AUTH_FILE.write_text(json.dumps(session, indent=2), encoding="utf-8")
+    for auth_path in dict.fromkeys([AUTH_FILE, ALT_AUTH_FILE]):
+        try:
+            auth_path.parent.mkdir(parents=True, exist_ok=True)
+            auth_path.write_text(json.dumps(session, indent=2), encoding="utf-8")
+        except OSError:
+            pass
     return session
 
 
 def _save_auth_session(session: dict) -> None:
-    DATA_ROOT.mkdir(parents=True, exist_ok=True)
-    AUTH_FILE.write_text(json.dumps(session, indent=2), encoding="utf-8")
+    for auth_path in dict.fromkeys([AUTH_FILE, ALT_AUTH_FILE]):
+        try:
+            auth_path.parent.mkdir(parents=True, exist_ok=True)
+            auth_path.write_text(json.dumps(session, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def _auth_session_paths() -> list[Path]:
+    return [path for path in dict.fromkeys([AUTH_FILE, ALT_AUTH_FILE]) if path.exists()]
 
 
 def load_auth_session(*, validate_token: bool = True) -> dict | None:
     """Load a saved login session and expose its token to child monitor processes."""
-    try:
-        session = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    session = None
+    for auth_path in _auth_session_paths():
+        try:
+            session = json.loads(auth_path.read_text(encoding="utf-8"))
+            break
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+
+    if not isinstance(session, dict):
         return None
 
     token = str(session.get("token") or "").strip()

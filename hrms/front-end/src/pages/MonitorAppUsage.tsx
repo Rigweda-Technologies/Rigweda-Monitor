@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getMonitorAppUsage, MonitorAppUsageEmployee, MonitorAppUsageSession } from "@/services/monitorActivity";
-import { getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
+import { formatDateTimeInOrgTimeZone, getOrgTimeZone, setOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
 const today = () => toDateKeyInOrgTimeZone(new Date());
@@ -31,10 +31,10 @@ const formatDuration = (seconds: number) => {
   return `${hours}h ${minutes}m`;
 };
 
-const formatTime = (value: string | null) => {
+const formatTime = (value: string | null, timeZone: string) => {
   if (!value) return "-";
   try {
-    return new Date(value).toLocaleString();
+    return formatDateTimeInOrgTimeZone(value, {}, timeZone);
   } catch {
     return value;
   }
@@ -96,6 +96,10 @@ const MonitorAppUsage = () => {
 
     try {
       const data = await getMonitorAppUsage(date, { limit: INITIAL_SESSION_LIMIT, offset: 0 });
+      if (data.timezone) {
+        setTimeZone(data.timezone);
+        setOrgTimeZone(data.timezone);
+      }
       setEmployees(data.employees || []);
       setSessions(data.sessions || []);
       setSessionTotal(Number(data.sessionPage?.total || (data.sessions || []).length || 0));
@@ -348,8 +352,8 @@ const MonitorAppUsage = () => {
                         )}
                         {!detailLoading && detailSessions.map((session) => (
                           <tr key={session.sessionId} className="hover:bg-muted/50">
-                            <td className="px-4 py-4 align-middle whitespace-nowrap">{formatTime(session.startedAt)}</td>
-                            <td className="px-4 py-4 align-middle whitespace-nowrap">{formatTime(session.endedAt)}</td>
+                            <td className="px-4 py-4 align-middle whitespace-nowrap">{formatTime(session.startedAt, timeZone)}</td>
+                            <td className="px-4 py-4 align-middle whitespace-nowrap">{formatTime(session.endedAt, timeZone)}</td>
                             <td className="min-w-[18rem] bg-background px-4 py-4 align-middle text-muted-foreground">
                               <div className="max-w-[26rem] whitespace-pre-wrap break-words">
                                 {formatKeys(session.keyNames)}
