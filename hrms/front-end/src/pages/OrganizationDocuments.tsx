@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { deleteApiWithToken, getApiWithToken, postApiWithToken } from "@/services/apiWrapper";
 import { useAuth } from "@/context/useAuth";
 import { getToken } from "@/utils/auth";
+import { formatDateTimeInOrgTimeZone, getOrgTimeZone, subscribeToOrgTimeZone } from "@/utils/timezone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -231,6 +232,11 @@ const formatDate = (value?: string | null) => {
   return new Date(value).toLocaleDateString();
 };
 
+const formatTimestamp = (value?: string | null, timeZone?: string) => {
+  if (!value) return "-";
+  return formatDateTimeInOrgTimeZone(value, {}, timeZone);
+};
+
 const formatFileSize = (bytes?: number) => {
   if (!bytes) return "-";
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -247,6 +253,7 @@ const getApiBaseUrl = () => String(import.meta.env.VITE_API_BASE_URL || "").repl
 
 const OrganizationDocuments = () => {
   const { hasAnyPermission } = useAuth();
+  const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
   const [documents, setDocuments] = useState<OrganizationDocument[]>([]);
   const [catalog, setCatalog] = useState<CatalogGroup[]>(FALLBACK_CATALOG);
   const [summary, setSummary] = useState<Summary>(emptySummary);
@@ -325,6 +332,8 @@ const OrganizationDocuments = () => {
   useEffect(() => {
     loadData();
   }, [canView]);
+
+  useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
 
   const validateFile = (file: File) => {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
@@ -570,7 +579,7 @@ const OrganizationDocuments = () => {
                             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                               <p>Number: <span className="font-medium">{uploaded.documentNumber || "-"}</span></p>
                               <p>Expiry: <span className="font-medium">{formatDate(uploaded.expiryDate)}</span></p>
-                              <p>Uploaded: <span className="font-medium">{formatDate(uploaded.uploadedAt)}</span></p>
+                              <p>Uploaded: <span className="font-medium">{formatTimestamp(uploaded.uploadedAt, timeZone)}</span></p>
                               <p>Type: <span className="font-medium">{uploaded.fileType}</span></p>
                             </div>
                           )}
@@ -579,7 +588,7 @@ const OrganizationDocuments = () => {
 
                           {uploaded?.uploadHistory?.length ? (
                             <div className="mt-3 rounded-md bg-white px-3 py-2 text-xs text-slate-600">
-                              History: {uploaded.uploadHistory.slice(-3).map((entry) => `${entry.action} ${formatDate(entry.uploadedAt)}`).join(" • ")}
+                                History: {uploaded.uploadHistory.slice(-3).map((entry) => `${entry.action} ${formatTimestamp(entry.uploadedAt, timeZone)}`).join(" • ")}
                             </div>
                           ) : null}
 
