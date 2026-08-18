@@ -24,12 +24,25 @@ const validatePayload = (body) => {
   const mouseEnabled = parseBoolean(body.mouseEnabled, true);
   const keyboardEnabled = parseBoolean(body.keyboardEnabled, true);
   const browserHistoryEnabled = parseBoolean(body.browserHistoryEnabled, false);
+  const screenshotIntervalMinutes = Math.max(Math.trunc(Number(body.screenshotIntervalMinutes) || 1), 1);
+  const mouseHeartbeatMinutes = Math.max(Math.trunc(Number(body.mouseHeartbeatMinutes) || 1), 1);
 
   if (!cloudName || !apiKey) {
     throw { code: 400, message: "Cloud name and API key are required." };
   }
 
-  return { cloudName, apiKey, apiSecret, uploadFolderRoot, screenshotsEnabled, mouseEnabled, keyboardEnabled, browserHistoryEnabled };
+  return {
+    cloudName,
+    apiKey,
+    apiSecret,
+    uploadFolderRoot,
+    screenshotsEnabled,
+    mouseEnabled,
+    keyboardEnabled,
+    browserHistoryEnabled,
+    screenshotIntervalMinutes,
+    mouseHeartbeatMinutes
+  };
 };
 
 const validateTestPayload = (body) => {

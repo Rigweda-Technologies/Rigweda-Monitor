@@ -10,8 +10,8 @@ import traceback
 from pathlib import Path
 
 if __package__ in {None, ""}:
-    # Fixed to point to the immediate parent root folder level
-    sys.path.append(str(Path(__file__).resolve().parents[0]))
+    # When launched as a script, add the frontend root so `import app.*` works.
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
     from app.auth import ensure_service_running, load_auth_session, register_startup
     from app.env import writable_runtime_path
     from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener

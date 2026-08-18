@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getMonitorEmployeeActivity, MonitorEmployeeActivity } from "@/services/monitorActivity";
+import { formatDateTimeInOrgTimeZone, getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => toDateKeyInOrgTimeZone(new Date());
 
 const formatDuration = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
@@ -24,11 +25,15 @@ const MonitorActivity = () => {
   const [employees, setEmployees] = useState<MonitorEmployeeActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
 
   const load = useCallback(async (manual = false) => {
     manual ? setRefreshing(true) : setLoading(true);
     try {
       const data = await getMonitorEmployeeActivity(date);
+      if (data.timezone) {
+        setTimeZone(data.timezone);
+      }
       setEmployees(data.employees || []);
     } catch (error) {
       if (manual) toast.error("Could not refresh monitor activity.");
@@ -40,6 +45,10 @@ const MonitorActivity = () => {
   }, [date]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
+  useEffect(() => {
+    setDate(toDateKeyInOrgTimeZone(new Date()));
+  }, [timeZone]);
 
   const onlineCount = employees.filter((employee) => getDisplayStatus(employee) === "online").length;
   const awayCount = employees.filter((employee) => getDisplayStatus(employee) === "away").length;
@@ -57,6 +66,7 @@ const MonitorActivity = () => {
             <p className="text-sm text-muted-foreground">
               Refresh manually to load the latest desktop activity. Online status now reflects both mouse and keyboard activity.
             </p>
+            <p className="text-xs text-muted-foreground">Displayed in {timeZone} time.</p>
           </div>
           <div className="flex items-center gap-2">
             <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-[155px]" />
@@ -93,7 +103,7 @@ const MonitorActivity = () => {
                       <TableCell className="font-medium">{employee.employeeName || "Employee"}</TableCell>
                       <TableCell>{employee.employeeId}</TableCell>
                       <TableCell><Badge className={statusClass}>{statusLabel}</Badge></TableCell>
-                      <TableCell>{employee.lastSeenAt ? new Date(employee.lastSeenAt).toLocaleString() : "-"}</TableCell>
+                      <TableCell>{employee.lastSeenAt ? formatDateTimeInOrgTimeZone(employee.lastSeenAt, {}, timeZone) : "-"}</TableCell>
                       <TableCell className="text-right">{formatDuration(Number(employee.productiveSeconds || 0))}</TableCell>
                     </TableRow>
                   );

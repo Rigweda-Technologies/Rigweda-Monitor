@@ -134,14 +134,19 @@ def _token_expiry(token: str) -> int:
 
 
 def get_interval_ms() -> int:
-    configured_interval = os.getenv("SCREENSHOT_INTERVAL_MS", "")
-
+    flags = _cached_monitor_flags()
     try:
-        interval_ms = int(configured_interval)
-    except ValueError:
-        return DEFAULT_INTERVAL_MS
+        minutes = max(int(flags.get("screenshotIntervalMinutes", 1)), 1)
+        return minutes * 60_000
+    except (TypeError, ValueError):
+        configured_interval = os.getenv("SCREENSHOT_INTERVAL_MS", "")
 
-    return interval_ms if interval_ms > 0 else DEFAULT_INTERVAL_MS
+        try:
+            interval_ms = int(configured_interval)
+        except ValueError:
+            return DEFAULT_INTERVAL_MS
+
+        return interval_ms if interval_ms > 0 else DEFAULT_INTERVAL_MS
 
 
 def get_batch_size() -> int:
@@ -200,11 +205,23 @@ def _resolve_monitor_settings(token: str) -> dict | None:
 
 def _cached_monitor_flags() -> dict[str, bool]:
     if load_monitor_feature_flags is None:
-        return {"screenshotsEnabled": True, "mouseEnabled": True, "keyboardEnabled": True}
+        return {
+            "screenshotsEnabled": True,
+            "mouseEnabled": True,
+            "keyboardEnabled": True,
+            "screenshotIntervalMinutes": 1,
+            "mouseHeartbeatMinutes": 1,
+        }
     try:
         return load_monitor_feature_flags()
     except Exception:
-        return {"screenshotsEnabled": True, "mouseEnabled": True, "keyboardEnabled": True}
+        return {
+            "screenshotsEnabled": True,
+            "mouseEnabled": True,
+            "keyboardEnabled": True,
+            "screenshotIntervalMinutes": 1,
+            "mouseHeartbeatMinutes": 1,
+        }
 
 
 def get_screenshot_scan_roots() -> list[Path]:
@@ -1106,7 +1123,6 @@ def start_screenshot_monitor() -> None:
         log_message("Screenshot monitor is disabled by Employee Monitor settings.")
         return
 
-    interval_seconds = get_interval_ms() / 1000
     log_message("Screenshot monitor started")
     log_message(f"Data root: {DATA_ROOT}")
     log_message(f"Screenshot root: {SCREENSHOT_ROOT}")
@@ -1119,7 +1135,10 @@ def start_screenshot_monitor() -> None:
         return
     capture_screenshot()
     upload_pending_screenshots()
-    while not stop_event.wait(interval_seconds):
+    while True:
+        interval_seconds = get_interval_ms() / 1000
+        if stop_event.wait(interval_seconds):
+            break
         if not _cached_monitor_flags().get("screenshotsEnabled", True):
             log_message("Screenshot monitor stopped because Employee Monitor settings disabled it.")
             return

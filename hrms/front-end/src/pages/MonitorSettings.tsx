@@ -39,6 +39,8 @@ type MonitorSettingsForm = {
   mouseEnabled: boolean;
   keyboardEnabled: boolean;
   browserHistoryEnabled: boolean;
+  screenshotIntervalMinutes: number;
+  mouseHeartbeatMinutes: number;
 };
 
 const MONITOR_CONTROLS: Array<{
@@ -78,7 +80,9 @@ const MonitorSettings = () => {
     screenshotsEnabled: true,
     mouseEnabled: true,
     keyboardEnabled: true,
-    browserHistoryEnabled: false
+    browserHistoryEnabled: false,
+    screenshotIntervalMinutes: 1,
+    mouseHeartbeatMinutes: 1
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,7 +105,9 @@ const MonitorSettings = () => {
             screenshotsEnabled: settings.screenshotsEnabled ?? true,
             mouseEnabled: settings.mouseEnabled ?? true,
             keyboardEnabled: settings.keyboardEnabled ?? true,
-            browserHistoryEnabled: settings.browserHistoryEnabled ?? false
+            browserHistoryEnabled: settings.browserHistoryEnabled ?? false,
+            screenshotIntervalMinutes: Math.max(Number(settings.screenshotIntervalMinutes || 1), 1),
+            mouseHeartbeatMinutes: Math.max(Number(settings.mouseHeartbeatMinutes || 1), 1)
           });
         }
       } catch (error) {
@@ -120,7 +126,9 @@ const MonitorSettings = () => {
     screenshotsEnabled: form.screenshotsEnabled,
     mouseEnabled: form.mouseEnabled,
     keyboardEnabled: form.keyboardEnabled,
-    browserHistoryEnabled: form.browserHistoryEnabled
+    browserHistoryEnabled: form.browserHistoryEnabled,
+    screenshotIntervalMinutes: form.screenshotIntervalMinutes,
+    mouseHeartbeatMinutes: form.mouseHeartbeatMinutes
   });
 
   const handleTest = async () => {
@@ -291,6 +299,50 @@ const MonitorSettings = () => {
                     </div>
                   );
                 })}
+                <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="screenshotIntervalMinutes" className="flex items-center gap-2">
+                      <Camera className="h-4 w-4 text-primary" />
+                      Screenshot interval
+                    </Label>
+                    <Input
+                      id="screenshotIntervalMinutes"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={form.screenshotIntervalMinutes}
+                      disabled={loading || !form.screenshotsEnabled}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          screenshotIntervalMinutes: Math.max(Number(event.target.value || 1), 1),
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">Capture one screenshot every N minutes.</p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="mouseHeartbeatMinutes" className="flex items-center gap-2">
+                      <MousePointer2 className="h-4 w-4 text-primary" />
+                      Mouse heartbeat
+                    </Label>
+                    <Input
+                      id="mouseHeartbeatMinutes"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={form.mouseHeartbeatMinutes}
+                      disabled={loading || !form.mouseEnabled}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          mouseHeartbeatMinutes: Math.max(Number(event.target.value || 1), 1),
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">Send mouse activity every N minutes while enabled.</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -335,8 +387,16 @@ const MonitorSettings = () => {
 
                 <div className="grid gap-3">
                   {[
-                    { label: "Screenshots", enabled: form.screenshotsEnabled, helper: "Image uploads and review queue." },
-                    { label: "Mouse activity", enabled: form.mouseEnabled, helper: "Idle vs active cursor tracking." },
+                    {
+                      label: "Screenshots",
+                      enabled: form.screenshotsEnabled,
+                      helper: `Image uploads every ${form.screenshotIntervalMinutes} minute(s).`,
+                    },
+                    {
+                      label: "Mouse activity",
+                      enabled: form.mouseEnabled,
+                      helper: `Idle vs active cursor tracking every ${form.mouseHeartbeatMinutes} minute(s).`,
+                    },
                     { label: "Keyboard activity", enabled: form.keyboardEnabled, helper: "App-scoped key usage sessions." },
                     { label: "Browser history", enabled: form.browserHistoryEnabled, helper: "Approved navigation activity." },
                   ].map((item) => (

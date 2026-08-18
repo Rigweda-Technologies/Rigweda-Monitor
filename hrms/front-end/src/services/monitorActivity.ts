@@ -42,6 +42,8 @@ export type MonitorCloudinarySettings = {
   mouseEnabled?: boolean;
   keyboardEnabled?: boolean;
   browserHistoryEnabled?: boolean;
+  screenshotIntervalMinutes?: number;
+  mouseHeartbeatMinutes?: number;
   updatedAt?: string;
 };
 
@@ -172,7 +174,7 @@ export const getMonitorEmployeeActivity = async (date: string) => {
     `/activity/employees?date=${encodeURIComponent(date)}`,
     null,
     { requiredPermissions: ["EMP_VIEW"] }
-  ) as { success?: boolean; message?: string; data?: { date: string; employees: MonitorEmployeeActivity[] } };
+  ) as { success?: boolean; message?: string; data?: { date: string; timezone: string; employees: MonitorEmployeeActivity[] } };
 
   if (!response.success || !response.data) {
     throw new Error(response.message || "Could not load monitor activity.");
