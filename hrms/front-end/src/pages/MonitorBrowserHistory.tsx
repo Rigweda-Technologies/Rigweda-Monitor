@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getMonitorBrowserHistory, MonitorBrowserHistory } from "@/services/monitorActivity";
-import { getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
+import { formatDateTimeInOrgTimeZone, getOrgTimeZone, setOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
 const today = () => toDateKeyInOrgTimeZone(new Date());
@@ -22,10 +22,10 @@ const getBrowserColor = (browser: string): string => {
   return "bg-gray-100 text-gray-800";
 };
 
-const formatTime = (value: string | null) => {
+const formatTime = (value: string | null, timeZone: string) => {
   if (!value) return "-";
   try {
-    return new Date(value).toLocaleString();
+    return formatDateTimeInOrgTimeZone(value, {}, timeZone);
   } catch {
     return value;
   }
@@ -50,6 +50,16 @@ const formatDuration = (ms: number | undefined) => {
   return `${hours}h ${minutes % 60}m`;
 };
 
+const sortBrowserHistoryDesc = (items: MonitorBrowserHistory[]) =>
+  [...items].sort((left, right) => {
+    const leftTime = new Date(left.timestamp || "").getTime();
+    const rightTime = new Date(right.timestamp || "").getTime();
+    if (leftTime !== rightTime) {
+      return rightTime - leftTime;
+    }
+    return String(right.id || "").localeCompare(String(left.id || ""));
+  });
+
 const MonitorBrowserHistory = () => {
   const [date, setDate] = useState(today);
   const [histories, setHistories] = useState<MonitorBrowserHistory[]>([]);
@@ -69,10 +79,13 @@ const MonitorBrowserHistory = () => {
     }
 
     try {
-      const data = await getMonitorBrowserHistory(date, { limit: INITIAL_LIMIT, offset: 0, browser: browserFilter });
-      setHistories(data.histories || []);
+      const data = await getMonitorBrowserHistory(date, { limit: INITIAL_LIMIT, offset, browser: browserFilter });
+      if (data.timezone) {
+        setTimeZone(data.timezone);
+        setOrgTimeZone(data.timezone);
+      }
+      setHistories(sortBrowserHistoryDesc(data.histories || []));
       setTotal(data.total || 0);
-      setOffset(0);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load browser history";
       toast.error(message);
@@ -83,7 +96,7 @@ const MonitorBrowserHistory = () => {
         setLoading(false);
       }
     }
-  }, [date, browserFilter]);
+  }, [date, browserFilter, offset]);
 
   useEffect(() => {
     loadHistories();
@@ -127,20 +140,26 @@ const MonitorBrowserHistory = () => {
               {/* Date Selector */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                <Input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full"
-                />
-              </div>
+                  <Input
+                    type="date"
+                    value={date}
+                  onChange={(e) => {
+                    setOffset(0);
+                    setDate(e.target.value);
+                  }}
+                    className="w-full"
+                  />
+                </div>
 
               {/* Browser Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Browser</label>
                 <select
                   value={browserFilter}
-                  onChange={(e) => setBrowserFilter(e.target.value)}
+                  onChange={(e) => {
+                    setOffset(0);
+                    setBrowserFilter(e.target.value);
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">All Browsers</option>
@@ -175,6 +194,7 @@ const MonitorBrowserHistory = () => {
             <CardContent>
               <div className="text-2xl font-bold">{total}</div>
               <p className="text-xs text-gray-500 mt-1">on {date}</p>
+              <p className="text-xs text-gray-400 mt-1">Showing in {timeZone}</p>
             </CardContent>
           </Card>
 
@@ -239,7 +259,7 @@ const MonitorBrowserHistory = () => {
                   <TableBody>
                     {filteredHistories.map((history) => (
                       <TableRow key={history.id} className="hover:bg-gray-50">
-                        <TableCell className="font-mono text-sm">{formatTime(history.timestamp)}</TableCell>
+                        <TableCell className="font-mono text-sm">{formatTime(history.timestamp, timeZone)}</TableCell>
                         <TableCell>
                           <Badge className={getBrowserColor(history.browser)}>
                             {history.browser.replace(/\.exe/i, "").toUpperCase()}
@@ -275,7 +295,7 @@ const MonitorBrowserHistory = () => {
         </Card>
 
         {/* Pagination Info */}
-        {filteredHistories.length > 0 && (
+        {total > 0 && (
           <div className="flex items-center justify-between text-sm text-gray-600">
             <div>Showing {offset + 1} to {Math.min(offset + INITIAL_LIMIT, total)} of {total} entries</div>
             {total > INITIAL_LIMIT && (

@@ -25,7 +25,7 @@ LOCK_FILE = DATA_ROOT / "activity_monitor.lock"
 LOG_FILE = DATA_ROOT.parent / "logs" / "activity_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
-HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
+DEFAULT_HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
 MAX_ACTIVITY_SECONDS = 3600
 POLL_SECONDS = 1
 STOP_EVENT = threading.Event()
@@ -81,6 +81,15 @@ def get_cursor_position() -> tuple[int, int]:
     if not ctypes.windll.user32.GetCursorPos(ctypes.byref(point)):
         raise OSError("Windows could not read the mouse cursor position")
     return point.x, point.y
+
+
+def get_heartbeat_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("mouseHeartbeatMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return DEFAULT_HEARTBEAT_SECONDS
 
 
 def get_connection() -> sqlite3.Connection:
@@ -245,8 +254,9 @@ def process_exists(pid: int) -> bool:
 def start_activity_monitor() -> None:
     """Record one-minute activity heartbeats; every record remains durable until the API accepts it."""
     device_id = get_device_id()
+    heartbeat_seconds = get_heartbeat_seconds()
     log_message(
-        f"Activity monitor started. idle_threshold={IDLE_THRESHOLD_SECONDS}s heartbeat={HEARTBEAT_SECONDS}s device={device_id}"
+        f"Activity monitor started. idle_threshold={IDLE_THRESHOLD_SECONDS}s heartbeat={heartbeat_seconds}s device={device_id}"
     )
     while True:
         try:
@@ -279,13 +289,14 @@ def start_activity_monitor() -> None:
                 last_moved_at = now
 
             next_status = "active" if now - last_moved_at < IDLE_THRESHOLD_SECONDS else "idle"
+            heartbeat_seconds = get_heartbeat_seconds()
             if next_status == "active":
                 active_seconds += elapsed
             else:
                 idle_seconds += elapsed
 
             state_changed = next_status != current_status
-            heartbeat_due = now - last_heartbeat >= HEARTBEAT_SECONDS
+            heartbeat_due = now - last_heartbeat >= heartbeat_seconds
             if state_changed or heartbeat_due:
                 queue_event(
                     device_id=device_id,

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import importlib
 import os
+import sys
 import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Callable
 
 from app.auth import DATA_ROOT, load_auth_session
@@ -23,18 +26,37 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     "keyboardEnabled": True,
     "browserHistoryEnabled": False,
 }
+DEFAULT_MONITOR_SETTINGS: dict[str, bool | int] = {
+    **DEFAULT_FEATURE_FLAGS,
+    "screenshotIntervalMinutes": 1,
+    "mouseHeartbeatMinutes": 1,
+}
 FEATURE_FLAGS_FILE = DATA_ROOT / "monitor_feature_flags.json"
+ALT_FEATURE_FLAGS_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\rigweda-monitor\data\monitor_feature_flags.json"))
 
 _state_lock = threading.Lock()
-_callbacks: list[Callable[[dict[str, bool]], None]] = []
+_callbacks: list[Callable[[dict[str, bool | int]], None]] = []
 _listener_stop_event = threading.Event()
 _listener_thread: threading.Thread | None = None
 _socket_client: socketio.Client | None = None if socketio is not None else None
-_current_flags: dict[str, bool] = dict(DEFAULT_FEATURE_FLAGS)
+_current_flags: dict[str, bool | int] = dict(DEFAULT_MONITOR_SETTINGS)
 
 
 def _hrms_backend_base_url() -> str:
-    return os.getenv("HRMS_BACKEND_URL", "https://rigweda-hrms-backend.onrender.com/api").rstrip("/")
+    configured = os.getenv("HRMS_BACKEND_URL", "").strip()
+    if configured:
+        return configured.rstrip("/")
+
+    login_url = os.getenv("HRMS_LOGIN_URL", "").strip()
+    if login_url:
+        normalized_login = login_url.rstrip("/")
+        if normalized_login.endswith("/users/login"):
+            return normalized_login[: -len("/users/login")].rstrip("/")
+        if normalized_login.endswith("/login"):
+            return normalized_login[: -len("/login")].rstrip("/")
+        return normalized_login
+
+    return "https://rigweda-hrms-backend.onrender.com/api"
 
 
 def _hrms_api_url(path: str) -> str:
@@ -79,10 +101,22 @@ def _request_json(url: str, *, token: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _load_cached_flags() -> dict[str, bool] | None:
+def _normalize_positive_minutes(value: Any, fallback: int = 1) -> int:
     try:
-        payload = json.loads(FEATURE_FLAGS_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return fallback
+    return max(parsed, 1)
+
+
+def _load_cached_flags() -> dict[str, bool | int] | None:
+    for flags_path in dict.fromkeys([FEATURE_FLAGS_FILE, ALT_FEATURE_FLAGS_FILE]):
+        try:
+            payload = json.loads(flags_path.read_text(encoding="utf-8"))
+            break
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            payload = None
+    if payload is None:
         return None
 
     if not isinstance(payload, dict):
@@ -93,6 +127,8 @@ def _load_cached_flags() -> dict[str, bool] | None:
         "mouseEnabled": bool(payload.get("mouseEnabled", True)),
         "keyboardEnabled": bool(payload.get("keyboardEnabled", True)),
         "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", False)),
+        "screenshotIntervalMinutes": _normalize_positive_minutes(payload.get("screenshotIntervalMinutes", 1), 1),
+        "mouseHeartbeatMinutes": _normalize_positive_minutes(payload.get("mouseHeartbeatMinutes", 1), 1),
     }
 
 
@@ -101,16 +137,20 @@ if _cached_flags is not None:
     _current_flags = _cached_flags
 
 
-def _save_cached_flags(flags: dict[str, bool]) -> None:
-    try:
-        DATA_ROOT.mkdir(parents=True, exist_ok=True)
-        FEATURE_FLAGS_FILE.write_text(json.dumps(flags, indent=2), encoding="utf-8")
-    except OSError:
-        pass
+def _save_cached_flags(flags: dict[str, bool | int]) -> None:
+    for flags_path in dict.fromkeys([FEATURE_FLAGS_FILE, ALT_FEATURE_FLAGS_FILE]):
+        try:
+            flags_path.parent.mkdir(parents=True, exist_ok=True)
+            flags_path.write_text(json.dumps(flags, indent=2), encoding="utf-8")
+        except OSError:
+            pass
 
 
-def _normalize_flags(payload: Any) -> dict[str, bool] | None:
-    settings = payload.get("settings") if isinstance(payload, dict) else payload
+def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
+    if isinstance(payload, dict) and isinstance(payload.get("settings"), dict):
+        settings = payload["settings"]
+    else:
+        settings = payload
     if not isinstance(settings, dict):
         return None
 
@@ -119,10 +159,12 @@ def _normalize_flags(payload: Any) -> dict[str, bool] | None:
         "mouseEnabled": bool(settings.get("mouseEnabled", True)),
         "keyboardEnabled": bool(settings.get("keyboardEnabled", True)),
         "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", False)),
+        "screenshotIntervalMinutes": _normalize_positive_minutes(settings.get("screenshotIntervalMinutes", 1), 1),
+        "mouseHeartbeatMinutes": _normalize_positive_minutes(settings.get("mouseHeartbeatMinutes", 1), 1),
     }
 
 
-def _notify_callbacks(flags: dict[str, bool]) -> None:
+def _notify_callbacks(flags: dict[str, bool | int]) -> None:
     callbacks = list(_callbacks)
     for callback in callbacks:
         try:
@@ -131,13 +173,15 @@ def _notify_callbacks(flags: dict[str, bool]) -> None:
             pass
 
 
-def _set_current_flags(flags: dict[str, bool]) -> bool:
+def _set_current_flags(flags: dict[str, bool | int]) -> bool:
     global _current_flags
     normalized = {
         "screenshotsEnabled": bool(flags.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(flags.get("mouseEnabled", True)),
         "keyboardEnabled": bool(flags.get("keyboardEnabled", True)),
         "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", False)),
+        "screenshotIntervalMinutes": _normalize_positive_minutes(flags.get("screenshotIntervalMinutes", 1), 1),
+        "mouseHeartbeatMinutes": _normalize_positive_minutes(flags.get("mouseHeartbeatMinutes", 1), 1),
     }
     with _state_lock:
         changed = normalized != _current_flags
@@ -148,22 +192,30 @@ def _set_current_flags(flags: dict[str, bool]) -> bool:
     return changed
 
 
-def get_monitor_feature_flags() -> dict[str, bool]:
+def get_monitor_feature_flags() -> dict[str, bool | int]:
     with _state_lock:
         return dict(_current_flags)
 
 
-def load_monitor_feature_flags(session: dict | None = None) -> dict[str, bool]:
+def load_monitor_feature_flags(session: dict | None = None) -> dict[str, bool | int]:
     """Backwards-compatible cache read for callers that only need the last known flags."""
     if session is not None:
         token = str(session.get("token") or "").strip()
         if token:
             refresh_monitor_feature_flags(session)
+
+    cached = _load_cached_flags()
+    if cached is not None:
+        with _state_lock:
+            global _current_flags
+            _current_flags = dict(cached)
+        return dict(cached)
+
     with _state_lock:
         return dict(_current_flags)
 
 
-def refresh_monitor_feature_flags(session: dict | None = None) -> dict[str, bool]:
+def refresh_monitor_feature_flags(session: dict | None = None) -> dict[str, bool | int]:
     """Fetch the current flags once and update local cache."""
     session = session or load_auth_session() or {}
     token = str(session.get("token") or "").strip()
@@ -191,43 +243,94 @@ def refresh_monitor_feature_flags(session: dict | None = None) -> dict[str, bool
     return get_monitor_feature_flags()
 
 
-def apply_monitor_feature_flags(flags: dict[str, bool] | None = None) -> dict[str, bool]:
+def _import_monitor_functions(module_name: str, start_name: str, stop_name: str):
+    module = sys.modules.get(module_name)
+    if module is None:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:
+            return None, None
+    return getattr(module, start_name, None), getattr(module, stop_name, None)
+
+
+def _loaded_monitor_functions(module_name: str, start_name: str, stop_name: str):
+    module = sys.modules.get(module_name)
+    if module is None:
+        return None, None
+    return getattr(module, start_name, None), getattr(module, stop_name, None)
+
+
+def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> dict[str, bool | int]:
     """Start or stop each monitor to match the current flags."""
     flags = dict(flags or get_monitor_feature_flags())
 
-    from app.screenshot_monitor import (
-        start_activity_monitor,
-        start_screenshot_monitor,
-        stop_activity_monitor,
-        stop_screenshot_monitor,
-    )
-    from app.keyboard_monitor import start_keyboard_monitor, stop_keyboard_monitor
-
     if flags.get("screenshotsEnabled", True):
-        start_screenshot_monitor()
+        start_screenshot_monitor, _ = _import_monitor_functions(
+            "app.screenshot_monitor",
+            "start_screenshot_monitor",
+            "stop_screenshot_monitor",
+        )
+        if start_screenshot_monitor is not None:
+            start_screenshot_monitor()
     else:
-        stop_screenshot_monitor()
+        _, stop_screenshot_monitor = _loaded_monitor_functions(
+            "app.screenshot_monitor",
+            "start_screenshot_monitor",
+            "stop_screenshot_monitor",
+        )
+        if stop_screenshot_monitor is not None:
+            stop_screenshot_monitor()
 
     if flags.get("mouseEnabled", True):
-        start_activity_monitor()
+        start_activity_monitor, _ = _import_monitor_functions(
+            "app.activity_monitor",
+            "start_activity_monitor",
+            "stop_activity_monitor",
+        )
+        if start_activity_monitor is not None:
+            start_activity_monitor()
     else:
-        stop_activity_monitor()
+        _, stop_activity_monitor = _loaded_monitor_functions(
+            "app.activity_monitor",
+            "start_activity_monitor",
+            "stop_activity_monitor",
+        )
+        if stop_activity_monitor is not None:
+            stop_activity_monitor()
 
     if flags.get("keyboardEnabled", True):
-        start_keyboard_monitor()
+        start_keyboard_monitor, _ = _import_monitor_functions(
+            "app.keyboard_monitor",
+            "start_keyboard_monitor",
+            "stop_keyboard_monitor",
+        )
+        if start_keyboard_monitor is not None:
+            start_keyboard_monitor()
     else:
-        stop_keyboard_monitor()
+        _, stop_keyboard_monitor = _loaded_monitor_functions(
+            "app.keyboard_monitor",
+            "start_keyboard_monitor",
+            "stop_keyboard_monitor",
+        )
+        if stop_keyboard_monitor is not None:
+            stop_keyboard_monitor()
 
-    try:
-        from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
-    except Exception:
-        start_browser_monitor = None  # type: ignore[assignment]
-        stop_browser_monitor = None  # type: ignore[assignment]
-
-    if flags.get("browserHistoryEnabled", False) and start_browser_monitor is not None:
-        start_browser_monitor()
-    elif stop_browser_monitor is not None:
-        stop_browser_monitor()
+    if flags.get("browserHistoryEnabled", False):
+        start_browser_monitor, _ = _import_monitor_functions(
+            "app.browser_history_monitor",
+            "start_browser_monitor",
+            "stop_browser_monitor",
+        )
+        if start_browser_monitor is not None:
+            start_browser_monitor()
+    else:
+        _, stop_browser_monitor = _loaded_monitor_functions(
+            "app.browser_history_monitor",
+            "start_browser_monitor",
+            "stop_browser_monitor",
+        )
+        if stop_browser_monitor is not None:
+            stop_browser_monitor()
 
     return flags
 
@@ -308,9 +411,22 @@ def start_monitor_settings_listener(
         if on_change is not None and on_change not in _callbacks:
             _callbacks.append(on_change)
 
-    current_flags = refresh_monitor_feature_flags(session)
+    current_flags = load_monitor_feature_flags(None)
     if on_change is not None:
-        on_change(dict(current_flags))
+        threading.Thread(
+            target=on_change,
+            args=(dict(current_flags),),
+            name="MonitorSettingsApply",
+            daemon=True,
+        ).start()
+
+    if token:
+        threading.Thread(
+            target=refresh_monitor_feature_flags,
+            args=(session,),
+            name="MonitorSettingsRefresh",
+            daemon=True,
+        ).start()
 
     if not token or socketio is None:
         return current_flags
