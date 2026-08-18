@@ -8,7 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 # Low-level Windows hooks for process tracking
 import win32gui
@@ -64,8 +64,8 @@ def get_device_id() -> str:
 
 
 def _chrome_history_cutoff_microseconds(hours: int = 1) -> int:
-    chrome_epoch = datetime(1601, 1, 1)
-    now = datetime.utcnow()
+    chrome_epoch = datetime(1601, 1, 1, tzinfo=UTC)
+    now = datetime.now(UTC)
     total_seconds = (now - chrome_epoch).total_seconds()
     return int((total_seconds - (hours * 3600)) * 1_000_000)
 
@@ -97,7 +97,8 @@ def _copy_sqlite_database_with_sidecars(source: Path, destination: Path) -> None
 
 
 def _format_timestamp_text(value: datetime) -> str:
-    return value.isoformat(sep="T", timespec="microseconds")
+    timestamp = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return timestamp.astimezone(UTC).isoformat(sep="T", timespec="microseconds").replace("+00:00", "Z")
 
 
 def _parse_timestamp_text(value: str) -> datetime | None:
@@ -107,13 +108,15 @@ def _parse_timestamp_text(value: str) -> datetime | None:
 
     normalized = text.replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(normalized)
+        parsed = datetime.fromisoformat(normalized)
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
     except ValueError:
         pass
 
     for timestamp_format in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.strptime(text, timestamp_format)
+            parsed = datetime.strptime(text, timestamp_format)
+            return parsed.replace(tzinfo=UTC)
         except ValueError:
             continue
     return None
@@ -152,7 +155,7 @@ def _get_chrome_history() -> list[dict]:
                     for row in cursor.fetchall():
                         url, title, visit_time, duration = row
                         if url and visit_time:
-                            chrome_epoch = datetime(1601, 1, 1)
+                            chrome_epoch = datetime(1601, 1, 1, tzinfo=UTC)
                             timestamp = chrome_epoch + timedelta(microseconds=visit_time)
                             history_entries.append({
                                 "url": url,
@@ -209,7 +212,7 @@ def _get_firefox_history() -> list[dict]:
                 for row in cursor.fetchall():
                     url, title, visit_date = row
                     if url and visit_date:
-                        timestamp = datetime.fromtimestamp(visit_date / 1000000)
+                        timestamp = datetime.fromtimestamp(visit_date / 1000000, tz=UTC)
                         history_entries.append({
                             "url": url,
                             "title": title or "",
@@ -261,7 +264,7 @@ def _get_edge_history() -> list[dict]:
                 for row in cursor.fetchall():
                     url, title, visit_time, duration = row
                     if url and visit_time:
-                        chrome_epoch = datetime(1601, 1, 1)
+                        chrome_epoch = datetime(1601, 1, 1, tzinfo=UTC)
                         timestamp = chrome_epoch + timedelta(microseconds=visit_time)
                         history_entries.append({
                             "url": url,

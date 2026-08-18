@@ -15,8 +15,15 @@ const normalizeDurationMs = (value) => {
   return Math.min(Math.round(duration), 86_400_000);
 };
 
+const isExplicitDateTimeString = (value) => /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(?:\.\d{1,6})?)?$/.test(String(value || "").trim());
+
+const hasTimeZoneDesignator = (value) => /([zZ]|[+-]\d{2}:?\d{2})$/.test(String(value || "").trim());
+
 const normalizeObservedAt = (value) => {
-  const timestamp = new Date(String(value || ""));
+  const raw = String(value || "").trim();
+  const timestamp = isExplicitDateTimeString(raw) && !hasTimeZoneDesignator(raw)
+    ? new Date(`${raw.replace(" ", "T")}Z`)
+    : new Date(raw);
   if (Number.isNaN(timestamp.getTime())) {
     throw new Error("Each browser history entry must include a valid observedAt timestamp.");
   }
