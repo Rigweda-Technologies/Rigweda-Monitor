@@ -39,6 +39,15 @@ TARGET_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.ex
 ENABLE_LOCAL_KEY_TRACE = os.getenv("RIGWEDA_MONITOR_LOCAL_KEY_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _backend_url_candidates() -> list[str]:
+    """Prefer the configured desktop backend, then fall back to hosted service."""
+    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    candidates = [DESKTOP_BACKEND_URL]
+    if DESKTOP_BACKEND_URL != hosted:
+        candidates.append(hosted)
+    return list(dict.fromkeys(candidates))
+
+
 def utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -410,7 +419,6 @@ class KeyboardUsageMonitor:
             log_message("Keyboard app usage sync skipped: no saved token.")
             return False
 
-        endpoint = f"{DESKTOP_BACKEND_URL}/app-usage/batch"
         payload = {
             "events": [
                 {
@@ -430,48 +438,52 @@ class KeyboardUsageMonitor:
                 for row in rows
             ]
         }
-
-        request = urllib.request.Request(
-            endpoint,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
-            method="POST",
-        )
         session_ids = [row["session_id"] for row in rows]
+        errors: list[str] = []
+        candidates = _backend_url_candidates()
 
-        try:
-            with urllib.request.urlopen(request, timeout=30):
-                pass
-        except urllib.error.HTTPError as error:
-            error_body = ""
+        for backend_url in candidates:
+            endpoint = f"{backend_url}/app-usage/batch"
+            request = urllib.request.Request(
+                endpoint,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+                method="POST",
+            )
             try:
-                error_body = error.read().decode("utf-8", "replace").strip()
-            except Exception:
+                with urllib.request.urlopen(request, timeout=30):
+                    pass
+                try:
+                    self._mark_sessions(session_ids, status="synced")
+                except Exception as error:
+                    log_exception("Keyboard app usage sync succeeded but local cleanup failed.", error)
+                    return False
+                if backend_url != candidates[0]:
+                    log_message(
+                        f"Keyboard app usage sync completed via fallback backend {backend_url}: {len(session_ids)} session(s)."
+                    )
+                else:
+                    log_message(f"Keyboard app usage sync completed: {len(session_ids)} session(s).")
+                return True
+            except urllib.error.HTTPError as error:
                 error_body = ""
-            detail = f"{error} {error_body}".strip()
-            self._mark_sessions(session_ids, status="failed", error=detail[:1000])
-            log_exception(
-                f"Keyboard app usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
-                error,
-            )
-            if error_body:
-                log_message(f"Keyboard app usage sync response body: {error_body[:2000]}")
-            return False
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            self._mark_sessions(session_ids, status="failed", error=str(error)[:1000])
-            log_exception(
-                f"Keyboard app usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
-                error,
-            )
-            return False
+                try:
+                    error_body = error.read().decode("utf-8", "replace").strip()
+                except Exception:
+                    error_body = ""
+                detail = f"{error} {error_body}".strip()
+                errors.append(f"{backend_url}: {detail}")
+                if error_body:
+                    log_message(f"Keyboard app usage sync response body: {error_body[:2000]}")
+            except (urllib.error.URLError, TimeoutError, OSError) as error:
+                errors.append(f"{backend_url}: {error}")
 
-        try:
-            self._mark_sessions(session_ids, status="synced")
-        except Exception as error:
-            log_exception("Keyboard app usage sync succeeded but local cleanup failed.", error)
-            return False
-        log_message(f"Keyboard app usage sync completed: {len(session_ids)} session(s).")
-        return True
+        self._mark_sessions(session_ids, status="failed", error=(" | ".join(errors) or "sync failed")[:1000])
+        log_exception(
+            f"Keyboard app usage sync failed for {len(rows)} session(s) to any backend. {_summarize_sessions(rows)}",
+            RuntimeError(" | ".join(errors) or "Keyboard app usage sync failed"),
+        )
+        return False
 
     def _write_header(self, *, app_name: str, process_name: str, title: str) -> None:
         if not ENABLE_LOCAL_KEY_TRACE:

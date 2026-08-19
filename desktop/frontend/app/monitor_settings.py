@@ -24,6 +24,7 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     "screenshotsEnabled": True,
     "mouseEnabled": True,
     "keyboardEnabled": True,
+    "appUsageEnabled": True,
     "browserHistoryEnabled": False,
 }
 DEFAULT_MONITOR_SETTINGS: dict[str, bool | int] = {
@@ -40,6 +41,10 @@ _listener_stop_event = threading.Event()
 _listener_thread: threading.Thread | None = None
 _socket_client: socketio.Client | None = None if socketio is not None else None
 _current_flags: dict[str, bool | int] = dict(DEFAULT_MONITOR_SETTINGS)
+
+
+def _force_keyboard_enabled() -> bool:
+    return os.getenv("RIGWEDA_MONITOR_FORCE_KEYBOARD_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _hrms_backend_base_url() -> str:
@@ -125,7 +130,8 @@ def _load_cached_flags() -> dict[str, bool | int] | None:
     return {
         "screenshotsEnabled": bool(payload.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(payload.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)),
+        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "appUsageEnabled": bool(payload.get("appUsageEnabled", True)),
         "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", False)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(payload.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(payload.get("mouseHeartbeatMinutes", 1), 1),
@@ -157,7 +163,8 @@ def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
     return {
         "screenshotsEnabled": bool(settings.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(settings.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)),
+        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "appUsageEnabled": bool(settings.get("appUsageEnabled", True)),
         "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", False)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(settings.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(settings.get("mouseHeartbeatMinutes", 1), 1),
@@ -178,7 +185,8 @@ def _set_current_flags(flags: dict[str, bool | int]) -> bool:
     normalized = {
         "screenshotsEnabled": bool(flags.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(flags.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)),
+        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "appUsageEnabled": bool(flags.get("appUsageEnabled", True)),
         "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", False)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(flags.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(flags.get("mouseHeartbeatMinutes", 1), 1),
@@ -314,6 +322,23 @@ def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> d
         )
         if stop_keyboard_monitor is not None:
             stop_keyboard_monitor()
+
+    if flags.get("appUsageEnabled", True):
+        start_app_usage_monitor, _ = _import_monitor_functions(
+            "app.screenshot_monitor",
+            "start_app_usage_monitor",
+            "stop_app_usage_monitor",
+        )
+        if start_app_usage_monitor is not None:
+            start_app_usage_monitor()
+    else:
+        _, stop_app_usage_monitor = _loaded_monitor_functions(
+            "app.screenshot_monitor",
+            "start_app_usage_monitor",
+            "stop_app_usage_monitor",
+        )
+        if stop_app_usage_monitor is not None:
+            stop_app_usage_monitor()
 
     if flags.get("browserHistoryEnabled", False):
         start_browser_monitor, _ = _import_monitor_functions(

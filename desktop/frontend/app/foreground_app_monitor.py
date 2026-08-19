@@ -18,6 +18,7 @@ from pathlib import Path
 
 from app.auth import load_auth_session
 from app.env import writable_runtime_path
+from app.monitor_settings import get_monitor_feature_flags
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 KEYBOARD_KEY_MIN = 8
@@ -29,6 +30,7 @@ LOG_FILE = DATA_ROOT.parent / "logs" / "app_usage_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 1
 HEARTBEAT_SECONDS = max(int(os.getenv("APP_USAGE_HEARTBEAT_SECONDS", "60")), 15)
+STOP_EVENT = threading.Event()
 
 
 def utc_now() -> str:
@@ -276,8 +278,6 @@ def sync_pending_sessions() -> bool:
         log_message("App usage sync skipped: no saved token.")
         return False
 
-    backend_url = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    endpoint = f"{backend_url}/app-usage/batch"
     payload = {
         "events": [
             {
@@ -295,49 +295,65 @@ def sync_pending_sessions() -> bool:
             for row in rows
         ]
     }
-    request = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
-        method="POST",
-    )
     ids = [row["session_id"] for row in rows]
-    try:
-        with urllib.request.urlopen(request, timeout=30):
-            pass
-    except urllib.error.HTTPError as error:
-        error_body = ""
-        try:
-            error_body = error.read().decode("utf-8", "replace").strip()
-        except Exception:
-            error_body = ""
-        detail = f"{error} {error_body}".strip()
-        mark_sessions(ids, status="failed", error=detail[:1000])
-        log_exception(
-            f"App usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
-            error,
-        )
-        if error_body:
-            log_message(f"App usage sync response body: {error_body[:2000]}")
-        return False
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        mark_sessions(ids, status="failed", error=str(error)[:1000])
-        log_exception(
-            f"App usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
-            error,
-        )
-        return False
+    configured = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    backend_urls = [configured]
+    if configured != hosted:
+        backend_urls.append(hosted)
 
-    try:
-        mark_sessions(ids, status="synced")
-    except Exception as error:
-        log_exception("App usage sync succeeded but local cleanup failed.", error)
-        return False
-    log_message(f"App usage sync completed: {len(ids)} session(s).")
-    return True
+    errors: list[str] = []
+    for backend_url in dict.fromkeys(backend_urls):
+        endpoint = f"{backend_url}/app-usage/batch"
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30):
+                pass
+            try:
+                mark_sessions(ids, status="synced")
+            except Exception as error:
+                log_exception("App usage sync succeeded but local cleanup failed.", error)
+                return False
+            if backend_url != backend_urls[0]:
+                log_message(f"App usage sync completed via fallback backend {backend_url}: {len(ids)} session(s).")
+            else:
+                log_message(f"App usage sync completed: {len(ids)} session(s).")
+            return True
+        except urllib.error.HTTPError as error:
+            error_body = ""
+            try:
+                error_body = error.read().decode("utf-8", "replace").strip()
+            except Exception:
+                error_body = ""
+            detail = f"{error} {error_body}".strip()
+            errors.append(f"{backend_url}: {detail}")
+            if error_body:
+                log_message(f"App usage sync response body: {error_body[:2000]}")
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            errors.append(f"{backend_url}: {error}")
+
+    mark_sessions(ids, status="failed", error=(" | ".join(errors) or "sync failed")[:1000])
+    log_exception(
+        f"App usage sync failed for {len(rows)} session(s) to any backend. {_summarize_sessions(rows)}",
+        RuntimeError(" | ".join(errors) or "App usage sync failed"),
+    )
+    return False
 
 
 def start_foreground_app_monitor() -> None:
+    if STOP_EVENT.is_set():
+        STOP_EVENT.clear()
+
+    flags = get_monitor_feature_flags()
+    if not flags.get("appUsageEnabled", True):
+        log_message("Foreground app monitor is disabled by Employee Monitor settings.")
+        return
+
     device_id = get_device_id()
     log_message(f"Foreground app monitor started. heartbeat={HEARTBEAT_SECONDS}s device={device_id}")
 
@@ -393,8 +409,9 @@ def start_foreground_app_monitor() -> None:
         session_last_flush = time.monotonic()
 
     try:
-        while True:
-            time.sleep(POLL_SECONDS)
+        while not STOP_EVENT.is_set():
+            if STOP_EVENT.wait(POLL_SECONDS):
+                break
             now = time.monotonic()
             elapsed = max(now - session_last_tick, 0)
             session_last_tick = now
@@ -447,6 +464,7 @@ def start_foreground_app_monitor() -> None:
 
 
 def main() -> int:
+    STOP_EVENT.clear()
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     try:
         lock_handle = LOCK_FILE.open("x", encoding="utf-8")
@@ -477,7 +495,12 @@ def main() -> int:
     return 0
 
 
+def stop_foreground_app_monitor() -> None:
+    STOP_EVENT.set()
+
+
 def run_monitor() -> int:
+    STOP_EVENT.clear()
     start_foreground_app_monitor()
     return 0
 

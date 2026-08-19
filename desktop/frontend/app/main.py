@@ -76,8 +76,15 @@ def _resume_monitor_in_background() -> int:
         "Monitor settings listener started with "
         f"screenshots={flags.get('screenshotsEnabled', True)} "
         f"mouse={flags.get('mouseEnabled', True)} "
-        f"keyboard={flags.get('keyboardEnabled', True)}"
+        f"keyboard={flags.get('keyboardEnabled', True)} "
+        f"appUsage={flags.get('appUsageEnabled', True)}"
     )
+
+    try:
+        apply_monitor_feature_flags(flags)
+        _log_startup("Initial monitor workers were applied from cached settings.")
+    except Exception as e:
+        _log_startup(f"Failed to apply initial monitor workers: {str(e)}")
 
     # Added automated browser monitor tracking to background startup routines too
     try:
@@ -129,7 +136,8 @@ def main() -> None:
                 "Initial monitor settings loaded: "
                 f"screenshots={flags.get('screenshotsEnabled', True)} "
                 f"mouse={flags.get('mouseEnabled', True)} "
-                f"keyboard={flags.get('keyboardEnabled', True)}"
+                f"keyboard={flags.get('keyboardEnabled', True)} "
+                f"appUsage={flags.get('appUsageEnabled', True)}"
             )
         except Exception as error:
             _log_startup(f"Failed to initialize monitor settings listener: {str(error)}")
