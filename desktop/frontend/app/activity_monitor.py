@@ -31,6 +31,16 @@ POLL_SECONDS = 1
 STOP_EVENT = threading.Event()
 
 
+def _backend_url_candidates() -> list[str]:
+    """Prefer the configured desktop backend, then fall back to hosted service."""
+    configured = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    candidates = [configured]
+    if configured != hosted:
+        candidates.append(hosted)
+    return list(dict.fromkeys(candidates))
+
+
 def log_message(message: object, *, exc_info: bool = False) -> None:
     try:
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -183,46 +193,51 @@ def sync_pending_events() -> bool:
     if not token:
         log_message("Activity sync skipped: no saved token.")
         return False
-    backend_url = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    endpoint = f"{backend_url}/activity-events/batch"
     payload = {"events": [_sanitize_event_row(row) for row in rows]}
-    request = urllib.request.Request(
-        endpoint, data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"}, method="POST",
-    )
     ids = [row["event_id"] for row in rows]
-    try:
-        with urllib.request.urlopen(request, timeout=30):
-            pass
-    except urllib.error.HTTPError as error:
-        response_body = ""
+    errors: list[str] = []
+    candidates = _backend_url_candidates()
+
+    for backend_url in candidates:
+        endpoint = f"{backend_url}/activity-events/batch"
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            method="POST",
+        )
         try:
-            response_body = error.read().decode("utf-8", "replace").strip()
-        except Exception:
+            with urllib.request.urlopen(request, timeout=30):
+                pass
+            try:
+                mark_events(ids, status="synced")
+            except Exception as error:
+                log_exception("Activity sync succeeded but local cleanup failed.", error)
+                return False
+            if backend_url != candidates[0]:
+                log_message(f"Activity sync completed via fallback backend {backend_url}: {len(ids)} event(s).")
+            else:
+                log_message(f"Activity sync completed: {len(ids)} event(s).")
+            return True
+        except urllib.error.HTTPError as error:
             response_body = ""
-        detail = f"{error} {response_body}".strip()
-        mark_events(ids, status="failed", error=detail[:1000])
-        log_exception(
-            f"Activity sync failed for {len(rows)} event(s) to {endpoint}. {_summarize_events(rows)}",
-            error,
-        )
-        if response_body:
-            log_message(f"Activity sync response body: {response_body[:2000]}")
-        return False
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        mark_events(ids, status="failed", error=str(error)[:1000])
-        log_exception(
-            f"Activity sync failed for {len(rows)} event(s) to {endpoint}. {_summarize_events(rows)}",
-            error,
-        )
-        return False
-    try:
-        mark_events(ids, status="synced")
-    except Exception as error:
-        log_exception("Activity sync succeeded but local cleanup failed.", error)
-        return False
-    log_message(f"Activity sync completed: {len(ids)} event(s).")
-    return True
+            try:
+                response_body = error.read().decode("utf-8", "replace").strip()
+            except Exception:
+                response_body = ""
+            detail = f"{error} {response_body}".strip()
+            errors.append(f"{backend_url}: {detail}")
+            if response_body:
+                log_message(f"Activity sync response body: {response_body[:2000]}")
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            errors.append(f"{backend_url}: {error}")
+
+    mark_events(ids, status="failed", error=(" | ".join(errors) or "sync failed")[:1000])
+    log_exception(
+        f"Activity sync failed for {len(rows)} event(s) to any backend. {_summarize_events(rows)}",
+        RuntimeError(" | ".join(errors) or "Activity sync failed"),
+    )
+    return False
 
 
 def process_exists(pid: int) -> bool:

@@ -42,6 +42,10 @@ _socket_client: socketio.Client | None = None if socketio is not None else None
 _current_flags: dict[str, bool | int] = dict(DEFAULT_MONITOR_SETTINGS)
 
 
+def _force_keyboard_enabled() -> bool:
+    return os.getenv("RIGWEDA_MONITOR_FORCE_KEYBOARD_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _hrms_backend_base_url() -> str:
     configured = os.getenv("HRMS_BACKEND_URL", "").strip()
     if configured:
@@ -125,7 +129,7 @@ def _load_cached_flags() -> dict[str, bool | int] | None:
     return {
         "screenshotsEnabled": bool(payload.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(payload.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)),
+        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
         "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", False)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(payload.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(payload.get("mouseHeartbeatMinutes", 1), 1),
@@ -157,7 +161,7 @@ def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
     return {
         "screenshotsEnabled": bool(settings.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(settings.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)),
+        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
         "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", False)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(settings.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(settings.get("mouseHeartbeatMinutes", 1), 1),
@@ -178,7 +182,7 @@ def _set_current_flags(flags: dict[str, bool | int]) -> bool:
     normalized = {
         "screenshotsEnabled": bool(flags.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(flags.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)),
+        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
         "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", False)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(flags.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(flags.get("mouseHeartbeatMinutes", 1), 1),
