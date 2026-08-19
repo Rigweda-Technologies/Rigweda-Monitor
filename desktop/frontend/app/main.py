@@ -76,7 +76,8 @@ def _resume_monitor_in_background() -> int:
         "Monitor settings listener started with "
         f"screenshots={flags.get('screenshotsEnabled', True)} "
         f"mouse={flags.get('mouseEnabled', True)} "
-        f"keyboard={flags.get('keyboardEnabled', True)}"
+        f"keyboard={flags.get('keyboardEnabled', True)} "
+        f"appUsage={flags.get('appUsageEnabled', True)}"
     )
 
     try:
@@ -135,7 +136,8 @@ def main() -> None:
                 "Initial monitor settings loaded: "
                 f"screenshots={flags.get('screenshotsEnabled', True)} "
                 f"mouse={flags.get('mouseEnabled', True)} "
-                f"keyboard={flags.get('keyboardEnabled', True)}"
+                f"keyboard={flags.get('keyboardEnabled', True)} "
+                f"appUsage={flags.get('appUsageEnabled', True)}"
             )
         except Exception as error:
             _log_startup(f"Failed to initialize monitor settings listener: {str(error)}")

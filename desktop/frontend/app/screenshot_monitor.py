@@ -11,6 +11,7 @@ from pathlib import Path
 from app.env import writable_runtime_path
 from app.activity_monitor import main as activity_main
 from app.foreground_app_monitor import run_monitor as app_usage_run_monitor
+from app.foreground_app_monitor import stop_foreground_app_monitor as app_usage_stop_monitor
 from app.monitor_settings import get_monitor_feature_flags
 from src.screenshots.screenshot import run_monitor as screenshot_run_monitor
 
@@ -109,6 +110,10 @@ def start_app_usage_monitor() -> tuple[bool, str]:
     """Launch foreground app tracking in the current desktop process."""
     global _APP_USAGE_THREAD
 
+    flags = get_monitor_feature_flags()
+    if not flags.get("appUsageEnabled", True):
+        return False, "App usage monitor is disabled by Employee Monitor settings."
+
     with _STATE_LOCK:
         if _thread_is_running(_APP_USAGE_THREAD):
             return True, "App usage monitor is already running."
@@ -118,6 +123,13 @@ def start_app_usage_monitor() -> tuple[bool, str]:
         thread.start()
 
     return True, "App usage monitor started."
+
+
+def stop_app_usage_monitor() -> None:
+    try:
+        app_usage_stop_monitor()
+    except Exception:
+        pass
 
 
 def stop_screenshot_monitor() -> None:

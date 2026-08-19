@@ -18,6 +18,7 @@ from pathlib import Path
 
 from app.auth import load_auth_session
 from app.env import writable_runtime_path
+from app.monitor_settings import get_monitor_feature_flags
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 KEYBOARD_KEY_MIN = 8
@@ -29,6 +30,7 @@ LOG_FILE = DATA_ROOT.parent / "logs" / "app_usage_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 1
 HEARTBEAT_SECONDS = max(int(os.getenv("APP_USAGE_HEARTBEAT_SECONDS", "60")), 15)
+STOP_EVENT = threading.Event()
 
 
 def utc_now() -> str:
@@ -344,6 +346,14 @@ def sync_pending_sessions() -> bool:
 
 
 def start_foreground_app_monitor() -> None:
+    if STOP_EVENT.is_set():
+        STOP_EVENT.clear()
+
+    flags = get_monitor_feature_flags()
+    if not flags.get("appUsageEnabled", True):
+        log_message("Foreground app monitor is disabled by Employee Monitor settings.")
+        return
+
     device_id = get_device_id()
     log_message(f"Foreground app monitor started. heartbeat={HEARTBEAT_SECONDS}s device={device_id}")
 
@@ -399,8 +409,9 @@ def start_foreground_app_monitor() -> None:
         session_last_flush = time.monotonic()
 
     try:
-        while True:
-            time.sleep(POLL_SECONDS)
+        while not STOP_EVENT.is_set():
+            if STOP_EVENT.wait(POLL_SECONDS):
+                break
             now = time.monotonic()
             elapsed = max(now - session_last_tick, 0)
             session_last_tick = now
@@ -453,6 +464,7 @@ def start_foreground_app_monitor() -> None:
 
 
 def main() -> int:
+    STOP_EVENT.clear()
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     try:
         lock_handle = LOCK_FILE.open("x", encoding="utf-8")
@@ -483,7 +495,12 @@ def main() -> int:
     return 0
 
 
+def stop_foreground_app_monitor() -> None:
+    STOP_EVENT.set()
+
+
 def run_monitor() -> int:
+    STOP_EVENT.clear()
     start_foreground_app_monitor()
     return 0
 
