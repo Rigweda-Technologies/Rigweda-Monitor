@@ -23,6 +23,7 @@ const validatePayload = (body) => {
   const screenshotsEnabled = parseBoolean(body.screenshotsEnabled, true);
   const mouseEnabled = parseBoolean(body.mouseEnabled, true);
   const keyboardEnabled = parseBoolean(body.keyboardEnabled, true);
+  const appUsageEnabled = parseBoolean(body.appUsageEnabled, true);
   const browserHistoryEnabled = parseBoolean(body.browserHistoryEnabled, false);
   const screenshotIntervalMinutes = Math.max(Math.trunc(Number(body.screenshotIntervalMinutes) || 1), 1);
   const mouseHeartbeatMinutes = Math.max(Math.trunc(Number(body.mouseHeartbeatMinutes) || 1), 1);
@@ -39,6 +40,7 @@ const validatePayload = (body) => {
     screenshotsEnabled,
     mouseEnabled,
     keyboardEnabled,
+    appUsageEnabled,
     browserHistoryEnabled,
     screenshotIntervalMinutes,
     mouseHeartbeatMinutes

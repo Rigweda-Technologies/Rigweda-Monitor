@@ -459,6 +459,8 @@ class LoginApp:
             enabled_labels.append("mouse activity")
         if flags.get("keyboardEnabled", True):
             enabled_labels.append("keyboard")
+        if flags.get("appUsageEnabled", True):
+            enabled_labels.append("app usage")
 
         if enabled_labels:
             self._set_status(

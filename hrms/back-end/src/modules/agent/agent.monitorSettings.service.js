@@ -14,6 +14,7 @@ const TABLE_SQL = `
     screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    app_usage_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     screenshot_interval_minutes INTEGER NOT NULL DEFAULT 1,
     mouse_heartbeat_minutes INTEGER NOT NULL DEFAULT 1,
@@ -89,6 +90,9 @@ const getPoolOrThrow = async () => {
   if (!columns.has("keyboard_enabled")) {
     alterStatements.push("ADD COLUMN keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE");
   }
+  if (!columns.has("app_usage_enabled")) {
+    alterStatements.push("ADD COLUMN app_usage_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  }
   if (!columns.has("browser_history_enabled")) {
     alterStatements.push("ADD COLUMN browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE");
   }
@@ -131,6 +135,7 @@ const toPublicSettings = (row, secret) => row && ({
   screenshotsEnabled: row.screenshots_enabled ?? true,
   mouseEnabled: row.mouse_enabled ?? true,
   keyboardEnabled: row.keyboard_enabled ?? true,
+  appUsageEnabled: row.app_usage_enabled ?? true,
   browserHistoryEnabled: row.browser_history_enabled ?? false,
   screenshotIntervalMinutes: normalizeMinutes(row.screenshot_interval_minutes, 1),
   mouseHeartbeatMinutes: normalizeMinutes(row.mouse_heartbeat_minutes, 1),
@@ -153,6 +158,7 @@ const getRawSettings = async (organizationId) => {
     screenshotsEnabled: row.screenshots_enabled ?? true,
     mouseEnabled: row.mouse_enabled ?? true,
     keyboardEnabled: row.keyboard_enabled ?? true,
+    appUsageEnabled: row.app_usage_enabled ?? true,
     browserHistoryEnabled: row.browser_history_enabled ?? false,
     screenshotIntervalMinutes: normalizeMinutes(row.screenshot_interval_minutes, 1),
     mouseHeartbeatMinutes: normalizeMinutes(row.mouse_heartbeat_minutes, 1),
@@ -188,10 +194,10 @@ const saveSettings = async (organizationId, payload) => {
       INSERT INTO monitor_cloudinary_settings (
         organization_id, cloud_name, api_key, api_secret_ciphertext,
         api_secret_iv, api_secret_auth_tag, upload_folder_root,
-        screenshots_enabled, mouse_enabled, keyboard_enabled, browser_history_enabled,
+        screenshots_enabled, mouse_enabled, keyboard_enabled, app_usage_enabled, browser_history_enabled,
         screenshot_interval_minutes, mouse_heartbeat_minutes
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (organization_id)
       DO UPDATE SET
         cloud_name = EXCLUDED.cloud_name,
@@ -203,6 +209,7 @@ const saveSettings = async (organizationId, payload) => {
         screenshots_enabled = EXCLUDED.screenshots_enabled,
         mouse_enabled = EXCLUDED.mouse_enabled,
         keyboard_enabled = EXCLUDED.keyboard_enabled,
+        app_usage_enabled = EXCLUDED.app_usage_enabled,
         browser_history_enabled = EXCLUDED.browser_history_enabled,
         screenshot_interval_minutes = EXCLUDED.screenshot_interval_minutes,
         mouse_heartbeat_minutes = EXCLUDED.mouse_heartbeat_minutes,
@@ -220,6 +227,7 @@ const saveSettings = async (organizationId, payload) => {
       normalizeBoolean(payload.screenshotsEnabled, true),
       normalizeBoolean(payload.mouseEnabled, true),
       normalizeBoolean(payload.keyboardEnabled, true),
+      normalizeBoolean(payload.appUsageEnabled, true),
       normalizeBoolean(payload.browserHistoryEnabled, false),
       normalizeMinutes(payload.screenshotIntervalMinutes, 1),
       normalizeMinutes(payload.mouseHeartbeatMinutes, 1)

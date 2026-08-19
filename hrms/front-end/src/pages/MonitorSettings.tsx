@@ -6,6 +6,7 @@ import {
   FolderTree,
   Globe,
   Keyboard,
+  Monitor,
   MousePointer2,
   RefreshCw,
   Save,
@@ -27,7 +28,7 @@ import {
 } from "@/services/monitorActivity";
 import { toast } from "sonner";
 
-type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled" | "browserHistoryEnabled";
+type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled" | "appUsageEnabled" | "browserHistoryEnabled";
 
 type MonitorSettingsForm = {
   cloudName: string;
@@ -38,6 +39,7 @@ type MonitorSettingsForm = {
   screenshotsEnabled: boolean;
   mouseEnabled: boolean;
   keyboardEnabled: boolean;
+  appUsageEnabled: boolean;
   browserHistoryEnabled: boolean;
   screenshotIntervalMinutes: number;
   mouseHeartbeatMinutes: number;
@@ -64,6 +66,11 @@ const MONITOR_CONTROLS: Array<{
     description: "Track app-scoped key usage sessions.",
   },
   {
+    key: "appUsageEnabled",
+    label: "App usage",
+    description: "Track foreground application usage sessions.",
+  },
+  {
     key: "browserHistoryEnabled",
     label: "Browser history",
     description: "Record approved browser navigation activity.",
@@ -80,6 +87,7 @@ const MonitorSettings = () => {
     screenshotsEnabled: true,
     mouseEnabled: true,
     keyboardEnabled: true,
+    appUsageEnabled: true,
     browserHistoryEnabled: false,
     screenshotIntervalMinutes: 1,
     mouseHeartbeatMinutes: 1
@@ -88,7 +96,7 @@ const MonitorSettings = () => {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const hasSecret = Boolean(form.apiSecret.trim() || form.apiSecretMasked);
-  const enabledCount = [form.screenshotsEnabled, form.mouseEnabled, form.keyboardEnabled, form.browserHistoryEnabled].filter(Boolean).length;
+  const enabledCount = [form.screenshotsEnabled, form.mouseEnabled, form.keyboardEnabled, form.appUsageEnabled, form.browserHistoryEnabled].filter(Boolean).length;
   const totalControls = MONITOR_CONTROLS.length;
 
   useEffect(() => {
@@ -105,6 +113,7 @@ const MonitorSettings = () => {
             screenshotsEnabled: settings.screenshotsEnabled ?? true,
             mouseEnabled: settings.mouseEnabled ?? true,
             keyboardEnabled: settings.keyboardEnabled ?? true,
+            appUsageEnabled: settings.appUsageEnabled ?? true,
             browserHistoryEnabled: settings.browserHistoryEnabled ?? false,
             screenshotIntervalMinutes: Math.max(Number(settings.screenshotIntervalMinutes || 1), 1),
             mouseHeartbeatMinutes: Math.max(Number(settings.mouseHeartbeatMinutes || 1), 1)
@@ -126,6 +135,7 @@ const MonitorSettings = () => {
     screenshotsEnabled: form.screenshotsEnabled,
     mouseEnabled: form.mouseEnabled,
     keyboardEnabled: form.keyboardEnabled,
+    appUsageEnabled: form.appUsageEnabled,
     browserHistoryEnabled: form.browserHistoryEnabled,
     screenshotIntervalMinutes: form.screenshotIntervalMinutes,
     mouseHeartbeatMinutes: form.mouseHeartbeatMinutes
@@ -268,6 +278,8 @@ const MonitorSettings = () => {
                       ? MousePointer2
                       : item.key === "keyboardEnabled"
                         ? Keyboard
+                        : item.key === "appUsageEnabled"
+                          ? Monitor
                         : Globe;
                   return (
                     <div
@@ -398,6 +410,7 @@ const MonitorSettings = () => {
                       helper: `Idle vs active cursor tracking every ${form.mouseHeartbeatMinutes} minute(s).`,
                     },
                     { label: "Keyboard activity", enabled: form.keyboardEnabled, helper: "App-scoped key usage sessions." },
+                    { label: "App usage", enabled: form.appUsageEnabled, helper: "Foreground application sessions." },
                     { label: "Browser history", enabled: form.browserHistoryEnabled, helper: "Approved navigation activity." },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
