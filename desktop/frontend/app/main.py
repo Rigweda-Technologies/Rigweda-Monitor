@@ -79,6 +79,12 @@ def _resume_monitor_in_background() -> int:
         f"keyboard={flags.get('keyboardEnabled', True)}"
     )
 
+    try:
+        apply_monitor_feature_flags(flags)
+        _log_startup("Initial monitor workers were applied from cached settings.")
+    except Exception as e:
+        _log_startup(f"Failed to apply initial monitor workers: {str(e)}")
+
     # Added automated browser monitor tracking to background startup routines too
     try:
         browser_started, browser_message = start_browser_monitor()

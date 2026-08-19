@@ -276,8 +276,6 @@ def sync_pending_sessions() -> bool:
         log_message("App usage sync skipped: no saved token.")
         return False
 
-    backend_url = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    endpoint = f"{backend_url}/app-usage/batch"
     payload = {
         "events": [
             {
@@ -295,46 +293,54 @@ def sync_pending_sessions() -> bool:
             for row in rows
         ]
     }
-    request = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
-        method="POST",
-    )
     ids = [row["session_id"] for row in rows]
-    try:
-        with urllib.request.urlopen(request, timeout=30):
-            pass
-    except urllib.error.HTTPError as error:
-        error_body = ""
-        try:
-            error_body = error.read().decode("utf-8", "replace").strip()
-        except Exception:
-            error_body = ""
-        detail = f"{error} {error_body}".strip()
-        mark_sessions(ids, status="failed", error=detail[:1000])
-        log_exception(
-            f"App usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
-            error,
-        )
-        if error_body:
-            log_message(f"App usage sync response body: {error_body[:2000]}")
-        return False
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        mark_sessions(ids, status="failed", error=str(error)[:1000])
-        log_exception(
-            f"App usage sync failed for {len(rows)} session(s) to {endpoint}. {_summarize_sessions(rows)}",
-            error,
-        )
-        return False
+    configured = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    backend_urls = [configured]
+    if configured != hosted:
+        backend_urls.append(hosted)
 
-    try:
-        mark_sessions(ids, status="synced")
-    except Exception as error:
-        log_exception("App usage sync succeeded but local cleanup failed.", error)
-        return False
-    log_message(f"App usage sync completed: {len(ids)} session(s).")
-    return True
+    errors: list[str] = []
+    for backend_url in dict.fromkeys(backend_urls):
+        endpoint = f"{backend_url}/app-usage/batch"
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30):
+                pass
+            try:
+                mark_sessions(ids, status="synced")
+            except Exception as error:
+                log_exception("App usage sync succeeded but local cleanup failed.", error)
+                return False
+            if backend_url != backend_urls[0]:
+                log_message(f"App usage sync completed via fallback backend {backend_url}: {len(ids)} session(s).")
+            else:
+                log_message(f"App usage sync completed: {len(ids)} session(s).")
+            return True
+        except urllib.error.HTTPError as error:
+            error_body = ""
+            try:
+                error_body = error.read().decode("utf-8", "replace").strip()
+            except Exception:
+                error_body = ""
+            detail = f"{error} {error_body}".strip()
+            errors.append(f"{backend_url}: {detail}")
+            if error_body:
+                log_message(f"App usage sync response body: {error_body[:2000]}")
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            errors.append(f"{backend_url}: {error}")
+
+    mark_sessions(ids, status="failed", error=(" | ".join(errors) or "sync failed")[:1000])
+    log_exception(
+        f"App usage sync failed for {len(rows)} session(s) to any backend. {_summarize_sessions(rows)}",
+        RuntimeError(" | ".join(errors) or "App usage sync failed"),
+    )
+    return False
 
 
 def start_foreground_app_monitor() -> None:
