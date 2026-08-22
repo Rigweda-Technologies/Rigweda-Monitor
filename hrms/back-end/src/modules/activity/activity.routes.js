@@ -40,13 +40,15 @@ router.get(
     const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : undefined;
     const appName = typeof req.query.appName === "string" ? req.query.appName : "";
     const processName = typeof req.query.processName === "string" ? req.query.processName : "";
+    const employeeId = typeof req.query.employeeId === "string" ? req.query.employeeId : "";
     const data = await activityService.listAppUsage({
       organizationId: req.user.organizationId,
       date,
       limit,
       offset,
       appName,
-      processName
+      processName,
+      employeeId
     });
 
     return res.status(200).json({

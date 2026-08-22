@@ -304,7 +304,7 @@ def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> d
             "stop_screenshot_monitor",
         )
         if stop_screenshot_monitor is not None:
-            stop_screenshot_monitor()
+            stop_screenshot_monitor("screenshots disabled by Employee Monitor settings")
 
     if flags.get("mouseEnabled", True):
         start_activity_monitor, _ = _import_monitor_functions(
@@ -321,7 +321,7 @@ def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> d
             "stop_activity_monitor",
         )
         if stop_activity_monitor is not None:
-            stop_activity_monitor()
+            stop_activity_monitor("mouse activity disabled by Employee Monitor settings")
 
     if flags.get("keyboardEnabled", True):
         start_keyboard_monitor, _ = _import_monitor_functions(

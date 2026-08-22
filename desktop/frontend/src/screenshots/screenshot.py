@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import base64
 import hashlib
 import json
@@ -65,6 +66,8 @@ stop_event = threading.Event()
 capture_lock = threading.Lock()
 upload_lock = threading.Lock()
 process_lock_handle = None
+shutdown_reason = "running"
+shutdown_reason_logged = False
 
 
 def _can_write_to_console(stream: object) -> bool:
@@ -119,6 +122,33 @@ def log_exception(message: object, error: BaseException | None = None, *, stream
             traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         else:
             traceback.print_exc(file=sys.stderr)
+
+
+def _set_shutdown_reason(reason: str) -> None:
+    global shutdown_reason
+    clean_reason = str(reason or "").strip() or "unspecified"
+    if shutdown_reason in ("running", ""):
+        shutdown_reason = clean_reason
+
+
+def get_shutdown_reason() -> str:
+    return shutdown_reason
+
+
+def _log_shutdown_once(prefix: str) -> None:
+    global shutdown_reason_logged
+    if shutdown_reason_logged:
+        return
+    shutdown_reason_logged = True
+    log_message(f"{prefix} reason={get_shutdown_reason()}")
+
+
+def _log_shutdown_on_exit() -> None:
+    if get_shutdown_reason() != "running":
+        _log_shutdown_once("Screenshot monitor exiting")
+
+
+atexit.register(_log_shutdown_on_exit)
 
 
 def _decode_jwt_payload(token: str) -> dict:
@@ -966,6 +996,11 @@ def upload_pending_screenshots() -> None:
 
     rows: list[sqlite3.Row] = []
     try:
+        if getattr(sys, "is_finalizing", lambda: False)():
+            _set_shutdown_reason("python interpreter is finalizing")
+            log_message("Screenshot upload skipped: python interpreter is finalizing.")
+            return
+
         token = get_access_token()
         if not token:
             return
@@ -1120,6 +1155,8 @@ def upload_pending_screenshots() -> None:
             )
         )
     except Exception as error:
+        if isinstance(error, RuntimeError) and "interpreter shutdown" in str(error).lower():
+            _set_shutdown_reason("python interpreter shutdown started during upload retry")
         log_exception("Screenshot upload retry scheduled.", error)
         mark_rows_failed(rows, error)
     finally:
@@ -1158,15 +1195,29 @@ def start_screenshot_monitor() -> None:
         upload_pending_screenshots()
 
 
-def stop_screenshot_monitor(*_: object) -> None:
+def stop_screenshot_monitor(reason: object = "stop requested") -> None:
+    _set_shutdown_reason(str(reason))
+    stop_event.set()
+
+
+def request_shutdown(reason: str) -> None:
+    _set_shutdown_reason(reason)
     stop_event.set()
 
 
 def listen_for_stop_command() -> None:
     for line in sys.stdin:
         if line.strip().lower() == "stop":
-            stop_screenshot_monitor()
+            request_shutdown("stdin stop command")
             break
+
+
+def _handle_signal(signum: int, _frame: object) -> None:
+    signal_name = {
+        signal.SIGINT: "SIGINT",
+        signal.SIGTERM: "SIGTERM",
+    }.get(signum, f"signal {signum}")
+    request_shutdown(f"{signal_name} received")
 
 
 def main() -> int:
@@ -1202,8 +1253,8 @@ def main() -> int:
     if not acquire_process_lock():
         return 0
 
-    signal.signal(signal.SIGINT, stop_screenshot_monitor)
-    signal.signal(signal.SIGTERM, stop_screenshot_monitor)
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
 
     stdin_thread = threading.Thread(target=listen_for_stop_command, daemon=True)
     stdin_thread.start()
@@ -1212,6 +1263,9 @@ def main() -> int:
         start_screenshot_monitor()
         return 0
     finally:
+        if get_shutdown_reason() == "running":
+            _set_shutdown_reason("stop event set or loop ended")
+        _log_shutdown_once("Screenshot monitor exiting")
         release_process_lock()
 
 
@@ -1224,6 +1278,9 @@ def run_monitor() -> int:
         start_screenshot_monitor()
         return 0
     finally:
+        if get_shutdown_reason() == "running":
+            _set_shutdown_reason("stop event set or loop ended")
+        _log_shutdown_once("Screenshot monitor exiting")
         release_process_lock()
 
 
