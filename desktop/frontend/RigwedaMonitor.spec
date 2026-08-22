@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('.venv/Lib/site-packages/customtkinter/assets', 'customtkinter/assets'), ('VERSION', '.')]
+datas = [('.venv/Lib/site-packages/customtkinter/assets', 'customtkinter/assets'), ('VERSION', '.'), ('assets/app-logo.png', 'assets')]
 binaries = []
 psutil_datas, psutil_binaries, psutil_hiddenimports = collect_all('psutil')
 pynput_datas, pynput_binaries, pynput_hiddenimports = collect_all('pynput')

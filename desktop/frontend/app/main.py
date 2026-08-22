@@ -1,4 +1,4 @@
-"""Entry point for the MyApp login front-end."""
+"""Entry point for the Rigweda Monitor login front-end."""
 
 from __future__ import annotations
 
@@ -12,13 +12,15 @@ from pathlib import Path
 if __package__ in {None, ""}:
     # When launched as a script, add the frontend root so `import app.*` works.
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from app.auth import ensure_service_running, load_auth_session, register_startup
+    from app.auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from app.env import writable_runtime_path
+    from app import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
     from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
-    from .auth import ensure_service_running, load_auth_session, register_startup
+    from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
+    from . import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
     from .monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
     from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
@@ -48,17 +50,23 @@ def _resume_monitor_in_background() -> int:
     _log_startup("Background startup requested.")
     session = load_auth_session()
     if not session:
+        saved_email = load_saved_auth_email()
         _log_startup("No valid saved auth token found. Showing sign-in window.")
         if __package__ in {None, ""}:
             from app.login_view import LoginApp
         else:  # pragma: no cover - import path depends on launch style
             from .login_view import LoginApp
 
+        prefill_session = {"email": saved_email} if saved_email else None
         app = LoginApp(
-            None,
+            prefill_session,
             hide_after_resume=False,
             auto_resume_saved_session=False,
-            startup_notice="Your session is missing or expired. Please sign in again.",
+            startup_notice=(
+                "Your session is missing or expired. Your email is prefilled, so just enter your password."
+                if saved_email
+                else "Your session is missing or expired. Please sign in again."
+            ),
         )
         app.run()
         return 0

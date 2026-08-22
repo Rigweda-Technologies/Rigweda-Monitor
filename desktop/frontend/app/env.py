@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+HOSTED_HRMS_BACKEND_URL = "https://rigweda-hrms-backend.onrender.com/api"
+HOSTED_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api"
 
 
 def load_app_env() -> None:
@@ -44,6 +47,32 @@ def load_app_env() -> None:
         for mode_path in mode_candidates:
             if mode_path.exists():
                 load_dotenv(mode_path, override=True)
+
+
+def is_frozen_app() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def _is_local_backend_url(url: str) -> bool:
+    normalized = url.strip().lower().rstrip("/")
+    return normalized.startswith(
+        (
+            "http://localhost",
+            "https://localhost",
+            "http://127.0.0.1",
+            "https://127.0.0.1",
+        )
+    )
+
+
+def prefer_hosted_backend_url(configured_value: str | None, *, hosted_default: str) -> str:
+    """Use hosted endpoints for packaged builds unless a non-local override is explicit."""
+    configured = str(configured_value or "").strip().rstrip("/")
+    if is_frozen_app():
+        if configured and not _is_local_backend_url(configured):
+            return configured
+        return hosted_default
+    return configured or hosted_default
 
 
 def writable_runtime_path(configured_value: str, fallback_name: str) -> Path:

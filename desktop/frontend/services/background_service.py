@@ -1,4 +1,4 @@
-"""Windows Service entry point for MyAppBackendService.
+"""Windows Service entry point for Rigweda Monitor Service.
 
 This file is a service template. It expects pywin32 to be installed on Windows.
 """
@@ -23,8 +23,8 @@ except ImportError as exc:  # pragma: no cover - Windows service runtime only
     ) from exc
 
 
-SERVICE_NAME = "MyAppBackendService"
-SERVICE_DISPLAY_NAME = "MyApp Backend Service"
+SERVICE_NAME = "RigwedaMonitorService"
+SERVICE_DISPLAY_NAME = "Rigweda Monitor Service"
 SERVICE_DESCRIPTION = "Backend service for Rigweda desktop monitoring."
 LOG_FILE = Path(__file__).resolve().with_name("background_service.log")
 FRONTEND_ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +33,7 @@ BACKEND_ROOT = DESKTOP_ROOT / "backend"
 BACKEND_SCRIPT = BACKEND_ROOT / "src" / "server.js"
 
 
-class MyAppBackendService(win32serviceutil.ServiceFramework):  # type: ignore[misc]
+class RigwedaMonitorService(win32serviceutil.ServiceFramework):  # type: ignore[misc]
     _svc_name_ = SERVICE_NAME
     _svc_display_name_ = SERVICE_DISPLAY_NAME
     _svc_description_ = SERVICE_DESCRIPTION
@@ -128,4 +128,4 @@ class MyAppBackendService(win32serviceutil.ServiceFramework):  # type: ignore[mi
 
 
 if __name__ == "__main__":  # pragma: no cover - Windows service runtime only
-    win32serviceutil.HandleCommandLine(MyAppBackendService)
+    win32serviceutil.HandleCommandLine(RigwedaMonitorService)

@@ -1,4 +1,4 @@
-# MyApp Login Front-End
+# Rigweda Monitor Login Front-End
 
 Classic premium-style login window built with `CustomTkinter` for a Windows desktop app.
 
@@ -44,7 +44,7 @@ python -m app.main
 ## Service Notes
 
 - The login screen authenticates with hardcoded credentials for now.
-- On success, the app runs `sc start MyAppBackendService`.
+- On success, the app runs `sc start RigwedaMonitorService`.
 - The backend service template in `services/background_service.py` expects `pywin32`.
 - Use `installer/install_service.bat` from an elevated Command Prompt to install the service.
 

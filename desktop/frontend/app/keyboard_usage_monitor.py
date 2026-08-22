@@ -20,7 +20,7 @@ import win32process
 from pynput import keyboard
 
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 DATA_ROOT = writable_runtime_path(
@@ -34,16 +34,19 @@ LOG_FILE = LOG_DIR / "keyboard_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 0.05
 SESSION_SNAPSHOT_SECONDS = 15
-DESKTOP_BACKEND_URL = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+DESKTOP_BACKEND_URL = prefer_hosted_backend_url(
+    os.getenv("DESKTOP_BACKEND_URL", HOSTED_DESKTOP_BACKEND_URL),
+    hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+)
 TARGET_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}
 ENABLE_LOCAL_KEY_TRACE = os.getenv("RIGWEDA_MONITOR_LOCAL_KEY_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _backend_url_candidates() -> list[str]:
     """Prefer the configured desktop backend, then fall back to hosted service."""
-    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    hosted = HOSTED_DESKTOP_BACKEND_URL
     candidates = [DESKTOP_BACKEND_URL]
-    if DESKTOP_BACKEND_URL != hosted:
+    if DESKTOP_BACKEND_URL != hosted and not DESKTOP_BACKEND_URL.startswith(("http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1")):
         candidates.append(hosted)
     return list(dict.fromkeys(candidates))
 

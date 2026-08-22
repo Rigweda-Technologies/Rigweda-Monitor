@@ -66,7 +66,7 @@ function Stop-RigwedaMonitorProcesses {
 }
 
 function Remove-RigwedaMonitorService {
-    $serviceName = 'MyAppBackendService'
+    $serviceName = 'RigwedaMonitorService'
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if (-not $service) {
         return
@@ -86,6 +86,30 @@ function Remove-RigwedaMonitorService {
         & sc.exe delete $serviceName | Out-Null
     } catch {
         Write-Info "  Could not delete service cleanly: $($_.Exception.Message)"
+    }
+}
+
+function Remove-LegacyRigwedaMonitorService {
+    $serviceName = 'RigwedaMonitorService'
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        return
+    }
+
+    Write-Info "Removing legacy Windows service: $serviceName"
+    try {
+        if ($service.Status -ne 'Stopped') {
+            Stop-Service -Name $serviceName -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+        }
+    } catch {
+        Write-Info "  Could not stop legacy service cleanly: $($_.Exception.Message)"
+    }
+
+    try {
+        & sc.exe delete $serviceName | Out-Null
+    } catch {
+        Write-Info "  Could not delete legacy service cleanly: $($_.Exception.Message)"
     }
 }
 
@@ -162,6 +186,7 @@ Write-Info "LogRoot: $LogRoot"
 
 Stop-RigwedaMonitorProcesses
 Remove-RigwedaMonitorService
+Remove-LegacyRigwedaMonitorService
 Remove-StartupEntry
 Remove-Shortcuts
 Remove-InstallDir
