@@ -23,6 +23,8 @@ set "BUNDLE_ZIP=%DIST_DIR%\%BUNDLE_NAME%.zip"
 set "BUNDLE_STAGE=%TEMP%\%BUNDLE_NAME%Stage"
 set "INSTALL_SCRIPT_PS1=..\..\scripts\install-fresh-rigweda-monitor.ps1"
 set "INSTALL_SCRIPT_BAT=..\..\scripts\install-fresh-rigweda-monitor.bat"
+set "UNINSTALL_SCRIPT_PS1=..\..\scripts\uninstall-rigweda-monitor.ps1"
+set "UNINSTALL_SCRIPT_BAT=..\..\scripts\uninstall-rigweda-monitor.bat"
 set "STOP_PROCESSES_PS1=..\..\scripts\stop-rigweda-monitor-processes.ps1"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%STOP_PROCESSES_PS1%"
@@ -71,6 +73,8 @@ set "ROBOCOPY_BUNDLE_EXIT=%errorlevel%"
 if %ROBOCOPY_BUNDLE_EXIT% GEQ 8 exit /b %ROBOCOPY_BUNDLE_EXIT%
 copy /Y "%INSTALL_SCRIPT_PS1%" "%BUNDLE_STAGE%\" >nul
 copy /Y "%INSTALL_SCRIPT_BAT%" "%BUNDLE_STAGE%\" >nul
+copy /Y "%UNINSTALL_SCRIPT_PS1%" "%BUNDLE_STAGE%\" >nul
+copy /Y "%UNINSTALL_SCRIPT_BAT%" "%BUNDLE_STAGE%\" >nul
 if not "%errorlevel%"=="0" exit /b %errorlevel%
 if exist "%BUNDLE_DIR%" rmdir /s /q "%BUNDLE_DIR%"
 robocopy "%BUNDLE_STAGE%" "%BUNDLE_DIR%" /E /NFL /NDL /NJH /NJS /NP >nul
@@ -87,4 +91,5 @@ echo Build complete.
 echo Fresh install folder: %BUNDLE_DIR%
 echo Fresh install zip: %BUNDLE_ZIP%
 echo Run installer: %BUNDLE_DIR%\install-fresh-rigweda-monitor.bat
+echo Run uninstaller: %BUNDLE_DIR%\uninstall-rigweda-monitor.bat
 echo Or run app directly: %BUNDLE_DIR%\%APP_NAME%\RigwedaMonitor.exe

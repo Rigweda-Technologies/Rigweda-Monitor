@@ -28,6 +28,7 @@ DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCA
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 STARTUP_LOG_FILE = LOG_DIR / "startup.log"
 CRASH_LOG_FILE = LOG_DIR / "crash.log"
+BACKGROUND_HOST_LOCK_FILE = DATA_ROOT / "background_host.lock"
 
 
 def _log_startup(message: str) -> None:
@@ -44,6 +45,60 @@ def _log_crash(error: BaseException) -> None:
         log_file.write(f"{timestamp} Unhandled exception: {error}\n")
         traceback.print_exc(file=log_file)
         log_file.write("\n")
+
+
+def _background_process_exists(pid: int) -> bool:
+    if pid <= 0:
+        return False
+
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
+                    f"{pid}\" -ErrorAction SilentlyContinue; if ($p) {{ $p.CommandLine }} "
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+
+    command_line = (result.stdout or "").lower()
+    return "rigwedamonitor" in command_line or "--background-start" in command_line or "main.py" in command_line
+
+
+def _acquire_background_host_lock() -> tuple[bool, str]:
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = BACKGROUND_HOST_LOCK_FILE.open("x", encoding="utf-8")
+        handle.write(str(os.getpid()))
+        handle.flush()
+        return True, "Background host lock acquired."
+    except FileExistsError:
+        try:
+            existing_pid = int(BACKGROUND_HOST_LOCK_FILE.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            existing_pid = 0
+
+        if existing_pid and _background_process_exists(existing_pid):
+            return False, f"Background host already running with PID {existing_pid}."
+
+        BACKGROUND_HOST_LOCK_FILE.unlink(missing_ok=True)
+        try:
+            handle = BACKGROUND_HOST_LOCK_FILE.open("x", encoding="utf-8")
+            handle.write(str(os.getpid()))
+            handle.flush()
+            return True, "Stale background host lock replaced."
+        except Exception as error:
+            return False, f"Could not acquire background host lock: {error}"
 
 
 def _resume_monitor_in_background() -> int:
@@ -71,66 +126,76 @@ def _resume_monitor_in_background() -> int:
         app.run()
         return 0
 
-    _log_startup("Saved auth session loaded for background monitoring.")
-
-    service_started, _service_message = ensure_service_running()
-    if not service_started:
-        _log_startup(f"Service/backend start failed: {_service_message}")
-        return 1
-
-    startup_registered, startup_message = register_startup()
-    _log_startup(startup_message if startup_registered else startup_message)
-
+    lock_acquired = False
     try:
-        refreshed_flags = refresh_monitor_feature_flags(session)
-        _log_startup(
-            "Refreshed monitor settings before starting workers: "
-            f"screenshots={refreshed_flags.get('screenshotsEnabled', True)} "
-            f"mouse={refreshed_flags.get('mouseEnabled', True)} "
-            f"keyboard={refreshed_flags.get('keyboardEnabled', True)} "
-            f"appUsage={refreshed_flags.get('appUsageEnabled', True)} "
-            f"browser={refreshed_flags.get('browserHistoryEnabled', True)} "
-            f"mouseIdle={refreshed_flags.get('mouseIdleThresholdMinutes', 1)}m "
-            f"keyboardHeartbeat={refreshed_flags.get('keyboardHeartbeatMinutes', 1)}m "
-            f"appUsageHeartbeat={refreshed_flags.get('appUsageHeartbeatMinutes', 1)}m "
-            f"browserSync={refreshed_flags.get('browserHistorySyncMinutes', 1)}m"
-        )
-    except Exception as error:
-        _log_startup(f"Failed to refresh monitor settings before worker startup: {str(error)}")
-        refreshed_flags = {}
+        lock_acquired, lock_message = _acquire_background_host_lock()
+        _log_startup(lock_message)
+        if not lock_acquired:
+            return 0
 
-    flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
-    if refreshed_flags:
+        _log_startup("Saved auth session loaded for background monitoring.")
+
+        service_started, _service_message = ensure_service_running()
+        if not service_started:
+            _log_startup(f"Service/backend start failed: {_service_message}")
+            return 1
+
+        startup_registered, startup_message = register_startup()
+        _log_startup(startup_message if startup_registered else startup_message)
+
         try:
-            flags = apply_monitor_feature_flags(refreshed_flags)
+            refreshed_flags = refresh_monitor_feature_flags(session)
+            _log_startup(
+                "Refreshed monitor settings before starting workers: "
+                f"screenshots={refreshed_flags.get('screenshotsEnabled', True)} "
+                f"mouse={refreshed_flags.get('mouseEnabled', True)} "
+                f"keyboard={refreshed_flags.get('keyboardEnabled', True)} "
+                f"appUsage={refreshed_flags.get('appUsageEnabled', True)} "
+                f"browser={refreshed_flags.get('browserHistoryEnabled', True)} "
+                f"mouseIdle={refreshed_flags.get('mouseIdleThresholdMinutes', 1)}m "
+                f"keyboardHeartbeat={refreshed_flags.get('keyboardHeartbeatMinutes', 1)}m "
+                f"appUsageHeartbeat={refreshed_flags.get('appUsageHeartbeatMinutes', 1)}m "
+                f"browserSync={refreshed_flags.get('browserHistorySyncMinutes', 1)}m"
+            )
         except Exception as error:
-            _log_startup(f"Failed to apply refreshed monitor settings: {str(error)}")
-    _log_startup(
-        "Monitor settings listener started with "
-        f"screenshots={flags.get('screenshotsEnabled', True)} "
-        f"mouse={flags.get('mouseEnabled', True)} "
-        f"keyboard={flags.get('keyboardEnabled', True)} "
-        f"appUsage={flags.get('appUsageEnabled', True)} "
-        f"browser={flags.get('browserHistoryEnabled', True)}"
-    )
+            _log_startup(f"Failed to refresh monitor settings before worker startup: {str(error)}")
+            refreshed_flags = {}
 
-    try:
-        apply_monitor_feature_flags(flags)
-        _log_startup("Initial monitor workers were applied from cached settings.")
-    except Exception as e:
-        _log_startup(f"Failed to apply initial monitor workers: {str(e)}")
+        flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+        if refreshed_flags:
+            try:
+                flags = apply_monitor_feature_flags(refreshed_flags)
+            except Exception as error:
+                _log_startup(f"Failed to apply refreshed monitor settings: {str(error)}")
+        _log_startup(
+            "Monitor settings listener started with "
+            f"screenshots={flags.get('screenshotsEnabled', True)} "
+            f"mouse={flags.get('mouseEnabled', True)} "
+            f"keyboard={flags.get('keyboardEnabled', True)} "
+            f"appUsage={flags.get('appUsageEnabled', True)} "
+            f"browser={flags.get('browserHistoryEnabled', True)}"
+        )
 
-    # Added automated browser monitor tracking to background startup routines too
-    try:
-        browser_started, browser_message = start_browser_monitor()
-        _log_startup(browser_message)
-    except Exception as e:
-        _log_startup(f"Failed to start browser monitor in background: {str(e)}")
+        try:
+            apply_monitor_feature_flags(flags)
+            _log_startup("Initial monitor workers were applied from cached settings.")
+        except Exception as e:
+            _log_startup(f"Failed to apply initial monitor workers: {str(e)}")
 
-    _log_startup("Background monitor controller is active.")
-    _log_startup("Keeping the background host process alive.")
-    threading.Event().wait()
-    return 0
+        # Added automated browser monitor tracking to background startup routines too
+        try:
+            browser_started, browser_message = start_browser_monitor()
+            _log_startup(browser_message)
+        except Exception as e:
+            _log_startup(f"Failed to start browser monitor in background: {str(e)}")
+
+        _log_startup("Background monitor controller is active.")
+        _log_startup("Keeping the background host process alive.")
+        threading.Event().wait()
+        return 0
+    finally:
+        if lock_acquired:
+            BACKGROUND_HOST_LOCK_FILE.unlink(missing_ok=True)
 
 
 def main() -> None:
