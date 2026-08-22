@@ -63,6 +63,8 @@ def _resume_monitor_in_background() -> int:
         app.run()
         return 0
 
+    _log_startup("Saved auth session loaded for background monitoring.")
+
     service_started, _service_message = ensure_service_running()
     if not service_started:
         _log_startup(f"Service/backend start failed: {_service_message}")

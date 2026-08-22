@@ -73,9 +73,13 @@ class LoginApp:
         self.root.resizable(False, False)
         self.root.geometry(self._center_geometry())
         self.root.minsize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        self.root.attributes("-topmost", True)
 
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.after(100, lambda: self.root.attributes("-topmost", True))
+        self.root.after(150, self.root.lift)
+        self.root.after(200, self.root.focus_force)
         if self.startup_notice:
             self.subtitle_label.configure(text=self.startup_notice)
 
