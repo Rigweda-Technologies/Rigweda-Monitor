@@ -16,6 +16,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import psutil
+
 from app.auth import load_auth_session
 from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
@@ -32,6 +34,8 @@ POLL_SECONDS = 1
 STOP_EVENT = threading.Event()
 SHUTDOWN_REASON = "running"
 SHUTDOWN_REASON_LOGGED = False
+_ACTIVITY_THREAD: threading.Thread | None = None
+_ACTIVITY_THREAD_LOCK = threading.Lock()
 
 
 def _backend_url_candidates() -> list[str]:
@@ -284,31 +288,15 @@ def sync_pending_events() -> bool:
 
 def process_exists(pid: int) -> bool:
     try:
-        import subprocess
-
-        result = subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                (
-                    "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
-                    f"{pid}\" -ErrorAction SilentlyContinue; if ($p) {{ $p.CommandLine }}"
-                ),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            creationflags=0x08000000 if os.name == "nt" else 0,
-        )
+        process = psutil.Process(pid)
+        command_line = " ".join(process.cmdline()).lower()
     except Exception:
         return False
 
-    command_line = result.stdout.lower()
     return "rigwedamonitor" in command_line or "activity_monitor" in command_line
 
 
-def start_activity_monitor() -> None:
+def _run_activity_monitor() -> None:
     """Record one-minute activity heartbeats; every record remains durable until the API accepts it."""
     device_id = get_device_id()
     heartbeat_seconds = get_heartbeat_seconds()
@@ -375,6 +363,24 @@ def start_activity_monitor() -> None:
             _set_shutdown_reason("stop event set or loop ended")
 
 
+def start_activity_monitor() -> tuple[bool, str]:
+    """Compatibility wrapper used by the shared monitor flag dispatcher."""
+    global _ACTIVITY_THREAD
+
+    if STOP_EVENT.is_set():
+        STOP_EVENT.clear()
+
+    with _ACTIVITY_THREAD_LOCK:
+        if _ACTIVITY_THREAD is not None and _ACTIVITY_THREAD.is_alive():
+            return True, "Activity monitor is already running."
+
+        thread = threading.Thread(target=_run_activity_monitor, name="ActivityMonitor", daemon=True)
+        _ACTIVITY_THREAD = thread
+        thread.start()
+
+    return True, "Activity monitor started."
+
+
 def stop_activity_monitor(reason: str = "stop requested") -> None:
     _set_shutdown_reason(reason)
     STOP_EVENT.set()
@@ -410,7 +416,7 @@ def main() -> int:
     lock_handle.write(str(os.getpid()))
     lock_handle.flush()
     try:
-        start_activity_monitor()
+        _run_activity_monitor()
     except KeyboardInterrupt:
         _set_shutdown_reason("KeyboardInterrupt")
         _log_shutdown_once()

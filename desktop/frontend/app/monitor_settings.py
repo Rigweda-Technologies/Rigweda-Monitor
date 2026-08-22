@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.auth import DATA_ROOT, load_auth_session
-from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url
+from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 
 try:
     import socketio
@@ -39,17 +39,27 @@ DEFAULT_MONITOR_SETTINGS: dict[str, bool | int] = {
 }
 FEATURE_FLAGS_FILE = DATA_ROOT / "monitor_feature_flags.json"
 ALT_FEATURE_FLAGS_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\rigweda-monitor\data\monitor_feature_flags.json"))
+LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
+LOG_FILE = LOG_DIR / "monitor_settings.log"
 
 _state_lock = threading.Lock()
 _callbacks: list[Callable[[dict[str, bool | int]], None]] = []
 _listener_stop_event = threading.Event()
 _listener_thread: threading.Thread | None = None
+_poller_thread: threading.Thread | None = None
 _socket_client: socketio.Client | None = None if socketio is not None else None
 _current_flags: dict[str, bool | int] = dict(DEFAULT_MONITOR_SETTINGS)
-
-
-def _force_keyboard_enabled() -> bool:
-    return os.getenv("RIGWEDA_MONITOR_FORCE_KEYBOARD_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+_SETTINGS_POLL_SECONDS = max(int(os.getenv("RIGWEDA_MONITOR_SETTINGS_POLL_SECONDS", "15")), 5)
+def _log_message(message: object, *, error: BaseException | None = None) -> None:
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a", encoding="utf-8") as log_file:
+            stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            log_file.write(f"{stamp} {message}\n")
+            if error is not None:
+                log_file.write(f"{stamp} {type(error).__name__}: {error}\n")
+    except OSError:
+        pass
 
 
 def _hrms_backend_base_url() -> str:
@@ -135,7 +145,7 @@ def _load_cached_flags() -> dict[str, bool | int] | None:
     return {
         "screenshotsEnabled": bool(payload.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(payload.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)),
         "appUsageEnabled": bool(payload.get("appUsageEnabled", True)),
         "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(payload.get("screenshotIntervalMinutes", 1), 1),
@@ -145,11 +155,6 @@ def _load_cached_flags() -> dict[str, bool | int] | None:
         "appUsageHeartbeatMinutes": _normalize_positive_minutes(payload.get("appUsageHeartbeatMinutes", 1), 1),
         "browserHistorySyncMinutes": _normalize_positive_minutes(payload.get("browserHistorySyncMinutes", 1), 1),
     }
-
-
-_cached_flags = _load_cached_flags()
-if _cached_flags is not None:
-    _current_flags = _cached_flags
 
 
 def _save_cached_flags(flags: dict[str, bool | int]) -> None:
@@ -172,7 +177,7 @@ def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
     return {
         "screenshotsEnabled": bool(settings.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(settings.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)),
         "appUsageEnabled": bool(settings.get("appUsageEnabled", True)),
         "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(settings.get("screenshotIntervalMinutes", 1), 1),
@@ -189,8 +194,8 @@ def _notify_callbacks(flags: dict[str, bool | int]) -> None:
     for callback in callbacks:
         try:
             callback(dict(flags))
-        except Exception:
-            pass
+        except Exception as error:
+            _log_message("Monitor settings callback failed.", error=error)
 
 
 def _set_current_flags(flags: dict[str, bool | int]) -> bool:
@@ -198,7 +203,7 @@ def _set_current_flags(flags: dict[str, bool | int]) -> bool:
     normalized = {
         "screenshotsEnabled": bool(flags.get("screenshotsEnabled", True)),
         "mouseEnabled": bool(flags.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)),
         "appUsageEnabled": bool(flags.get("appUsageEnabled", True)),
         "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(flags.get("screenshotIntervalMinutes", 1), 1),
@@ -213,6 +218,7 @@ def _set_current_flags(flags: dict[str, bool | int]) -> bool:
         _current_flags = normalized
     _save_cached_flags(normalized)
     if changed:
+        apply_monitor_feature_flags(normalized)
         _notify_callbacks(normalized)
     return changed
 
@@ -227,14 +233,7 @@ def load_monitor_feature_flags(session: dict | None = None) -> dict[str, bool | 
     if session is not None:
         token = str(session.get("token") or "").strip()
         if token:
-            refresh_monitor_feature_flags(session)
-
-    cached = _load_cached_flags()
-    if cached is not None:
-        with _state_lock:
-            global _current_flags
-            _current_flags = dict(cached)
-        return dict(cached)
+            return refresh_monitor_feature_flags(session)
 
     with _state_lock:
         return dict(_current_flags)
@@ -247,24 +246,32 @@ def refresh_monitor_feature_flags(session: dict | None = None) -> dict[str, bool
     global _current_flags
 
     if not token:
-        cached = _load_cached_flags()
-        if cached is not None:
-            with _state_lock:
-                _current_flags = dict(cached)
-            return dict(cached)
-        return get_monitor_feature_flags()
+        flags = dict(DEFAULT_MONITOR_SETTINGS)
+        _set_current_flags(flags)
+        _log_message(
+            "Monitor settings source resolved from defaults because no HRMS token was available."
+        )
+        return flags
 
     payload = _request_json(_hrms_api_url("/agents/cloudinary/upload-config"), token=token)
     flags = _normalize_flags(payload.get("data") if payload else None)
     if flags is None:
-        cached = _load_cached_flags()
-        if cached is not None:
-            with _state_lock:
-                _current_flags = dict(cached)
-            return dict(cached)
-        return get_monitor_feature_flags()
+        flags = dict(DEFAULT_MONITOR_SETTINGS)
+        _set_current_flags(flags)
+        _log_message(
+            "Monitor settings source resolved from defaults because HRMS settings were unavailable."
+        )
+        return flags
 
     _set_current_flags(flags)
+    _log_message(
+        "Monitor settings source resolved from HRMS: "
+        f"screenshots={flags.get('screenshotsEnabled', True)} "
+        f"mouse={flags.get('mouseEnabled', True)} "
+        f"keyboard={flags.get('keyboardEnabled', True)} "
+        f"appUsage={flags.get('appUsageEnabled', True)} "
+        f"browser={flags.get('browserHistoryEnabled', True)}"
+    )
     return get_monitor_feature_flags()
 
 
@@ -285,43 +292,19 @@ def _loaded_monitor_functions(module_name: str, start_name: str, stop_name: str)
     return getattr(module, start_name, None), getattr(module, stop_name, None)
 
 
+def _safe_apply_monitor_action(label: str, action: Callable[..., Any] | None, *args: Any) -> None:
+    if action is None:
+        return
+
+    try:
+        action(*args)
+    except Exception as error:
+        _log_message(f"{label} monitor transition failed.", error=error)
+
+
 def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> dict[str, bool | int]:
     """Start or stop each monitor to match the current flags."""
     flags = dict(flags or get_monitor_feature_flags())
-
-    if flags.get("screenshotsEnabled", True):
-        start_screenshot_monitor, _ = _import_monitor_functions(
-            "app.screenshot_monitor",
-            "start_screenshot_monitor",
-            "stop_screenshot_monitor",
-        )
-        if start_screenshot_monitor is not None:
-            start_screenshot_monitor()
-    else:
-        _, stop_screenshot_monitor = _loaded_monitor_functions(
-            "app.screenshot_monitor",
-            "start_screenshot_monitor",
-            "stop_screenshot_monitor",
-        )
-        if stop_screenshot_monitor is not None:
-            stop_screenshot_monitor("screenshots disabled by Employee Monitor settings")
-
-    if flags.get("mouseEnabled", True):
-        start_activity_monitor, _ = _import_monitor_functions(
-            "app.activity_monitor",
-            "start_activity_monitor",
-            "stop_activity_monitor",
-        )
-        if start_activity_monitor is not None:
-            start_activity_monitor()
-    else:
-        _, stop_activity_monitor = _loaded_monitor_functions(
-            "app.activity_monitor",
-            "start_activity_monitor",
-            "stop_activity_monitor",
-        )
-        if stop_activity_monitor is not None:
-            stop_activity_monitor("mouse activity disabled by Employee Monitor settings")
 
     if flags.get("keyboardEnabled", True):
         start_keyboard_monitor, _ = _import_monitor_functions(
@@ -330,15 +313,58 @@ def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> d
             "stop_keyboard_monitor",
         )
         if start_keyboard_monitor is not None:
-            start_keyboard_monitor()
+            try:
+                started, message = start_keyboard_monitor()
+                _log_message(f"Keyboard monitor apply result: started={started} message={message}")
+            except Exception as error:
+                _log_message("Keyboard monitor transition failed.", error=error)
     else:
-        _, stop_keyboard_monitor = _loaded_monitor_functions(
+        _, stop_keyboard_monitor = _import_monitor_functions(
             "app.keyboard_monitor",
             "start_keyboard_monitor",
             "stop_keyboard_monitor",
         )
         if stop_keyboard_monitor is not None:
-            stop_keyboard_monitor()
+            _log_message("Keyboard monitor apply result: stopping keyboard monitor.")
+            _safe_apply_monitor_action("Keyboard", stop_keyboard_monitor)
+
+    if flags.get("screenshotsEnabled", True):
+        start_screenshot_monitor, _ = _import_monitor_functions(
+            "app.screenshot_monitor",
+            "start_screenshot_monitor",
+            "stop_screenshot_monitor",
+        )
+        _safe_apply_monitor_action("Screenshot", start_screenshot_monitor)
+    else:
+        _, stop_screenshot_monitor = _import_monitor_functions(
+            "app.screenshot_monitor",
+            "start_screenshot_monitor",
+            "stop_screenshot_monitor",
+        )
+        _safe_apply_monitor_action(
+            "Screenshot",
+            stop_screenshot_monitor,
+            "screenshots disabled by Employee Monitor settings",
+        )
+
+    if flags.get("mouseEnabled", True):
+        start_activity_monitor, _ = _import_monitor_functions(
+            "app.activity_monitor",
+            "start_activity_monitor",
+            "stop_activity_monitor",
+        )
+        _safe_apply_monitor_action("Mouse activity", start_activity_monitor)
+    else:
+        _, stop_activity_monitor = _import_monitor_functions(
+            "app.activity_monitor",
+            "start_activity_monitor",
+            "stop_activity_monitor",
+        )
+        _safe_apply_monitor_action(
+            "Mouse activity",
+            stop_activity_monitor,
+            "mouse activity disabled by Employee Monitor settings",
+        )
 
     if flags.get("appUsageEnabled", True):
         start_app_usage_monitor, _ = _import_monitor_functions(
@@ -346,16 +372,14 @@ def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> d
             "start_app_usage_monitor",
             "stop_app_usage_monitor",
         )
-        if start_app_usage_monitor is not None:
-            start_app_usage_monitor()
+        _safe_apply_monitor_action("App usage", start_app_usage_monitor)
     else:
-        _, stop_app_usage_monitor = _loaded_monitor_functions(
+        _, stop_app_usage_monitor = _import_monitor_functions(
             "app.foreground_app_monitor",
             "start_app_usage_monitor",
             "stop_app_usage_monitor",
         )
-        if stop_app_usage_monitor is not None:
-            stop_app_usage_monitor()
+        _safe_apply_monitor_action("App usage", stop_app_usage_monitor)
 
     if flags.get("browserHistoryEnabled", False):
         start_browser_monitor, _ = _import_monitor_functions(
@@ -363,16 +387,14 @@ def apply_monitor_feature_flags(flags: dict[str, bool | int] | None = None) -> d
             "start_browser_monitor",
             "stop_browser_monitor",
         )
-        if start_browser_monitor is not None:
-            start_browser_monitor()
+        _safe_apply_monitor_action("Browser history", start_browser_monitor)
     else:
-        _, stop_browser_monitor = _loaded_monitor_functions(
+        _, stop_browser_monitor = _import_monitor_functions(
             "app.browser_history_monitor",
             "start_browser_monitor",
             "stop_browser_monitor",
         )
-        if stop_browser_monitor is not None:
-            stop_browser_monitor()
+        _safe_apply_monitor_action("Browser history", stop_browser_monitor)
 
     return flags
 
@@ -400,6 +422,14 @@ def _listener_worker(token: str) -> None:
             return
         changed = _set_current_flags(flags)
         if changed:
+            _log_message(
+                "Monitor settings updated via socket: "
+                f"screenshots={flags.get('screenshotsEnabled', True)} "
+                f"mouse={flags.get('mouseEnabled', True)} "
+                f"keyboard={flags.get('keyboardEnabled', True)} "
+                f"appUsage={flags.get('appUsageEnabled', True)} "
+                f"browser={flags.get('browserHistoryEnabled', True)}"
+            )
             apply_monitor_feature_flags(flags)
 
     @client.event
@@ -440,6 +470,32 @@ def _listener_worker(token: str) -> None:
                 _socket_client = None
 
 
+def _poller_worker(token: str) -> None:
+    """Fallback settings poller when realtime sockets are unavailable or stale."""
+    while not _listener_stop_event.is_set():
+        try:
+            previous_flags = get_monitor_feature_flags()
+            session = load_auth_session(validate_token=False) or {}
+            current_token = str(session.get("token") or token or "").strip()
+            if current_token:
+                flags = refresh_monitor_feature_flags(session)
+                apply_monitor_feature_flags(flags)
+                if flags != previous_flags:
+                    _log_message(
+                        "Monitor settings refreshed from poller: "
+                        f"screenshots={flags.get('screenshotsEnabled', True)} "
+                        f"mouse={flags.get('mouseEnabled', True)} "
+                        f"keyboard={flags.get('keyboardEnabled', True)} "
+                        f"appUsage={flags.get('appUsageEnabled', True)} "
+                        f"browser={flags.get('browserHistoryEnabled', True)}"
+                    )
+        except Exception as error:
+            _log_message("Monitor settings poller encountered an error.", error=error)
+
+        if _listener_stop_event.wait(_SETTINGS_POLL_SECONDS):
+            break
+
+
 def start_monitor_settings_listener(
     session: dict | None = None,
     *,
@@ -470,6 +526,15 @@ def start_monitor_settings_listener(
             daemon=True,
         ).start()
 
+    global _poller_thread
+    if token and (socketio is None or _poller_thread is None or not _poller_thread.is_alive()):
+        with _state_lock:
+            if _poller_thread is None or not _poller_thread.is_alive():
+                _listener_stop_event.clear()
+                thread = threading.Thread(target=_poller_worker, args=(token,), name="MonitorSettingsPoller", daemon=True)
+                _poller_thread = thread
+                thread.start()
+
     if not token or socketio is None:
         return current_flags
 
@@ -487,7 +552,7 @@ def start_monitor_settings_listener(
 
 def stop_monitor_settings_listener() -> None:
     """Stop the realtime settings listener if it is running."""
-    global _listener_thread
+    global _listener_thread, _poller_thread
     _listener_stop_event.set()
 
     client = None
@@ -507,3 +572,11 @@ def stop_monitor_settings_listener() -> None:
         except Exception:
             pass
     _listener_thread = None
+
+    poller = _poller_thread
+    if poller is not None and poller.is_alive():
+        try:
+            poller.join(timeout=2)
+        except Exception:
+            pass
+    _poller_thread = None

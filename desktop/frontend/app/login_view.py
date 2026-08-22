@@ -576,7 +576,7 @@ class LoginApp:
             else:
                 self._set_status("Login successful. Monitoring is disabled by Employee Monitor settings.", COLORS["success"])
         else:
-            flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+            flags = start_monitor_settings_listener(session)
             apply_monitor_feature_flags(flags)
             enabled_labels = []
             if flags.get("screenshotsEnabled", True):

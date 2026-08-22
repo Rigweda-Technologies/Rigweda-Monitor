@@ -6,19 +6,22 @@ import sys
 import threading
 import time
 import os
+import subprocess
 import traceback
 from pathlib import Path
+
+import psutil
 
 if __package__ in {None, ""}:
     # When launched as a script, add the frontend root so `import app.*` works.
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from app.auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
+    from app.auth import ensure_service_running, launch_background_monitor_process, load_auth_session, load_saved_auth_email, register_startup
     from app.env import writable_runtime_path
     from app import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
     from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
-    from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
+    from .auth import ensure_service_running, launch_background_monitor_process, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
     from . import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
     from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
@@ -29,6 +32,8 @@ LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_R
 STARTUP_LOG_FILE = LOG_DIR / "startup.log"
 CRASH_LOG_FILE = LOG_DIR / "crash.log"
 BACKGROUND_HOST_LOCK_FILE = DATA_ROOT / "background_host.lock"
+BACKGROUND_WATCHDOG_LOCK_FILE = DATA_ROOT / "background_watchdog.lock"
+BACKGROUND_WATCHDOG_POLL_SECONDS = 15
 
 
 def _log_startup(message: str) -> None:
@@ -52,27 +57,108 @@ def _background_process_exists(pid: int) -> bool:
         return False
 
     try:
-        import subprocess
-
-        result = subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                (
-                    "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
-                    f"{pid}\" -ErrorAction SilentlyContinue; if ($p) {{ $p.CommandLine }} "
-                ),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        process = psutil.Process(pid)
+        command_line = " ".join(process.cmdline()).lower()
     except Exception:
         return False
 
-    command_line = (result.stdout or "").lower()
     return "rigwedamonitor" in command_line or "--background-start" in command_line or "main.py" in command_line
+
+
+def _read_lock_pid(lock_file: Path) -> int:
+    try:
+        return int(lock_file.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def _watchdog_process_exists(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    return _background_process_exists(pid)
+
+
+def _acquire_watchdog_lock() -> tuple[bool, str]:
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = BACKGROUND_WATCHDOG_LOCK_FILE.open("x", encoding="utf-8")
+        handle.write(str(os.getpid()))
+        handle.flush()
+        return True, "Background watchdog lock acquired."
+    except FileExistsError:
+        existing_pid = _read_lock_pid(BACKGROUND_WATCHDOG_LOCK_FILE)
+        if existing_pid and _watchdog_process_exists(existing_pid):
+            return False, f"Background watchdog already running with PID {existing_pid}."
+
+        BACKGROUND_WATCHDOG_LOCK_FILE.unlink(missing_ok=True)
+        try:
+            handle = BACKGROUND_WATCHDOG_LOCK_FILE.open("x", encoding="utf-8")
+            handle.write(str(os.getpid()))
+            handle.flush()
+            return True, "Stale background watchdog lock replaced."
+        except Exception as error:
+            return False, f"Could not acquire background watchdog lock: {error}"
+
+
+def _launch_background_watchdog_process() -> tuple[bool, str]:
+    if os.name != "nt":
+        return False, "Background watchdog launching is only supported on Windows."
+
+    if getattr(sys, "frozen", False):
+        executable = str(Path(sys.executable).resolve())
+        args = [executable, "--background-watchdog"]
+    else:
+        python_executable = Path(sys.executable).resolve()
+        python_windowed = python_executable.with_name("pythonw.exe")
+        launcher = python_windowed if python_windowed.exists() else python_executable
+        main_script = Path(__file__).resolve().with_name("main.py")
+        args = [str(launcher), str(main_script), "--background-watchdog"]
+
+    creationflags = 0x00000008 | 0x00000200 | 0x08000000
+    startupinfo = None
+    if hasattr(subprocess, "STARTUPINFO"):
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= 1
+        startupinfo.wShowWindow = 0
+
+    try:
+        subprocess.Popen(
+            args,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            creationflags=creationflags,
+            startupinfo=startupinfo,
+            close_fds=True,
+        )
+    except OSError as error:
+        return False, f"Could not launch background watchdog: {error}"
+
+    return True, "Background watchdog launched."
+
+
+def _run_background_watchdog() -> int:
+    _log_startup("Background watchdog startup requested.")
+    lock_acquired, lock_message = _acquire_watchdog_lock()
+    _log_startup(lock_message)
+    if not lock_acquired:
+        return 0
+
+    try:
+        while True:
+            host_pid = _read_lock_pid(BACKGROUND_HOST_LOCK_FILE)
+            host_running = _background_process_exists(host_pid)
+
+            if not host_running:
+                _log_startup(
+                    f"Background host missing or stopped. hostPid={host_pid or 'none'}; relaunching host."
+                )
+                started, message = launch_background_monitor_process()
+                _log_startup(message)
+                if started:
+                    time.sleep(10)
+            time.sleep(BACKGROUND_WATCHDOG_POLL_SECONDS)
+    finally:
+        _log_startup("Background watchdog exiting.")
+        BACKGROUND_WATCHDOG_LOCK_FILE.unlink(missing_ok=True)
 
 
 def _acquire_background_host_lock() -> tuple[bool, str]:
@@ -161,7 +247,7 @@ def _resume_monitor_in_background() -> int:
             _log_startup(f"Failed to refresh monitor settings before worker startup: {str(error)}")
             refreshed_flags = {}
 
-        flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+        flags = start_monitor_settings_listener(session)
         if refreshed_flags:
             try:
                 flags = apply_monitor_feature_flags(refreshed_flags)
@@ -189,9 +275,18 @@ def _resume_monitor_in_background() -> int:
         except Exception as e:
             _log_startup(f"Failed to start browser monitor in background: {str(e)}")
 
+        try:
+            watchdog_started, watchdog_message = _launch_background_watchdog_process()
+            _log_startup(watchdog_message if watchdog_started else watchdog_message)
+        except Exception as error:
+            _log_startup(f"Failed to launch background watchdog from background host: {str(error)}")
+
         _log_startup("Background monitor controller is active.")
         _log_startup("Keeping the background host process alive.")
-        threading.Event().wait()
+        try:
+            threading.Event().wait()
+        finally:
+            _log_startup("Background host exiting.")
         return 0
     finally:
         if lock_acquired:
@@ -224,6 +319,10 @@ def main() -> None:
             from .keyboard_monitor import main as keyboard_main
         raise SystemExit(keyboard_main())
 
+    if "--background-watchdog" in sys.argv:
+        sys.argv = [arg for arg in sys.argv if arg != "--background-watchdog"]
+        raise SystemExit(_run_background_watchdog())
+
     if "--background-start" in sys.argv:
         raise SystemExit(_resume_monitor_in_background())
 
@@ -231,7 +330,7 @@ def main() -> None:
     if startup_session:
         try:
             refreshed_flags = refresh_monitor_feature_flags(startup_session)
-            flags = start_monitor_settings_listener(startup_session, on_change=apply_monitor_feature_flags)
+            flags = start_monitor_settings_listener(startup_session)
             if refreshed_flags:
                 flags = apply_monitor_feature_flags(refreshed_flags)
             _log_startup(

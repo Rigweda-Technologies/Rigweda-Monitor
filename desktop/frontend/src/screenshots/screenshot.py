@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 
+import psutil
 from dotenv import load_dotenv
 from mss import MSS
 from mss.tools import to_png
@@ -339,38 +340,28 @@ def _normalize_process_path(path: str | None) -> str:
 
 
 def _get_process_signature(pid: int) -> dict[str, str] | None:
-    result = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            (
-                f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
-                "if ($p) { "
-                "$start = $null; "
-                "try { $start = $p.StartTime.ToUniversalTime().ToString('o') } catch { } ; "
-                "[Console]::Out.WriteLine((@{ Path = $p.Path; StartTime = $start } | ConvertTo-Json -Compress)) "
-                "}"
-            ),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    payload = result.stdout.strip()
-    if not payload:
+    try:
+        process = psutil.Process(pid)
+    except Exception:
         return None
 
     try:
-        data = json.loads(payload)
-    except json.JSONDecodeError:
+        process_path = process.exe()
+    except Exception:
+        process_path = ""
+
+    try:
+        start_time = datetime.fromtimestamp(process.create_time(), tz=UTC).isoformat().replace("+00:00", "Z")
+    except Exception:
+        start_time = ""
+
+    if not process_path and not start_time:
         return None
 
     return {
         "pid": str(pid),
-        "path": _normalize_process_path(data.get("Path")),
-        "start_time": str(data.get("StartTime") or "").strip(),
+        "path": _normalize_process_path(process_path),
+        "start_time": start_time,
     }
 
 

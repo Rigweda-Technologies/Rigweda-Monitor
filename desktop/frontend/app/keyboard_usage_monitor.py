@@ -747,15 +747,24 @@ def start_keyboard_monitor() -> tuple[bool, str]:
 
     flags = get_monitor_feature_flags()
     if not flags.get("keyboardEnabled", True):
-        return False, "Keyboard monitor is disabled by Employee Monitor settings."
+        message = "Keyboard monitor is disabled by Employee Monitor settings."
+        log_message(message)
+        return False, message
 
     if _keyboard_monitor is not None and _keyboard_monitor._listener is not None and _keyboard_monitor._listener.is_alive():
-        return True, "Keyboard monitor is already running."
+        message = "Keyboard monitor is already running."
+        log_message(message)
+        return True, message
 
     _keyboard_monitor = KeyboardUsageMonitor()
     if _keyboard_monitor.start():
-        return True, "Keyboard monitor started and syncing to Postgres."
-    return False, "Keyboard monitor failed to start."
+        message = "Keyboard monitor started and syncing to Postgres."
+        log_message(message)
+        return True, message
+
+    message = "Keyboard monitor failed to start."
+    log_message(message)
+    return False, message
 
 
 def stop_keyboard_monitor() -> None:
@@ -765,6 +774,7 @@ def stop_keyboard_monitor() -> None:
     if monitor is None:
         return
     try:
+        log_message("Keyboard monitor stop requested.")
         _set_shutdown_reason("stop requested by desktop monitor controller")
         monitor.stop()
     except Exception as error:

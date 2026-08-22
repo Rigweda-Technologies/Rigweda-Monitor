@@ -43,6 +43,18 @@ def _run_sc_command(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _hidden_subprocess_kwargs() -> dict[str, object]:
+    kwargs: dict[str, object] = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = CREATE_NO_WINDOW
+        if hasattr(subprocess, "STARTUPINFO"):
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = SW_HIDE
+            kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
 class _ShellExecuteInfo(ctypes.Structure):
     _fields_ = [
         ("cbSize", wintypes.DWORD),
