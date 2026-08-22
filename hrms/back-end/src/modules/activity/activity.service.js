@@ -672,12 +672,13 @@ exports.listAppUsage = async ({ organizationId, date, limit = 15, offset = 0, ap
   };
 };
 
-exports.listAppKeyUsage = async ({ organizationId, date }) => {
+exports.listAppKeyUsage = async ({ organizationId, date, employeeId = "" }) => {
   const timeZone = await getOrganizationTimeZone(organizationId);
   const normalizedDate = toDateKeyInTimeZone(date || new Date(), timeZone);
   const dayStart = startOfDayInTimeZone(normalizedDate, timeZone);
   const dayEnd = endOfDayInTimeZone(normalizedDate, timeZone);
   const pool = await getMonitorPgPool();
+  const requestedEmployeeId = String(employeeId || "").trim();
   const { rows } = await pool.query(
     `
       SELECT
@@ -699,12 +700,34 @@ exports.listAppKeyUsage = async ({ organizationId, date }) => {
     [String(organizationId), dayStart, dayEnd]
   );
 
-  const employeeIds = Array.from(new Set(rows.map((row) => String(row.employeeId)).filter(Boolean)));
+  let filteredRows = rows;
+  if (requestedEmployeeId) {
+    const matchingEmployees = await Employee.find({
+      organizationId,
+      $or: [
+        { _id: requestedEmployeeId },
+        { employeeCode: requestedEmployeeId },
+        { userId: requestedEmployeeId }
+      ]
+    })
+      .select("_id employeeCode userId")
+      .lean();
+
+    const allowedIds = new Set([requestedEmployeeId]);
+    for (const employee of matchingEmployees) {
+      if (employee?._id) allowedIds.add(String(employee._id));
+      if (employee?.employeeCode) allowedIds.add(String(employee.employeeCode));
+      if (employee?.userId) allowedIds.add(String(employee.userId));
+    }
+    filteredRows = rows.filter((row) => allowedIds.has(String(row.employeeId)));
+  }
+
+  const employeeIds = Array.from(new Set(filteredRows.map((row) => String(row.employeeId)).filter(Boolean)));
   const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
 
   const grouped = new Map();
 
-  for (const row of rows) {
+  for (const row of filteredRows) {
     const employee = employeeMap.get(String(row.employeeId)) || {};
     const canonicalEmployeeId = employee.employeeId || String(row.employeeId);
     const key = `${canonicalEmployeeId}::${row.appName}::${row.processName}`;

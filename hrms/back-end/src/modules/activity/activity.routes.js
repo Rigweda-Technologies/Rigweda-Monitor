@@ -65,9 +65,11 @@ router.get(
   authorize("EMP_VIEW"),
   asyncHandler(async (req, res) => {
     const date = typeof req.query.date === "string" ? req.query.date : "";
+    const employeeId = typeof req.query.employeeId === "string" ? req.query.employeeId : "";
     const data = await activityService.listAppKeyUsage({
       organizationId: req.user.organizationId,
-      date
+      date,
+      employeeId
     });
 
     return res.status(200).json({

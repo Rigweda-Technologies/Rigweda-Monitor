@@ -24,7 +24,7 @@ QUEUE_DB = DATA_ROOT / "activity_queue.db"
 LOCK_FILE = DATA_ROOT / "activity_monitor.lock"
 LOG_FILE = DATA_ROOT.parent / "logs" / "activity_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
-IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
+DEFAULT_IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
 DEFAULT_HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
 MAX_ACTIVITY_SECONDS = 3600
 POLL_SECONDS = 1
@@ -103,6 +103,15 @@ def get_heartbeat_seconds() -> int:
         return minutes * 60
     except (TypeError, ValueError):
         return DEFAULT_HEARTBEAT_SECONDS
+
+
+def get_idle_threshold_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("mouseIdleThresholdMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return DEFAULT_IDLE_THRESHOLD_SECONDS
 
 
 def get_connection() -> sqlite3.Connection:
@@ -273,8 +282,9 @@ def start_activity_monitor() -> None:
     """Record one-minute activity heartbeats; every record remains durable until the API accepts it."""
     device_id = get_device_id()
     heartbeat_seconds = get_heartbeat_seconds()
+    idle_threshold_seconds = get_idle_threshold_seconds()
     log_message(
-        f"Activity monitor started. idle_threshold={IDLE_THRESHOLD_SECONDS}s heartbeat={heartbeat_seconds}s device={device_id}"
+        f"Activity monitor started. idle_threshold={idle_threshold_seconds}s heartbeat={heartbeat_seconds}s device={device_id}"
     )
     while True:
         try:
@@ -306,7 +316,8 @@ def start_activity_monitor() -> None:
                 last_position = position
                 last_moved_at = now
 
-            next_status = "active" if now - last_moved_at < IDLE_THRESHOLD_SECONDS else "idle"
+            idle_threshold_seconds = get_idle_threshold_seconds()
+            next_status = "active" if now - last_moved_at < idle_threshold_seconds else "idle"
             heartbeat_seconds = get_heartbeat_seconds()
             if next_status == "active":
                 active_seconds += elapsed

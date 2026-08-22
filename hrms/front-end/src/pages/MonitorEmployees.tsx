@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Eye, Globe, LayoutGrid, RefreshCw, Users } from "lucide-react";
+import { Eye, Globe, Keyboard, LayoutGrid, RefreshCw, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -207,17 +207,36 @@ const MonitorEmployees = () => {
                                   size="icon"
                                   variant="outline"
                                   className="h-9 w-9"
-                                  aria-label="View webhistory"
+                                  aria-label="View browser history"
                                   onClick={() =>
                                     navigate(
-                                      `/monitor/activity?date=${encodeURIComponent(date)}`
+                                      `/monitor/browser-history?employeeId=${encodeURIComponent(employee.employeeId)}&date=${encodeURIComponent(date)}`
                                     )
                                   }
                                 >
                                   <Globe className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>View webhistory</TooltipContent>
+                              <TooltipContent>View browser history</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-9 w-9"
+                                  aria-label="View key presses"
+                                  onClick={() =>
+                                    navigate(
+                                      `/monitor/app-keys?employeeId=${encodeURIComponent(employee.employeeId)}&date=${encodeURIComponent(date)}`
+                                    )
+                                  }
+                                >
+                                  <Keyboard className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View key presses</TooltipContent>
                             </Tooltip>
 
                             <Tooltip>

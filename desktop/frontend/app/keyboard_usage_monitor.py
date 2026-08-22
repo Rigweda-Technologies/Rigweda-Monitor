@@ -33,7 +33,7 @@ LOCK_FILE = DATA_ROOT / "keyboard_monitor.lock"
 LOG_FILE = LOG_DIR / "keyboard_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 0.05
-SESSION_SNAPSHOT_SECONDS = 15
+DEFAULT_SESSION_SNAPSHOT_SECONDS = max(int(os.getenv("KEYBOARD_SESSION_SNAPSHOT_SECONDS", "15")), 5)
 DESKTOP_BACKEND_URL = prefer_hosted_backend_url(
     os.getenv("DESKTOP_BACKEND_URL", HOSTED_DESKTOP_BACKEND_URL),
     hosted_default=HOSTED_DESKTOP_BACKEND_URL,
@@ -215,6 +215,15 @@ def _summarize_sessions(rows: list[sqlite3.Row]) -> str:
     return f"count={len(rows)} app_counts={app_counts}"
 
 
+def get_snapshot_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("keyboardHeartbeatMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return DEFAULT_SESSION_SNAPSHOT_SECONDS
+
+
 class KeyboardUsageMonitor:
     def __init__(self) -> None:
         self._stop_event = threading.Event()
@@ -251,7 +260,9 @@ class KeyboardUsageMonitor:
             self._foreground_thread.start()
             self._writer_thread = threading.Thread(target=self._flush_loop, daemon=True)
             self._writer_thread.start()
-            log_message(f"Keyboard app usage monitor started. device={self._device_id}")
+            log_message(
+                f"Keyboard app usage monitor started. snapshot={get_snapshot_seconds()}s device={self._device_id}"
+            )
             return True
         except Exception as error:
             log_exception("Keyboard app usage monitor failed to start.", error)
@@ -533,7 +544,7 @@ class KeyboardUsageMonitor:
 
         if not force and self._session_last_snapshot_at is not None:
             elapsed = (self._session_last_event_at - self._session_last_snapshot_at).total_seconds()
-            if elapsed < SESSION_SNAPSHOT_SECONDS:
+            if elapsed < get_snapshot_seconds():
                 return False
 
         started_at_text = self._session_started_at.isoformat().replace("+00:00", "Z")

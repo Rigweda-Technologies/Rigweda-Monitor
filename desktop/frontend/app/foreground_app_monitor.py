@@ -29,7 +29,7 @@ LOCK_FILE = DATA_ROOT / "app_usage_monitor.lock"
 LOG_FILE = DATA_ROOT.parent / "logs" / "app_usage_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 1
-HEARTBEAT_SECONDS = max(int(os.getenv("APP_USAGE_HEARTBEAT_SECONDS", "60")), 15)
+DEFAULT_HEARTBEAT_SECONDS = max(int(os.getenv("APP_USAGE_HEARTBEAT_SECONDS", "60")), 15)
 STOP_EVENT = threading.Event()
 _APP_USAGE_LOCK = threading.Lock()
 _APP_USAGE_THREAD: threading.Thread | None = None
@@ -72,6 +72,15 @@ def _summarize_sessions(rows: list[sqlite3.Row]) -> str:
         app_name = str(row["app_name"] or "unknown")
         app_counts[app_name] = app_counts.get(app_name, 0) + 1
     return f"count={len(rows)} app_counts={app_counts}"
+
+
+def get_heartbeat_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("appUsageHeartbeatMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return DEFAULT_HEARTBEAT_SECONDS
 
 
 def get_device_id() -> str:
@@ -360,7 +369,8 @@ def start_foreground_app_monitor() -> None:
         return
 
     device_id = get_device_id()
-    log_message(f"Foreground app monitor started. heartbeat={HEARTBEAT_SECONDS}s device={device_id}")
+    heartbeat_seconds = get_heartbeat_seconds()
+    log_message(f"Foreground app monitor started. heartbeat={heartbeat_seconds}s device={device_id}")
 
     current_app: tuple[str, str] | None = None
     session_started_at: datetime | None = None
@@ -455,7 +465,8 @@ def start_foreground_app_monitor() -> None:
             session_active_seconds += elapsed
             session_key_presses += len(key_presses)
             session_key_names.extend(key_presses)
-            if now - session_last_flush >= HEARTBEAT_SECONDS:
+            heartbeat_seconds = get_heartbeat_seconds()
+            if now - session_last_flush >= heartbeat_seconds:
                 flush_session(ended_reason="heartbeat")
                 current_app = app_context
                 session_started_at = datetime.now(UTC)
