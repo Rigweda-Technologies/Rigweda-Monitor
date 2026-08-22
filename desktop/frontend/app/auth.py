@@ -29,6 +29,9 @@ STARTUP_APP_NAME = "RigwedaMonitor"
 PROFILE_SCHEMA_VERSION = 4
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 SW_HIDE = 0
+DETACHED_PROCESS = 0x00000008
+CREATE_NEW_PROCESS_GROUP = 0x00000200
+CREATE_NO_WINDOW = 0x08000000
 
 
 def _run_sc_command(*args: str) -> subprocess.CompletedProcess[str]:
@@ -440,6 +443,42 @@ def register_startup() -> tuple[bool, str]:
         return False, f"Could not register Windows startup: {error}"
 
     return True, "Windows startup registered."
+
+
+def launch_background_monitor_process() -> tuple[bool, str]:
+    """Start a detached background host for the long-running desktop monitors."""
+    if os.name != "nt":
+        return False, "Background monitor launching is only supported on Windows."
+
+    if getattr(sys, "frozen", False):
+        executable = str(Path(sys.executable).resolve())
+        args = [executable, "--background-start"]
+    else:
+        python_executable = Path(sys.executable).resolve()
+        python_windowed = python_executable.with_name("pythonw.exe")
+        launcher = python_windowed if python_windowed.exists() else python_executable
+        main_script = Path(__file__).resolve().with_name("main.py")
+        args = [str(launcher), str(main_script), "--background-start"]
+
+    creationflags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+    startupinfo = None
+    if hasattr(subprocess, "STARTUPINFO"):
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = SW_HIDE
+
+    try:
+        subprocess.Popen(
+            args,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            creationflags=creationflags,
+            startupinfo=startupinfo,
+            close_fds=True,
+        )
+    except OSError as error:
+        return False, f"Could not launch background monitor host: {error}"
+
+    return True, "Background monitor host launched."
 
 
 def login_to_hrms(email: str, password: str) -> tuple[bool, str, dict | None]:

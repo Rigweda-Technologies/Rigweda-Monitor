@@ -13,7 +13,7 @@ import urllib.request
 import customtkinter as ctk
 from PIL import Image
 
-from app.auth import ensure_service_running, login_to_hrms, register_startup
+from app.auth import ensure_service_running, launch_background_monitor_process, login_to_hrms, register_startup
 from app.monitor_settings import apply_monitor_feature_flags, get_monitor_feature_flags, start_monitor_settings_listener
 
 COLORS = {
@@ -551,29 +551,54 @@ class LoginApp:
             self._set_status(message, COLORS["error"])
             return False
 
-        flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
-
         if register_windows_startup:
             register_startup()
 
         self._show_employee_details(session)
-        enabled_labels = []
-        if flags.get("screenshotsEnabled", True):
-            enabled_labels.append("screenshots")
-        if flags.get("mouseEnabled", True):
-            enabled_labels.append("mouse activity")
-        if flags.get("keyboardEnabled", True):
-            enabled_labels.append("keyboard")
-        if flags.get("appUsageEnabled", True):
-            enabled_labels.append("app usage")
+        background_started, _background_message = launch_background_monitor_process()
+        if background_started:
+            flags = get_monitor_feature_flags()
+            enabled_labels = []
+            if flags.get("screenshotsEnabled", True):
+                enabled_labels.append("screenshots")
+            if flags.get("mouseEnabled", True):
+                enabled_labels.append("mouse activity")
+            if flags.get("keyboardEnabled", True):
+                enabled_labels.append("keyboard")
+            if flags.get("appUsageEnabled", True):
+                enabled_labels.append("app usage")
 
-        if enabled_labels:
+            if enabled_labels:
+                self._set_status(
+                    f"Login successful. {', '.join(enabled_labels).capitalize()} monitoring is running in the background.",
+                    COLORS["success"],
+                )
+            else:
+                self._set_status("Login successful. Monitoring is disabled by Employee Monitor settings.", COLORS["success"])
+        else:
+            flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+            apply_monitor_feature_flags(flags)
+            enabled_labels = []
+            if flags.get("screenshotsEnabled", True):
+                enabled_labels.append("screenshots")
+            if flags.get("mouseEnabled", True):
+                enabled_labels.append("mouse activity")
+            if flags.get("keyboardEnabled", True):
+                enabled_labels.append("keyboard")
+            if flags.get("appUsageEnabled", True):
+                enabled_labels.append("app usage")
+
+            if enabled_labels:
+                self._set_status(
+                    f"Login successful. {', '.join(enabled_labels).capitalize()} monitoring is active in this session.",
+                    COLORS["success"],
+                )
+            else:
+                self._set_status("Login successful. Monitoring is disabled by Employee Monitor settings.", COLORS["success"])
             self._set_status(
-                f"Login successful. {', '.join(enabled_labels).capitalize()} monitoring is active.",
+                f"Login successful. Background host could not be launched, so monitoring continues in this session.",
                 COLORS["success"],
             )
-        else:
-            self._set_status("Login successful. Monitoring is disabled by Employee Monitor settings.", COLORS["success"])
         self.subtitle_label.configure(
             text=f"Session verified. Employee profile is active. Popup closes in {self.auto_close_seconds} seconds.",
             text_color=COLORS["text_muted"],

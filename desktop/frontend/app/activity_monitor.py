@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import ctypes
 import json
 import os
@@ -29,6 +30,8 @@ DEFAULT_HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30"
 MAX_ACTIVITY_SECONDS = 3600
 POLL_SECONDS = 1
 STOP_EVENT = threading.Event()
+SHUTDOWN_REASON = "running"
+SHUTDOWN_REASON_LOGGED = False
 
 
 def _backend_url_candidates() -> list[str]:
@@ -67,6 +70,33 @@ def log_exception(message: object, error: BaseException | None = None) -> None:
                 traceback.print_exc(file=log_file)
     except OSError:
         pass
+
+
+def _set_shutdown_reason(reason: str) -> None:
+    global SHUTDOWN_REASON
+    clean_reason = str(reason or "").strip() or "unspecified"
+    if SHUTDOWN_REASON in ("running", ""):
+        SHUTDOWN_REASON = clean_reason
+
+
+def get_shutdown_reason() -> str:
+    return SHUTDOWN_REASON
+
+
+def _log_shutdown_once() -> None:
+    global SHUTDOWN_REASON_LOGGED
+    if SHUTDOWN_REASON_LOGGED:
+        return
+    SHUTDOWN_REASON_LOGGED = True
+    log_message(f"Activity monitor exiting. reason={get_shutdown_reason()}")
+
+
+def _log_shutdown_on_exit() -> None:
+    if get_shutdown_reason() != "running":
+        _log_shutdown_once()
+
+
+atexit.register(_log_shutdown_on_exit)
 
 
 class POINT(ctypes.Structure):
@@ -341,18 +371,25 @@ def start_activity_monitor() -> None:
                 sync_pending_events()
     finally:
         # The next app launch will replace a stale PID file if this monitor exits unexpectedly.
-        pass
+        if get_shutdown_reason() == "running":
+            _set_shutdown_reason("stop event set or loop ended")
 
 
-def stop_activity_monitor() -> None:
+def stop_activity_monitor(reason: str = "stop requested") -> None:
+    _set_shutdown_reason(reason)
     STOP_EVENT.set()
 
 
 def main() -> int:
+    global SHUTDOWN_REASON, SHUTDOWN_REASON_LOGGED
+    SHUTDOWN_REASON = "running"
+    SHUTDOWN_REASON_LOGGED = False
     STOP_EVENT.clear()
     flags = get_monitor_feature_flags()
     if not flags.get("mouseEnabled", True):
         log_message("Activity monitor is disabled by Employee Monitor settings.")
+        _set_shutdown_reason("disabled by Employee Monitor settings")
+        _log_shutdown_once()
         return 0
 
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
@@ -375,13 +412,17 @@ def main() -> int:
     try:
         start_activity_monitor()
     except KeyboardInterrupt:
+        _set_shutdown_reason("KeyboardInterrupt")
+        _log_shutdown_once()
         return 0
     except Exception:
+        _set_shutdown_reason("crashed")
         log_exception("Activity monitor crashed.")
         raise
     finally:
         lock_handle.close()
         LOCK_FILE.unlink(missing_ok=True)
+        _log_shutdown_once()
     return 0
 
 

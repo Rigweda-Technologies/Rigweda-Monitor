@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import sqlite3
@@ -40,6 +41,8 @@ DESKTOP_BACKEND_URL = prefer_hosted_backend_url(
 )
 TARGET_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}
 ENABLE_LOCAL_KEY_TRACE = os.getenv("RIGWEDA_MONITOR_LOCAL_KEY_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
+_SHUTDOWN_REASON = "running"
+_SHUTDOWN_REASON_LOGGED = False
 
 
 def _backend_url_candidates() -> list[str]:
@@ -78,6 +81,29 @@ def log_exception(message: object, error: BaseException | None = None) -> None:
                 traceback.print_exc(file=log_file)
     except OSError:
         pass
+
+
+def _set_shutdown_reason(reason: str) -> None:
+    global _SHUTDOWN_REASON
+    clean_reason = str(reason or "").strip() or "unspecified"
+    if _SHUTDOWN_REASON in ("running", ""):
+        _SHUTDOWN_REASON = clean_reason
+
+
+def _log_shutdown_once() -> None:
+    global _SHUTDOWN_REASON_LOGGED
+    if _SHUTDOWN_REASON_LOGGED:
+        return
+    _SHUTDOWN_REASON_LOGGED = True
+    log_message(f"Keyboard monitor exiting. reason={_SHUTDOWN_REASON}")
+
+
+def _log_shutdown_on_exit() -> None:
+    if _SHUTDOWN_REASON != "running":
+        _log_shutdown_once()
+
+
+atexit.register(_log_shutdown_on_exit)
 
 
 def get_device_id() -> str:
@@ -269,6 +295,7 @@ class KeyboardUsageMonitor:
             return False
 
     def stop(self) -> None:
+        _set_shutdown_reason("stop requested")
         self._stop_event.set()
         try:
             self._flush_session(ended_reason="shutdown")
@@ -738,27 +765,40 @@ def stop_keyboard_monitor() -> None:
     if monitor is None:
         return
     try:
+        _set_shutdown_reason("stop requested by desktop monitor controller")
         monitor.stop()
-    except Exception:
-        pass
+    except Exception as error:
+        log_exception("Keyboard monitor stop failed.", error)
 
 
 def main() -> int:
-    global _keyboard_monitor
+    global _keyboard_monitor, _SHUTDOWN_REASON, _SHUTDOWN_REASON_LOGGED
+
+    _SHUTDOWN_REASON = "running"
+    _SHUTDOWN_REASON_LOGGED = False
 
     flags = get_monitor_feature_flags()
     if not flags.get("keyboardEnabled", True):
         log_message("Keyboard monitor is disabled by Employee Monitor settings.")
+        _set_shutdown_reason("disabled by Employee Monitor settings")
+        _log_shutdown_once()
         return 0
 
     _keyboard_monitor = KeyboardUsageMonitor()
     if not _keyboard_monitor.start():
+        _set_shutdown_reason("failed to start")
+        _log_shutdown_once()
         return 1
 
     try:
         _keyboard_monitor.wait()
     except KeyboardInterrupt:
+        _set_shutdown_reason("KeyboardInterrupt")
+        _log_shutdown_once()
         return 0
     finally:
         _keyboard_monitor.stop()
+        if _SHUTDOWN_REASON == "running":
+            _set_shutdown_reason("stop event set or loop ended")
+        _log_shutdown_once()
     return 0

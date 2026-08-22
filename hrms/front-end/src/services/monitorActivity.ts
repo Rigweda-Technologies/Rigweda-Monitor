@@ -189,12 +189,13 @@ export const getMonitorEmployeeActivity = async (date: string) => {
   return response.data;
 };
 
-export const getMonitorAppUsage = async (date: string, params?: { limit?: number; offset?: number; appName?: string; processName?: string }) => {
+export const getMonitorAppUsage = async (date: string, params?: { limit?: number; offset?: number; appName?: string; processName?: string; employeeId?: string }) => {
   const query = new URLSearchParams({ date: String(date) });
   if (typeof params?.limit === "number") query.set("limit", String(params.limit));
   if (typeof params?.offset === "number") query.set("offset", String(params.offset));
   if (params?.appName) query.set("appName", params.appName);
   if (params?.processName) query.set("processName", params.processName);
+  if (params?.employeeId) query.set("employeeId", params.employeeId);
   const response = await getApiWithToken(
     `/activity/apps?${query.toString()}`,
     null,
