@@ -80,3 +80,19 @@ export const getMonitorCloudinarySettingsFromRigweda = async ({ token }) => {
 
   return payload.data;
 };
+
+export const getMonitorUsbSettingsFromRigweda = async ({ token }) => {
+  const response = await fetch(buildHrmsApiUrl("/api/agents/usb/control-config"), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success || !payload?.data) {
+    throw new Error(payload?.message || `Failed to fetch USB monitor settings: ${response.status}`);
+  }
+
+  return payload.data;
+};

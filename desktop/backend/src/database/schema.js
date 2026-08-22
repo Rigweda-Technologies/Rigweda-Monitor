@@ -78,6 +78,19 @@ export const initializeDatabase = async () => {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_usb_settings (
+      organization_id TEXT PRIMARY KEY,
+      usb_mode TEXT NOT NULL DEFAULT 'allow',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_usb_settings
+    ADD COLUMN IF NOT EXISTS usb_mode TEXT NOT NULL DEFAULT 'allow'
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS monitor_activity_events (
       id TEXT PRIMARY KEY,
       organization_id TEXT,
