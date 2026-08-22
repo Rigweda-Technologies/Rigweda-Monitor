@@ -5,10 +5,12 @@ datas = [('.venv/Lib/site-packages/customtkinter/assets', 'customtkinter/assets'
 binaries = []
 psutil_datas, psutil_binaries, psutil_hiddenimports = collect_all('psutil')
 pynput_datas, pynput_binaries, pynput_hiddenimports = collect_all('pynput')
+socketio_datas, socketio_binaries, socketio_hiddenimports = collect_all('socketio')
+engineio_datas, engineio_binaries, engineio_hiddenimports = collect_all('engineio')
 tmp_ret = collect_all('customtkinter')
-datas += psutil_datas + pynput_datas + tmp_ret[0]
-binaries += psutil_binaries + pynput_binaries + tmp_ret[1]
-hiddenimports = psutil_hiddenimports + pynput_hiddenimports + tmp_ret[2]
+datas += psutil_datas + pynput_datas + socketio_datas + engineio_datas + tmp_ret[0]
+binaries += psutil_binaries + pynput_binaries + socketio_binaries + engineio_binaries + tmp_ret[1]
+hiddenimports = psutil_hiddenimports + pynput_hiddenimports + socketio_hiddenimports + engineio_hiddenimports + tmp_ret[2]
 
 
 a = Analysis(
