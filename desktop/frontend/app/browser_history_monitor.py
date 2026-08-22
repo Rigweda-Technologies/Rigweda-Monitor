@@ -1,3 +1,4 @@
+import atexit
 import hashlib
 import json
 import os
@@ -34,6 +35,8 @@ STATUS_LOG_FILE = Path(LOG_DIR) / "browser_monitor.log"  # Thread status logs he
 last_processed_time = {}  # Track last processed timestamp per browser
 _STOP_EVENT = threading.Event()
 _MONITOR_THREAD: threading.Thread | None = None
+_SHUTDOWN_REASON = "running"
+_SHUTDOWN_REASON_LOGGED = False
 
 
 def _browser_sync_interval_seconds() -> int:
@@ -307,6 +310,29 @@ def write_to_log_folder(text_to_log: str) -> None:
             f.write(text_to_log)
     except Exception:
         pass
+
+
+def _set_shutdown_reason(reason: str) -> None:
+    global _SHUTDOWN_REASON
+    clean_reason = str(reason or "").strip() or "unspecified"
+    if _SHUTDOWN_REASON in ("running", ""):
+        _SHUTDOWN_REASON = clean_reason
+
+
+def _log_shutdown_once() -> None:
+    global _SHUTDOWN_REASON_LOGGED
+    if _SHUTDOWN_REASON_LOGGED:
+        return
+    _SHUTDOWN_REASON_LOGGED = True
+    write_to_log_folder(f"[{time.strftime('%Y-%m-%dT%H:%M:%S')}] Browser monitor exiting. reason={_SHUTDOWN_REASON}\n")
+
+
+def _log_shutdown_on_exit() -> None:
+    if _SHUTDOWN_REASON != "running":
+        _log_shutdown_once()
+
+
+atexit.register(_log_shutdown_on_exit)
 
 
 def _desktop_backend_url() -> str:
@@ -672,7 +698,12 @@ def start_browser_monitor() -> tuple[bool, str]:
         def monitor_loop():
             interval_seconds = _browser_sync_interval_seconds()
             while not _STOP_EVENT.is_set():
-                check_browser_history()
+                try:
+                    check_browser_history()
+                except Exception as error:
+                    write_to_log_folder(
+                        f"[{time.strftime('%Y-%m-%dT%H:%M:%S')}] Browser monitor loop failed: {type(error).__name__}: {error}\n"
+                    )
                 interval_seconds = _browser_sync_interval_seconds()
                 _STOP_EVENT.wait(interval_seconds)
 
@@ -680,6 +711,10 @@ def start_browser_monitor() -> tuple[bool, str]:
         _MONITOR_THREAD.start()
         return True, "Browser monitor started successfully."
     except Exception as e:
+        _set_shutdown_reason("failed to start")
+        write_to_log_folder(
+            f"[{time.strftime('%Y-%m-%dT%H:%M:%S')}] Browser monitor failed to start: {type(e).__name__}: {e}\n"
+        )
         return False, f"Failed to start browser monitor: {str(e)}"
 
 
@@ -687,6 +722,7 @@ def stop_browser_monitor() -> None:
     """Stops the background browser history monitoring thread."""
     global _MONITOR_THREAD
 
+    _set_shutdown_reason("stop requested")
     _STOP_EVENT.set()
     thread = _MONITOR_THREAD
     if thread is not None and thread.is_alive():
@@ -695,4 +731,5 @@ def stop_browser_monitor() -> None:
         except Exception:
             pass
     _MONITOR_THREAD = None
+    _log_shutdown_once()
 

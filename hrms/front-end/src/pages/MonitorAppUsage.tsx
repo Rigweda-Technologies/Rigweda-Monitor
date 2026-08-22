@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clock3, Monitor, RefreshCw } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,11 +51,23 @@ const formatTypedText = (value: string | null | undefined) => {
   return text.length > 0 ? text : "-";
 };
 
+const matchesRequestedEmployee = (
+  item: { employeeId?: string | null; employeeCode?: string | null },
+  requestedEmployeeId: string
+) => {
+  const requested = String(requestedEmployeeId || "").trim().toLowerCase();
+  if (!requested) return true;
+
+  const employeeId = String(item.employeeId || "").trim().toLowerCase();
+  const employeeCode = String(item.employeeCode || "").trim().toLowerCase();
+  return employeeId === requested || employeeCode === requested;
+};
+
 const groupAppSessions = (sessions: MonitorAppUsageSession[]) => {
   const grouped = new Map<string, AppUsageGroup>();
 
   for (const session of sessions) {
-    const key = `${session.appName}::${session.processName}`;
+    const key = `${String(session.appName || "").trim().toLowerCase()}::${String(session.processName || "").trim().toLowerCase()}`;
     const current = grouped.get(key) || {
       appName: session.appName,
       processName: session.processName,
@@ -75,6 +88,9 @@ const groupAppSessions = (sessions: MonitorAppUsageSession[]) => {
 };
 
 const MonitorAppUsage = () => {
+  const [searchParams] = useSearchParams();
+  const employeeIdParam = searchParams.get("employeeId")?.trim() || "";
+  const dateParam = searchParams.get("date")?.trim() || "";
   const [date, setDate] = useState(today);
   const [employees, setEmployees] = useState<MonitorAppUsageEmployee[]>([]);
   const [sessions, setSessions] = useState<MonitorAppUsageSession[]>([]);
@@ -95,14 +111,20 @@ const MonitorAppUsage = () => {
     }
 
     try {
-      const data = await getMonitorAppUsage(date, { limit: INITIAL_SESSION_LIMIT, offset: 0 });
+      const data = await getMonitorAppUsage(date, {
+        limit: INITIAL_SESSION_LIMIT,
+        offset: 0,
+        employeeId: employeeIdParam || undefined
+      });
       if (data.timezone) {
         setTimeZone(data.timezone);
         setOrgTimeZone(data.timezone);
       }
-      setEmployees(data.employees || []);
-      setSessions(data.sessions || []);
-      setSessionTotal(Number(data.sessionPage?.total || (data.sessions || []).length || 0));
+      const nextEmployees = (data.employees || []).filter((employee) => matchesRequestedEmployee(employee, employeeIdParam));
+      const nextSessions = (data.sessions || []).filter((session) => matchesRequestedEmployee(session, employeeIdParam));
+      setEmployees(nextEmployees);
+      setSessions(nextSessions);
+      setSessionTotal(Number(data.sessionPage?.total || nextSessions.length || 0));
     } catch (error) {
       if (manual) toast.error("Could not refresh app usage.");
       console.error("Could not load app usage", error);
@@ -110,7 +132,7 @@ const MonitorAppUsage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [date]);
+  }, [date, employeeIdParam]);
 
   const loadAppDetails = useCallback(async (group: AppUsageGroup) => {
     const requestSeq = ++detailRequestSeqRef.current;
@@ -123,11 +145,12 @@ const MonitorAppUsage = () => {
         appName: group.appName,
         processName: group.processName,
         limit: APP_DETAIL_LIMIT,
-        offset: 0
+        offset: 0,
+        employeeId: employeeIdParam || undefined
       });
 
       if (requestSeq !== detailRequestSeqRef.current) return;
-      setDetailSessions(data.sessions || []);
+      setDetailSessions((data.sessions || []).filter((session) => matchesRequestedEmployee(session, employeeIdParam)));
     } catch (error) {
       if (requestSeq === detailRequestSeqRef.current) {
         toast.error("Could not load app details.");
@@ -138,7 +161,7 @@ const MonitorAppUsage = () => {
         setDetailLoading(false);
       }
     }
-  }, [date]);
+  }, [date, employeeIdParam]);
 
   useEffect(() => {
     void loadSessions();
@@ -147,8 +170,10 @@ const MonitorAppUsage = () => {
   useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
 
   useEffect(() => {
-    setDate(toDateKeyInOrgTimeZone(new Date()));
-  }, [timeZone]);
+    if (!dateParam) {
+      setDate(toDateKeyInOrgTimeZone(new Date()));
+    }
+  }, [timeZone, dateParam]);
 
   useEffect(() => {
     setSelectedGroup(null);
@@ -162,6 +187,7 @@ const MonitorAppUsage = () => {
   const totalKeyPresses = employees.reduce((sum, employee) => sum + Number(employee.totalKeyPresses || 0), 0);
   const topEmployee = useMemo(() => employees[0] || null, [employees]);
   const groupedApps = useMemo(() => groupAppSessions(sessions), [sessions]);
+  const pageTitle = employeeIdParam ? "Employee app usage" : "Employee app usage";
 
   const closeDetails = () => {
     setSelectedGroup(null);
@@ -175,11 +201,16 @@ const MonitorAppUsage = () => {
         <div className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold">Foreground app usage</h2>
+              <h2 className="text-2xl font-semibold">{pageTitle}</h2>
               <p className="text-sm text-muted-foreground">
-                Tracks which application was active and how long it stayed in focus.
+                {employeeIdParam
+                  ? "Tracks the selected employee's active applications and focus time."
+                  : "Tracks which application was active and how long it stayed in focus."}
               </p>
               <p className="text-xs text-muted-foreground">Displayed in {timeZone} time.</p>
+              {employeeIdParam && (
+                <p className="text-xs text-muted-foreground">Filtered by employee ID: {employeeIdParam}</p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-[155px]" />
@@ -199,7 +230,10 @@ const MonitorAppUsage = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Monitor className="h-5 w-5" /> Employee app usage</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Monitor className="h-5 w-5" />
+                {employeeIdParam ? "Employee app usage" : "Employee app usage"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Table>

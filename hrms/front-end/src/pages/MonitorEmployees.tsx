@@ -248,7 +248,7 @@ const MonitorEmployees = () => {
                                   aria-label="View apps used"
                                   onClick={() =>
                                     navigate(
-                                      `/monitor/apps?date=${encodeURIComponent(date)}`
+                                      `/monitor/apps?employeeId=${encodeURIComponent(employee.employeeId)}&date=${encodeURIComponent(date)}`
                                     )
                                   }
                                 >
