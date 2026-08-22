@@ -17,7 +17,7 @@ import psutil
 
 # Pull the path framework matching the rest of your app
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 # Separate path targets exactly matching your project architecture
@@ -301,7 +301,10 @@ def write_to_log_folder(text_to_log: str) -> None:
 
 
 def _desktop_backend_url() -> str:
-    return os.getenv("DESKTOP_BACKEND_URL", DEFAULT_DESKTOP_BACKEND_URL).rstrip("/")
+    return prefer_hosted_backend_url(
+        os.getenv("DESKTOP_BACKEND_URL", DEFAULT_DESKTOP_BACKEND_URL),
+        hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+    )
 
 
 def _browser_history_endpoint() -> str:

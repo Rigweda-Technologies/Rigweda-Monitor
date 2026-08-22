@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.auth import DATA_ROOT, load_auth_session
+from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url
 
 try:
     import socketio
@@ -50,7 +51,7 @@ def _force_keyboard_enabled() -> bool:
 def _hrms_backend_base_url() -> str:
     configured = os.getenv("HRMS_BACKEND_URL", "").strip()
     if configured:
-        return configured.rstrip("/")
+        return prefer_hosted_backend_url(configured, hosted_default=HOSTED_HRMS_BACKEND_URL)
 
     login_url = os.getenv("HRMS_LOGIN_URL", "").strip()
     if login_url:
@@ -61,7 +62,7 @@ def _hrms_backend_base_url() -> str:
             return normalized_login[: -len("/login")].rstrip("/")
         return normalized_login
 
-    return "https://rigweda-hrms-backend.onrender.com/api"
+    return HOSTED_HRMS_BACKEND_URL
 
 
 def _hrms_api_url(path: str) -> str:

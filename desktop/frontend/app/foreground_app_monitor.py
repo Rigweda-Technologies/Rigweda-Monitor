@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -31,6 +31,8 @@ DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 1
 HEARTBEAT_SECONDS = max(int(os.getenv("APP_USAGE_HEARTBEAT_SECONDS", "60")), 15)
 STOP_EVENT = threading.Event()
+_APP_USAGE_LOCK = threading.Lock()
+_APP_USAGE_THREAD: threading.Thread | None = None
 
 
 def utc_now() -> str:
@@ -296,8 +298,11 @@ def sync_pending_sessions() -> bool:
         ]
     }
     ids = [row["session_id"] for row in rows]
-    configured = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    configured = prefer_hosted_backend_url(
+        os.getenv("DESKTOP_BACKEND_URL", HOSTED_DESKTOP_BACKEND_URL),
+        hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+    )
+    hosted = HOSTED_DESKTOP_BACKEND_URL
     backend_urls = [configured]
     if configured != hosted:
         backend_urls.append(hosted)
@@ -497,6 +502,29 @@ def main() -> int:
 
 def stop_foreground_app_monitor() -> None:
     STOP_EVENT.set()
+
+
+def start_app_usage_monitor() -> tuple[bool, str]:
+    """Compatibility wrapper used by the shared monitor flag dispatcher."""
+    global _APP_USAGE_THREAD
+
+    if STOP_EVENT.is_set():
+        STOP_EVENT.clear()
+
+    with _APP_USAGE_LOCK:
+        if _APP_USAGE_THREAD is not None and _APP_USAGE_THREAD.is_alive():
+            return True, "Foreground app monitor is already running."
+
+        thread = threading.Thread(target=run_monitor, name="ForegroundAppMonitor", daemon=False)
+        _APP_USAGE_THREAD = thread
+        thread.start()
+
+    return True, "Foreground app monitor started."
+
+
+def stop_app_usage_monitor() -> None:
+    """Compatibility wrapper used by the shared monitor flag dispatcher."""
+    stop_foreground_app_monitor()
 
 
 def run_monitor() -> int:

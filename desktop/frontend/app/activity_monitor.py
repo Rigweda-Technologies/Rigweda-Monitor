@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -33,10 +33,13 @@ STOP_EVENT = threading.Event()
 
 def _backend_url_candidates() -> list[str]:
     """Prefer the configured desktop backend, then fall back to hosted service."""
-    configured = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    configured = prefer_hosted_backend_url(
+        os.getenv("DESKTOP_BACKEND_URL", HOSTED_DESKTOP_BACKEND_URL),
+        hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+    )
+    hosted = HOSTED_DESKTOP_BACKEND_URL
     candidates = [configured]
-    if configured != hosted:
+    if configured != hosted and not configured.startswith(("http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1")):
         candidates.append(hosted)
     return list(dict.fromkeys(candidates))
 

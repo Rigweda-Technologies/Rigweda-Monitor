@@ -14,7 +14,7 @@ import base64
 from ctypes import wintypes
 from pathlib import Path
 
-from app.env import load_app_env, writable_runtime_path
+from app.env import HOSTED_HRMS_BACKEND_URL, is_frozen_app, load_app_env, prefer_hosted_backend_url, writable_runtime_path
 
 load_app_env()
 
@@ -24,7 +24,7 @@ DEFAULT_LOGIN_URL = f"{DEFAULT_HRMS_BACKEND_URL}/users/login"
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 AUTH_FILE = DATA_ROOT / "auth.json"
 ALT_AUTH_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\rigweda-monitor\data\auth.json"))
-SERVICE_NAME = "MyAppBackendService"
+SERVICE_NAME = "RigwedaMonitorService"
 STARTUP_APP_NAME = "RigwedaMonitor"
 PROFILE_SCHEMA_VERSION = 4
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
@@ -68,7 +68,7 @@ def _is_access_denied(output: str) -> bool:
 def _requires_local_windows_service() -> bool:
     """Use the legacy Windows service only when explicitly enabled.
 
-    A local API URL does not mean that ``MyAppBackendService`` exists: during
+    A local API URL does not mean that ``RigwedaMonitor`` exists: during
     development the API is commonly started directly with Node/Python.
     """
     return str(os.getenv("DESKTOP_START_WINDOWS_SERVICE", "false")).strip().lower() in {"1", "true", "yes"}
@@ -209,7 +209,7 @@ def _response_data(payload: dict) -> dict:
 
 
 def _hrms_backend_url() -> str:
-    return os.getenv("HRMS_BACKEND_URL", DEFAULT_HRMS_BACKEND_URL).rstrip("/")
+    return prefer_hosted_backend_url(os.getenv("HRMS_BACKEND_URL", DEFAULT_HRMS_BACKEND_URL), hosted_default=HOSTED_HRMS_BACKEND_URL)
 
 
 def _hrms_api_url(path: str) -> str:
@@ -224,7 +224,7 @@ def _login_url_candidates() -> list[str]:
     """Prefer the configured backend, but fall back to hosted login for offline local dev."""
     configured_base = _hrms_backend_url()
     candidates = [configured_base]
-    if configured_base != DEFAULT_HRMS_BACKEND_URL:
+    if not is_frozen_app() and configured_base != DEFAULT_HRMS_BACKEND_URL:
         candidates.append(DEFAULT_HRMS_BACKEND_URL)
 
     login_urls: list[str] = []
@@ -390,6 +390,21 @@ def load_auth_session(*, validate_token: bool = True) -> dict | None:
             _save_auth_session(session)
 
     return session
+
+
+def load_saved_auth_email() -> str | None:
+    """Return the last saved login email without requiring a valid session token."""
+    for auth_path in _auth_session_paths():
+        try:
+            session = json.loads(auth_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+
+        email = _pick_first_text(session.get("email"))
+        if email:
+            return email
+
+    return None
 
 
 def register_startup() -> tuple[bool, str]:
