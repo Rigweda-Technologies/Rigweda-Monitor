@@ -17,7 +17,7 @@ import psutil
 
 # Pull the path framework matching the rest of your app
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 # Separate path targets exactly matching your project architecture
@@ -34,6 +34,15 @@ STATUS_LOG_FILE = Path(LOG_DIR) / "browser_monitor.log"  # Thread status logs he
 last_processed_time = {}  # Track last processed timestamp per browser
 _STOP_EVENT = threading.Event()
 _MONITOR_THREAD: threading.Thread | None = None
+
+
+def _browser_sync_interval_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("browserHistorySyncMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return 60
 
 
 def get_active_window_info() -> tuple[str, str]:
@@ -301,7 +310,10 @@ def write_to_log_folder(text_to_log: str) -> None:
 
 
 def _desktop_backend_url() -> str:
-    return os.getenv("DESKTOP_BACKEND_URL", DEFAULT_DESKTOP_BACKEND_URL).rstrip("/")
+    return prefer_hosted_backend_url(
+        os.getenv("DESKTOP_BACKEND_URL", DEFAULT_DESKTOP_BACKEND_URL),
+        hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+    )
 
 
 def _browser_history_endpoint() -> str:
@@ -652,12 +664,17 @@ def start_browser_monitor() -> tuple[bool, str]:
 
         _STOP_EVENT.clear()
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
-        write_to_log_folder(f"\n[{timestamp}] --- Covert Browser History Monitor Thread Initialized ---\n")
+        sync_seconds = _browser_sync_interval_seconds()
+        write_to_log_folder(
+            f"\n[{timestamp}] --- Covert Browser History Monitor Thread Initialized --- interval={sync_seconds}s ---\n"
+        )
         
         def monitor_loop():
+            interval_seconds = _browser_sync_interval_seconds()
             while not _STOP_EVENT.is_set():
                 check_browser_history()
-                _STOP_EVENT.wait(0.5)  # Check every 500ms for new history
+                interval_seconds = _browser_sync_interval_seconds()
+                _STOP_EVENT.wait(interval_seconds)
 
         _MONITOR_THREAD = threading.Thread(target=monitor_loop, name="BrowserHistoryMonitor", daemon=True)
         _MONITOR_THREAD.start()

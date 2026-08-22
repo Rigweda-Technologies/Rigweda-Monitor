@@ -29,6 +29,13 @@ import {
 import { toast } from "sonner";
 
 type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled" | "appUsageEnabled" | "browserHistoryEnabled";
+type MonitorNumericKey =
+  | "screenshotIntervalMinutes"
+  | "mouseHeartbeatMinutes"
+  | "mouseIdleThresholdMinutes"
+  | "keyboardHeartbeatMinutes"
+  | "appUsageHeartbeatMinutes"
+  | "browserHistorySyncMinutes";
 
 type MonitorSettingsForm = {
   cloudName: string;
@@ -43,6 +50,10 @@ type MonitorSettingsForm = {
   browserHistoryEnabled: boolean;
   screenshotIntervalMinutes: number;
   mouseHeartbeatMinutes: number;
+  mouseIdleThresholdMinutes: number;
+  keyboardHeartbeatMinutes: number;
+  appUsageHeartbeatMinutes: number;
+  browserHistorySyncMinutes: number;
 };
 
 const MONITOR_CONTROLS: Array<{
@@ -77,6 +88,90 @@ const MONITOR_CONTROLS: Array<{
   },
 ];
 
+const MONITOR_SECTIONS: Array<{
+  key: MonitorControlKey;
+  label: string;
+  description: string;
+  icon: typeof Camera;
+  fields: Array<{
+    key: MonitorNumericKey;
+    label: string;
+    helper: string;
+    fullWidth?: boolean;
+  }>;
+}> = [
+  {
+    key: "screenshotsEnabled",
+    label: "Screenshots",
+    description: "Capture and upload employee screenshots.",
+    icon: Camera,
+    fields: [
+      {
+        key: "screenshotIntervalMinutes",
+        label: "Interval",
+        helper: "Capture one screenshot every N minutes.",
+      },
+    ],
+  },
+  {
+    key: "mouseEnabled",
+    label: "Mouse activity",
+    description: "Track idle and active mouse movement.",
+    icon: MousePointer2,
+    fields: [
+      {
+        key: "mouseHeartbeatMinutes",
+        label: "Heartbeat",
+        helper: "Send a mouse activity heartbeat every N minutes.",
+      },
+      {
+        key: "mouseIdleThresholdMinutes",
+        label: "Idle threshold",
+        helper: "If the mouse stays active for N minutes, keep the user online for the next N minutes.",
+      },
+    ],
+  },
+  {
+    key: "keyboardEnabled",
+    label: "Keyboard activity",
+    description: "Track app-scoped key usage sessions.",
+    icon: Keyboard,
+    fields: [
+      {
+        key: "keyboardHeartbeatMinutes",
+        label: "Sync interval",
+        helper: "Sync keyboard sessions every N minutes.",
+      },
+    ],
+  },
+  {
+    key: "appUsageEnabled",
+    label: "App usage",
+    description: "Track foreground application usage sessions.",
+    icon: Monitor,
+    fields: [
+      {
+        key: "appUsageHeartbeatMinutes",
+        label: "Sync interval",
+        helper: "Send foreground app sessions every N minutes.",
+      },
+    ],
+  },
+  {
+    key: "browserHistoryEnabled",
+    label: "Browser history",
+    description: "Record approved browser navigation activity.",
+    icon: Globe,
+    fields: [
+      {
+        key: "browserHistorySyncMinutes",
+        label: "Sync interval",
+        helper: "Sync browser history every N minutes.",
+      },
+    ],
+  },
+];
+
 const MonitorSettings = () => {
   const [form, setForm] = useState<MonitorSettingsForm>({
     cloudName: "",
@@ -90,7 +185,11 @@ const MonitorSettings = () => {
     appUsageEnabled: true,
     browserHistoryEnabled: false,
     screenshotIntervalMinutes: 1,
-    mouseHeartbeatMinutes: 1
+    mouseHeartbeatMinutes: 1,
+    mouseIdleThresholdMinutes: 1,
+    keyboardHeartbeatMinutes: 1,
+    appUsageHeartbeatMinutes: 1,
+    browserHistorySyncMinutes: 1
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -116,7 +215,11 @@ const MonitorSettings = () => {
             appUsageEnabled: settings.appUsageEnabled ?? true,
             browserHistoryEnabled: settings.browserHistoryEnabled ?? false,
             screenshotIntervalMinutes: Math.max(Number(settings.screenshotIntervalMinutes || 1), 1),
-            mouseHeartbeatMinutes: Math.max(Number(settings.mouseHeartbeatMinutes || 1), 1)
+            mouseHeartbeatMinutes: Math.max(Number(settings.mouseHeartbeatMinutes || 1), 1),
+            mouseIdleThresholdMinutes: Math.max(Number(settings.mouseIdleThresholdMinutes || 1), 1),
+            keyboardHeartbeatMinutes: Math.max(Number(settings.keyboardHeartbeatMinutes || 1), 1),
+            appUsageHeartbeatMinutes: Math.max(Number(settings.appUsageHeartbeatMinutes || 1), 1),
+            browserHistorySyncMinutes: Math.max(Number(settings.browserHistorySyncMinutes || 1), 1)
           });
         }
       } catch (error) {
@@ -138,7 +241,11 @@ const MonitorSettings = () => {
     appUsageEnabled: form.appUsageEnabled,
     browserHistoryEnabled: form.browserHistoryEnabled,
     screenshotIntervalMinutes: form.screenshotIntervalMinutes,
-    mouseHeartbeatMinutes: form.mouseHeartbeatMinutes
+    mouseHeartbeatMinutes: form.mouseHeartbeatMinutes,
+    mouseIdleThresholdMinutes: form.mouseIdleThresholdMinutes,
+    keyboardHeartbeatMinutes: form.keyboardHeartbeatMinutes,
+    appUsageHeartbeatMinutes: form.appUsageHeartbeatMinutes,
+    browserHistorySyncMinutes: form.browserHistorySyncMinutes
   });
 
   const handleTest = async () => {
@@ -270,90 +377,67 @@ const MonitorSettings = () => {
                   Turn individual employee monitoring signals on or off for the desktop client.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 pt-6">
-                {MONITOR_CONTROLS.map((item) => {
-                  const Icon = item.key === "screenshotsEnabled"
-                    ? Camera
-                    : item.key === "mouseEnabled"
-                      ? MousePointer2
-                      : item.key === "keyboardEnabled"
-                        ? Keyboard
-                        : item.key === "appUsageEnabled"
-                          ? Monitor
-                        : Globe;
-                  return (
-                    <div
-                      key={item.key}
-                      className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-gradient-to-r from-background to-muted/20 px-4 py-4 transition-all duration-300 hover:border-primary/30 hover:shadow-sm"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 rounded-xl bg-primary/10 p-2 text-primary">
-                          <Icon className="h-4 w-4" />
+              <CardContent className="space-y-4 pt-6">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {MONITOR_SECTIONS.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div
+                        key={item.key}
+                        className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3">
+                            <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor={item.key} className="text-sm font-semibold">
+                                {item.label}
+                              </Label>
+                              <p className="max-w-md text-xs text-muted-foreground">{item.description}</p>
+                            </div>
+                          </div>
+                          <Switch
+                            id={item.key}
+                            checked={form[item.key]}
+                            disabled={loading}
+                            onCheckedChange={(checked) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                [item.key]: checked,
+                              }))
+                            }
+                          />
                         </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={item.key} className="text-sm font-semibold">
-                            {item.label}
-                          </Label>
-                          <p className="max-w-md text-xs text-muted-foreground">{item.description}</p>
+
+                        <div className={`mt-4 grid gap-3 ${item.fields.length > 1 ? "md:grid-cols-2" : ""}`}>
+                          {item.fields.map((field) => (
+                            <div key={field.key} className={`grid gap-2 ${field.fullWidth ? "md:col-span-2" : ""}`}>
+                              <Label htmlFor={field.key} className="text-xs font-medium text-foreground">
+                                {field.label}
+                              </Label>
+                              <Input
+                                id={field.key}
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={form[field.key]}
+                                disabled={loading || !form[item.key]}
+                                onChange={(event) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    [field.key]: Math.max(Number(event.target.value || 1), 1),
+                                  }))
+                                }
+                              />
+                              <p className="text-xs leading-5 text-muted-foreground">{field.helper}</p>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <Switch
-                        id={item.key}
-                        checked={form[item.key]}
-                        disabled={loading}
-                        onCheckedChange={(checked) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            [item.key]: checked,
-                          }))
-                        }
-                      />
-                    </div>
-                  );
-                })}
-                <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="screenshotIntervalMinutes" className="flex items-center gap-2">
-                      <Camera className="h-4 w-4 text-primary" />
-                      Screenshot interval
-                    </Label>
-                    <Input
-                      id="screenshotIntervalMinutes"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={form.screenshotIntervalMinutes}
-                      disabled={loading || !form.screenshotsEnabled}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          screenshotIntervalMinutes: Math.max(Number(event.target.value || 1), 1),
-                        }))
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">Capture one screenshot every N minutes.</p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="mouseHeartbeatMinutes" className="flex items-center gap-2">
-                      <MousePointer2 className="h-4 w-4 text-primary" />
-                      Mouse heartbeat
-                    </Label>
-                    <Input
-                      id="mouseHeartbeatMinutes"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={form.mouseHeartbeatMinutes}
-                      disabled={loading || !form.mouseEnabled}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          mouseHeartbeatMinutes: Math.max(Number(event.target.value || 1), 1),
-                        }))
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">Send mouse activity every N minutes while enabled.</p>
-                  </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -407,11 +491,23 @@ const MonitorSettings = () => {
                     {
                       label: "Mouse activity",
                       enabled: form.mouseEnabled,
-                      helper: `Idle vs active cursor tracking every ${form.mouseHeartbeatMinutes} minute(s).`,
+                      helper: `Heartbeat every ${form.mouseHeartbeatMinutes} minute(s); idle threshold ${form.mouseIdleThresholdMinutes} minute(s).`,
                     },
-                    { label: "Keyboard activity", enabled: form.keyboardEnabled, helper: "App-scoped key usage sessions." },
-                    { label: "App usage", enabled: form.appUsageEnabled, helper: "Foreground application sessions." },
-                    { label: "Browser history", enabled: form.browserHistoryEnabled, helper: "Approved navigation activity." },
+                    {
+                      label: "Keyboard activity",
+                      enabled: form.keyboardEnabled,
+                      helper: `Sync every ${form.keyboardHeartbeatMinutes} minute(s).`,
+                    },
+                    {
+                      label: "App usage",
+                      enabled: form.appUsageEnabled,
+                      helper: `Sync every ${form.appUsageHeartbeatMinutes} minute(s).`,
+                    },
+                    {
+                      label: "Browser history",
+                      enabled: form.browserHistoryEnabled,
+                      helper: `Sync every ${form.browserHistorySyncMinutes} minute(s).`,
+                    },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
                       <div>

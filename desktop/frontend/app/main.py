@@ -1,4 +1,4 @@
-"""Entry point for the MyApp login front-end."""
+"""Entry point for the Rigweda Monitor login front-end."""
 
 from __future__ import annotations
 
@@ -12,14 +12,16 @@ from pathlib import Path
 if __package__ in {None, ""}:
     # When launched as a script, add the frontend root so `import app.*` works.
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from app.auth import ensure_service_running, load_auth_session, register_startup
+    from app.auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from app.env import writable_runtime_path
-    from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
+    from app import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
+    from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
-    from .auth import ensure_service_running, load_auth_session, register_startup
+    from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
-    from .monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
+    from . import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
+    from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -48,20 +50,28 @@ def _resume_monitor_in_background() -> int:
     _log_startup("Background startup requested.")
     session = load_auth_session()
     if not session:
+        saved_email = load_saved_auth_email()
         _log_startup("No valid saved auth token found. Showing sign-in window.")
         if __package__ in {None, ""}:
             from app.login_view import LoginApp
         else:  # pragma: no cover - import path depends on launch style
             from .login_view import LoginApp
 
+        prefill_session = {"email": saved_email} if saved_email else None
         app = LoginApp(
-            None,
+            prefill_session,
             hide_after_resume=False,
             auto_resume_saved_session=False,
-            startup_notice="Your session is missing or expired. Please sign in again.",
+            startup_notice=(
+                "Your session is missing or expired. Your email is prefilled, so just enter your password."
+                if saved_email
+                else "Your session is missing or expired. Please sign in again."
+            ),
         )
         app.run()
         return 0
+
+    _log_startup("Saved auth session loaded for background monitoring.")
 
     service_started, _service_message = ensure_service_running()
     if not service_started:
@@ -71,13 +81,37 @@ def _resume_monitor_in_background() -> int:
     startup_registered, startup_message = register_startup()
     _log_startup(startup_message if startup_registered else startup_message)
 
+    try:
+        refreshed_flags = refresh_monitor_feature_flags(session)
+        _log_startup(
+            "Refreshed monitor settings before starting workers: "
+            f"screenshots={refreshed_flags.get('screenshotsEnabled', True)} "
+            f"mouse={refreshed_flags.get('mouseEnabled', True)} "
+            f"keyboard={refreshed_flags.get('keyboardEnabled', True)} "
+            f"appUsage={refreshed_flags.get('appUsageEnabled', True)} "
+            f"browser={refreshed_flags.get('browserHistoryEnabled', True)} "
+            f"mouseIdle={refreshed_flags.get('mouseIdleThresholdMinutes', 1)}m "
+            f"keyboardHeartbeat={refreshed_flags.get('keyboardHeartbeatMinutes', 1)}m "
+            f"appUsageHeartbeat={refreshed_flags.get('appUsageHeartbeatMinutes', 1)}m "
+            f"browserSync={refreshed_flags.get('browserHistorySyncMinutes', 1)}m"
+        )
+    except Exception as error:
+        _log_startup(f"Failed to refresh monitor settings before worker startup: {str(error)}")
+        refreshed_flags = {}
+
     flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+    if refreshed_flags:
+        try:
+            flags = apply_monitor_feature_flags(refreshed_flags)
+        except Exception as error:
+            _log_startup(f"Failed to apply refreshed monitor settings: {str(error)}")
     _log_startup(
         "Monitor settings listener started with "
         f"screenshots={flags.get('screenshotsEnabled', True)} "
         f"mouse={flags.get('mouseEnabled', True)} "
         f"keyboard={flags.get('keyboardEnabled', True)} "
-        f"appUsage={flags.get('appUsageEnabled', True)}"
+        f"appUsage={flags.get('appUsageEnabled', True)} "
+        f"browser={flags.get('browserHistoryEnabled', True)}"
     )
 
     try:
@@ -131,13 +165,21 @@ def main() -> None:
     startup_session = load_auth_session()
     if startup_session:
         try:
+            refreshed_flags = refresh_monitor_feature_flags(startup_session)
             flags = start_monitor_settings_listener(startup_session, on_change=apply_monitor_feature_flags)
+            if refreshed_flags:
+                flags = apply_monitor_feature_flags(refreshed_flags)
             _log_startup(
                 "Initial monitor settings loaded: "
                 f"screenshots={flags.get('screenshotsEnabled', True)} "
                 f"mouse={flags.get('mouseEnabled', True)} "
                 f"keyboard={flags.get('keyboardEnabled', True)} "
-                f"appUsage={flags.get('appUsageEnabled', True)}"
+                f"appUsage={flags.get('appUsageEnabled', True)} "
+                f"browser={flags.get('browserHistoryEnabled', True)} "
+                f"mouseIdle={flags.get('mouseIdleThresholdMinutes', 1)}m "
+                f"keyboardHeartbeat={flags.get('keyboardHeartbeatMinutes', 1)}m "
+                f"appUsageHeartbeat={flags.get('appUsageHeartbeatMinutes', 1)}m "
+                f"browserSync={flags.get('browserHistorySyncMinutes', 1)}m"
             )
         except Exception as error:
             _log_startup(f"Failed to initialize monitor settings listener: {str(error)}")

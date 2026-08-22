@@ -20,7 +20,7 @@ import win32process
 from pynput import keyboard
 
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 DATA_ROOT = writable_runtime_path(
@@ -33,17 +33,20 @@ LOCK_FILE = DATA_ROOT / "keyboard_monitor.lock"
 LOG_FILE = LOG_DIR / "keyboard_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
 POLL_SECONDS = 0.05
-SESSION_SNAPSHOT_SECONDS = 15
-DESKTOP_BACKEND_URL = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
+DEFAULT_SESSION_SNAPSHOT_SECONDS = max(int(os.getenv("KEYBOARD_SESSION_SNAPSHOT_SECONDS", "15")), 5)
+DESKTOP_BACKEND_URL = prefer_hosted_backend_url(
+    os.getenv("DESKTOP_BACKEND_URL", HOSTED_DESKTOP_BACKEND_URL),
+    hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+)
 TARGET_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}
 ENABLE_LOCAL_KEY_TRACE = os.getenv("RIGWEDA_MONITOR_LOCAL_KEY_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _backend_url_candidates() -> list[str]:
     """Prefer the configured desktop backend, then fall back to hosted service."""
-    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    hosted = HOSTED_DESKTOP_BACKEND_URL
     candidates = [DESKTOP_BACKEND_URL]
-    if DESKTOP_BACKEND_URL != hosted:
+    if DESKTOP_BACKEND_URL != hosted and not DESKTOP_BACKEND_URL.startswith(("http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1")):
         candidates.append(hosted)
     return list(dict.fromkeys(candidates))
 
@@ -212,6 +215,15 @@ def _summarize_sessions(rows: list[sqlite3.Row]) -> str:
     return f"count={len(rows)} app_counts={app_counts}"
 
 
+def get_snapshot_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("keyboardHeartbeatMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return DEFAULT_SESSION_SNAPSHOT_SECONDS
+
+
 class KeyboardUsageMonitor:
     def __init__(self) -> None:
         self._stop_event = threading.Event()
@@ -248,7 +260,9 @@ class KeyboardUsageMonitor:
             self._foreground_thread.start()
             self._writer_thread = threading.Thread(target=self._flush_loop, daemon=True)
             self._writer_thread.start()
-            log_message(f"Keyboard app usage monitor started. device={self._device_id}")
+            log_message(
+                f"Keyboard app usage monitor started. snapshot={get_snapshot_seconds()}s device={self._device_id}"
+            )
             return True
         except Exception as error:
             log_exception("Keyboard app usage monitor failed to start.", error)
@@ -530,7 +544,7 @@ class KeyboardUsageMonitor:
 
         if not force and self._session_last_snapshot_at is not None:
             elapsed = (self._session_last_event_at - self._session_last_snapshot_at).total_seconds()
-            if elapsed < SESSION_SNAPSHOT_SECONDS:
+            if elapsed < get_snapshot_seconds():
                 return False
 
         started_at_text = self._session_started_at.isoformat().replace("+00:00", "Z")

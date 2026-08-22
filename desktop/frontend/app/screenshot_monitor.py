@@ -9,11 +9,9 @@ import traceback
 from pathlib import Path
 
 from app.env import writable_runtime_path
-from app.activity_monitor import main as activity_main
-from app.foreground_app_monitor import run_monitor as app_usage_run_monitor
-from app.foreground_app_monitor import stop_foreground_app_monitor as app_usage_stop_monitor
 from app.monitor_settings import get_monitor_feature_flags
 from src.screenshots.screenshot import run_monitor as screenshot_run_monitor
+from src.screenshots.screenshot import stop_screenshot_monitor as screenshot_stop_monitor
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
@@ -54,6 +52,8 @@ def _run_screenshot_worker() -> None:
 
 def _run_activity_worker() -> None:
     try:
+        from app.activity_monitor import main as activity_main
+
         exit_code = activity_main()
         _log_message(f"Activity monitor exited with code {exit_code}.")
     except Exception as error:
@@ -62,6 +62,8 @@ def _run_activity_worker() -> None:
 
 def _run_app_usage_worker() -> None:
     try:
+        from app.foreground_app_monitor import run_monitor as app_usage_run_monitor
+
         exit_code = app_usage_run_monitor()
         _log_message(f"App usage monitor exited with code {exit_code}.")
     except Exception as error:
@@ -127,6 +129,8 @@ def start_app_usage_monitor() -> tuple[bool, str]:
 
 def stop_app_usage_monitor() -> None:
     try:
+        from app.foreground_app_monitor import stop_foreground_app_monitor as app_usage_stop_monitor
+
         app_usage_stop_monitor()
     except Exception:
         pass
@@ -134,8 +138,7 @@ def stop_app_usage_monitor() -> None:
 
 def stop_screenshot_monitor() -> None:
     try:
-        from src.screenshots.screenshot import stop_screenshot_monitor as _stop
-        _stop()
+        screenshot_stop_monitor()
     except Exception:
         pass
 

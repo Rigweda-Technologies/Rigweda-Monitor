@@ -139,15 +139,34 @@ function Remove-StartupEntry {
     }
 }
 
+function Remove-LegacyService {
+    $legacyServiceName = 'RigwedaMonitorService'
+    $service = Get-Service -Name $legacyServiceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        return
+    }
+
+    Write-Info "Removing legacy Windows service: $legacyServiceName"
+    try {
+        if ($service.Status -ne 'Stopped') {
+            Stop-Service -Name $legacyServiceName -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+        }
+    } catch {
+        Write-Info "  Could not stop legacy service cleanly: $($_.Exception.Message)"
+    }
+
+    try {
+        & sc.exe delete $legacyServiceName | Out-Null
+    } catch {
+        Write-Info "  Could not delete legacy service cleanly: $($_.Exception.Message)"
+    }
+}
+
 function Remove-LocalData {
     $legacyDataRoot = 'C:\Rigweda_monitor'
 
-    Write-Info "Removing local app data..."
-    if (Test-Path $DataRoot) {
-        $safeDataRoot = Assert-SafeTarget $DataRoot $env:LOCALAPPDATA 'Local data root'
-        Remove-Item -LiteralPath $safeDataRoot -Recurse -Force
-    }
-
+    Write-Info "Removing local screenshot cache and logs..."
     if (Test-Path $LogRoot) {
         $safeLogRoot = Assert-SafeTarget $LogRoot $env:LOCALAPPDATA 'Local log root'
         Remove-Item -LiteralPath $safeLogRoot -Recurse -Force
@@ -156,6 +175,10 @@ function Remove-LocalData {
     if (Test-Path $legacyDataRoot) {
         Write-Info "Removing legacy data root..."
         Remove-Item -LiteralPath $legacyDataRoot -Recurse -Force
+    }
+
+    if (Test-Path $DataRoot) {
+        Write-Info "Preserving session and device data in: $DataRoot"
     }
 
     $shortcutRoots = @(
@@ -253,6 +276,7 @@ if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVers
 
 Stop-RigwedaMonitorProcesses
 Remove-StartupEntry
+Remove-LegacyService
 Remove-LocalData
 Remove-InstallDir
 Copy-FreshBuild -ResolvedSource $resolvedSource

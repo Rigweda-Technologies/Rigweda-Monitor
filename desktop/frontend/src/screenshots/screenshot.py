@@ -27,11 +27,16 @@ from PIL import ImageGrab
 
 try:
     from app.env import load_app_env, writable_runtime_path
+    from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url
     from app.monitor_settings import load_monitor_feature_flags
 except ImportError:
     load_dotenv()
     writable_runtime_path = None
     load_monitor_feature_flags = None
+    HOSTED_HRMS_BACKEND_URL = "https://rigweda-hrms-backend.onrender.com/api"
+
+    def prefer_hosted_backend_url(configured_value: str | None, *, hosted_default: str) -> str:
+        return str(configured_value or hosted_default).strip().rstrip("/") or hosted_default
 else:
     load_app_env()
 
@@ -168,7 +173,10 @@ def get_upload_concurrency() -> int:
 
 
 def get_backend_base_url() -> str:
-    hrms_url = os.getenv("HRMS_BACKEND_URL", "https://rigweda-hrms-backend.onrender.com/api").strip().rstrip("/")
+    hrms_url = prefer_hosted_backend_url(
+        os.getenv("HRMS_BACKEND_URL", HOSTED_HRMS_BACKEND_URL),
+        hosted_default=HOSTED_HRMS_BACKEND_URL,
+    )
     if hrms_url.endswith("/api"):
         return f"{hrms_url}/agents"
     return f"{hrms_url}/api/agents"

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.auth import load_auth_session
-from app.env import writable_runtime_path
+from app.env import HOSTED_DESKTOP_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 from app.monitor_settings import get_monitor_feature_flags
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -24,7 +24,7 @@ QUEUE_DB = DATA_ROOT / "activity_queue.db"
 LOCK_FILE = DATA_ROOT / "activity_monitor.lock"
 LOG_FILE = DATA_ROOT.parent / "logs" / "activity_monitor.log"
 DEVICE_ID_FILE = DATA_ROOT / "device_id.txt"
-IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
+DEFAULT_IDLE_THRESHOLD_SECONDS = max(int(os.getenv("MOUSE_IDLE_THRESHOLD_SECONDS", "60")), 10)
 DEFAULT_HEARTBEAT_SECONDS = max(int(os.getenv("ACTIVITY_HEARTBEAT_SECONDS", "30")), 10)
 MAX_ACTIVITY_SECONDS = 3600
 POLL_SECONDS = 1
@@ -33,10 +33,13 @@ STOP_EVENT = threading.Event()
 
 def _backend_url_candidates() -> list[str]:
     """Prefer the configured desktop backend, then fall back to hosted service."""
-    configured = os.getenv("DESKTOP_BACKEND_URL", "https://rigweda-monitor-backend.vercel.app/api").rstrip("/")
-    hosted = "https://rigweda-monitor-backend.vercel.app/api"
+    configured = prefer_hosted_backend_url(
+        os.getenv("DESKTOP_BACKEND_URL", HOSTED_DESKTOP_BACKEND_URL),
+        hosted_default=HOSTED_DESKTOP_BACKEND_URL,
+    )
+    hosted = HOSTED_DESKTOP_BACKEND_URL
     candidates = [configured]
-    if configured != hosted:
+    if configured != hosted and not configured.startswith(("http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1")):
         candidates.append(hosted)
     return list(dict.fromkeys(candidates))
 
@@ -100,6 +103,15 @@ def get_heartbeat_seconds() -> int:
         return minutes * 60
     except (TypeError, ValueError):
         return DEFAULT_HEARTBEAT_SECONDS
+
+
+def get_idle_threshold_seconds() -> int:
+    flags = get_monitor_feature_flags()
+    try:
+        minutes = max(int(flags.get("mouseIdleThresholdMinutes", 1)), 1)
+        return minutes * 60
+    except (TypeError, ValueError):
+        return DEFAULT_IDLE_THRESHOLD_SECONDS
 
 
 def get_connection() -> sqlite3.Connection:
@@ -270,8 +282,9 @@ def start_activity_monitor() -> None:
     """Record one-minute activity heartbeats; every record remains durable until the API accepts it."""
     device_id = get_device_id()
     heartbeat_seconds = get_heartbeat_seconds()
+    idle_threshold_seconds = get_idle_threshold_seconds()
     log_message(
-        f"Activity monitor started. idle_threshold={IDLE_THRESHOLD_SECONDS}s heartbeat={heartbeat_seconds}s device={device_id}"
+        f"Activity monitor started. idle_threshold={idle_threshold_seconds}s heartbeat={heartbeat_seconds}s device={device_id}"
     )
     while True:
         try:
@@ -303,7 +316,8 @@ def start_activity_monitor() -> None:
                 last_position = position
                 last_moved_at = now
 
-            next_status = "active" if now - last_moved_at < IDLE_THRESHOLD_SECONDS else "idle"
+            idle_threshold_seconds = get_idle_threshold_seconds()
+            next_status = "active" if now - last_moved_at < idle_threshold_seconds else "idle"
             heartbeat_seconds = get_heartbeat_seconds()
             if next_status == "active":
                 active_seconds += elapsed

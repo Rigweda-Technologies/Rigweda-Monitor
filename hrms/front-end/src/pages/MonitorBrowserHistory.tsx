@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Globe, RefreshCw, ExternalLink } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,6 +62,10 @@ const sortBrowserHistoryDesc = (items: MonitorBrowserHistory[]) =>
   });
 
 const MonitorBrowserHistory = () => {
+  const [searchParams] = useSearchParams();
+  const employeeIdParam = searchParams.get("employeeId") || "";
+  const dateParam = searchParams.get("date") || "";
+  const browserParam = searchParams.get("browser") || "";
   const [date, setDate] = useState(today);
   const [histories, setHistories] = useState<MonitorBrowserHistory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +76,15 @@ const MonitorBrowserHistory = () => {
   const [browserFilter, setBrowserFilter] = useState("");
   const [searchUrl, setSearchUrl] = useState("");
 
+  useEffect(() => {
+    if (dateParam) {
+      setDate(dateParam);
+    }
+    if (browserParam) {
+      setBrowserFilter(browserParam);
+    }
+  }, [dateParam, browserParam]);
+
   const loadHistories = useCallback(async (manual = false) => {
     if (manual) {
       setRefreshing(true);
@@ -79,7 +93,12 @@ const MonitorBrowserHistory = () => {
     }
 
     try {
-      const data = await getMonitorBrowserHistory(date, { limit: INITIAL_LIMIT, offset, browser: browserFilter });
+      const data = await getMonitorBrowserHistory(date, {
+        limit: INITIAL_LIMIT,
+        offset,
+        employeeId: employeeIdParam || undefined,
+        browser: browserFilter || undefined,
+      });
       if (data.timezone) {
         setTimeZone(data.timezone);
         setOrgTimeZone(data.timezone);
@@ -96,7 +115,7 @@ const MonitorBrowserHistory = () => {
         setLoading(false);
       }
     }
-  }, [date, browserFilter, offset]);
+  }, [date, browserFilter, offset, employeeIdParam]);
 
   useEffect(() => {
     loadHistories();
@@ -114,6 +133,7 @@ const MonitorBrowserHistory = () => {
     : histories;
 
   const browserOptions = Array.from(new Set(histories.map((h) => h.browser))).sort();
+  const pageTitle = employeeIdParam ? "Browser History for Employee" : "Browser History Monitoring";
 
   return (
     <MainLayout>
@@ -122,7 +142,7 @@ const MonitorBrowserHistory = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Globe className="h-8 w-8 text-blue-600" />
-            <h1 className="text-3xl font-bold">Browser History Monitoring</h1>
+            <h1 className="text-3xl font-bold">{pageTitle}</h1>
           </div>
           <Button onClick={() => loadHistories(true)} disabled={refreshing} variant="outline" size="sm">
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />

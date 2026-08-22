@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Keyboard, Monitor, RefreshCw } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,16 +21,25 @@ const formatDuration = (seconds: number) => {
 };
 
 const MonitorAppKeyUsage = () => {
-  const [date, setDate] = useState(today);
+  const [searchParams] = useSearchParams();
+  const employeeIdParam = searchParams.get("employeeId") || "";
+  const dateParam = searchParams.get("date") || "";
+  const [date, setDate] = useState(dateParam || today());
   const [rows, setRows] = useState<MonitorAppKeyUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
 
+  useEffect(() => {
+    if (dateParam) {
+      setDate(dateParam);
+    }
+  }, [dateParam]);
+
   const load = useCallback(async (manual = false) => {
     manual ? setRefreshing(true) : setLoading(true);
     try {
-      const data = await getMonitorAppKeyUsage(date);
+      const data = await getMonitorAppKeyUsage(date, { employeeId: employeeIdParam || undefined });
       setRows(data.appKeys || []);
     } catch (error) {
       if (manual) toast.error("Could not refresh key press usage.");
@@ -38,7 +48,7 @@ const MonitorAppKeyUsage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [date]);
+  }, [date, employeeIdParam]);
 
   useEffect(() => {
     void load();
@@ -47,8 +57,10 @@ const MonitorAppKeyUsage = () => {
   useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
 
   useEffect(() => {
-    setDate(toDateKeyInOrgTimeZone(new Date()));
-  }, [timeZone]);
+    if (!dateParam) {
+      setDate(toDateKeyInOrgTimeZone(new Date()));
+    }
+  }, [timeZone, dateParam]);
 
   useEffect(() => {
     const interval = window.setInterval(() => void load(), 30_000);
@@ -70,6 +82,9 @@ const MonitorAppKeyUsage = () => {
             <p className="text-sm text-muted-foreground">
               Shows app-wise key press counts for monitored employee sessions.
             </p>
+            {employeeIdParam && (
+              <p className="text-xs text-muted-foreground">Filtered for employee: {employeeIdParam}</p>
+            )}
             <p className="text-xs text-muted-foreground">Displayed in {timeZone} time.</p>
           </div>
           <div className="flex items-center gap-2">
