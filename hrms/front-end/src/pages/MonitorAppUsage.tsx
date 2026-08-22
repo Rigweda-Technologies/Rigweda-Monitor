@@ -13,7 +13,7 @@ import { formatDateTimeInOrgTimeZone, getOrgTimeZone, setOrgTimeZone, subscribeT
 import { toast } from "sonner";
 
 const today = () => toDateKeyInOrgTimeZone(new Date());
-const INITIAL_SESSION_LIMIT = 15;
+const INITIAL_SESSION_LIMIT = 100;
 const APP_DETAIL_LIMIT = 1000;
 
 type AppUsageGroup = {

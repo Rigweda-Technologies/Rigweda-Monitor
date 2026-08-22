@@ -27,6 +27,10 @@ const validatePayload = (body) => {
   const browserHistoryEnabled = parseBoolean(body.browserHistoryEnabled, false);
   const screenshotIntervalMinutes = Math.max(Math.trunc(Number(body.screenshotIntervalMinutes) || 1), 1);
   const mouseHeartbeatMinutes = Math.max(Math.trunc(Number(body.mouseHeartbeatMinutes) || 1), 1);
+  const mouseIdleThresholdMinutes = Math.max(Math.trunc(Number(body.mouseIdleThresholdMinutes) || 1), 1);
+  const keyboardHeartbeatMinutes = Math.max(Math.trunc(Number(body.keyboardHeartbeatMinutes) || 1), 1);
+  const appUsageHeartbeatMinutes = Math.max(Math.trunc(Number(body.appUsageHeartbeatMinutes) || 1), 1);
+  const browserHistorySyncMinutes = Math.max(Math.trunc(Number(body.browserHistorySyncMinutes) || 1), 1);
 
   if (!cloudName || !apiKey) {
     throw { code: 400, message: "Cloud name and API key are required." };
@@ -43,7 +47,11 @@ const validatePayload = (body) => {
     appUsageEnabled,
     browserHistoryEnabled,
     screenshotIntervalMinutes,
-    mouseHeartbeatMinutes
+    mouseHeartbeatMinutes,
+    mouseIdleThresholdMinutes,
+    keyboardHeartbeatMinutes,
+    appUsageHeartbeatMinutes,
+    browserHistorySyncMinutes
   };
 };
 

@@ -15,13 +15,13 @@ if __package__ in {None, ""}:
     from app.auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from app.env import writable_runtime_path
     from app import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
-    from app.monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
+    from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
     from . import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
-    from .monitor_settings import apply_monitor_feature_flags, start_monitor_settings_listener
+    from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -81,13 +81,37 @@ def _resume_monitor_in_background() -> int:
     startup_registered, startup_message = register_startup()
     _log_startup(startup_message if startup_registered else startup_message)
 
+    try:
+        refreshed_flags = refresh_monitor_feature_flags(session)
+        _log_startup(
+            "Refreshed monitor settings before starting workers: "
+            f"screenshots={refreshed_flags.get('screenshotsEnabled', True)} "
+            f"mouse={refreshed_flags.get('mouseEnabled', True)} "
+            f"keyboard={refreshed_flags.get('keyboardEnabled', True)} "
+            f"appUsage={refreshed_flags.get('appUsageEnabled', True)} "
+            f"browser={refreshed_flags.get('browserHistoryEnabled', True)} "
+            f"mouseIdle={refreshed_flags.get('mouseIdleThresholdMinutes', 1)}m "
+            f"keyboardHeartbeat={refreshed_flags.get('keyboardHeartbeatMinutes', 1)}m "
+            f"appUsageHeartbeat={refreshed_flags.get('appUsageHeartbeatMinutes', 1)}m "
+            f"browserSync={refreshed_flags.get('browserHistorySyncMinutes', 1)}m"
+        )
+    except Exception as error:
+        _log_startup(f"Failed to refresh monitor settings before worker startup: {str(error)}")
+        refreshed_flags = {}
+
     flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
+    if refreshed_flags:
+        try:
+            flags = apply_monitor_feature_flags(refreshed_flags)
+        except Exception as error:
+            _log_startup(f"Failed to apply refreshed monitor settings: {str(error)}")
     _log_startup(
         "Monitor settings listener started with "
         f"screenshots={flags.get('screenshotsEnabled', True)} "
         f"mouse={flags.get('mouseEnabled', True)} "
         f"keyboard={flags.get('keyboardEnabled', True)} "
-        f"appUsage={flags.get('appUsageEnabled', True)}"
+        f"appUsage={flags.get('appUsageEnabled', True)} "
+        f"browser={flags.get('browserHistoryEnabled', True)}"
     )
 
     try:
@@ -141,13 +165,21 @@ def main() -> None:
     startup_session = load_auth_session()
     if startup_session:
         try:
+            refreshed_flags = refresh_monitor_feature_flags(startup_session)
             flags = start_monitor_settings_listener(startup_session, on_change=apply_monitor_feature_flags)
+            if refreshed_flags:
+                flags = apply_monitor_feature_flags(refreshed_flags)
             _log_startup(
                 "Initial monitor settings loaded: "
                 f"screenshots={flags.get('screenshotsEnabled', True)} "
                 f"mouse={flags.get('mouseEnabled', True)} "
                 f"keyboard={flags.get('keyboardEnabled', True)} "
-                f"appUsage={flags.get('appUsageEnabled', True)}"
+                f"appUsage={flags.get('appUsageEnabled', True)} "
+                f"browser={flags.get('browserHistoryEnabled', True)} "
+                f"mouseIdle={flags.get('mouseIdleThresholdMinutes', 1)}m "
+                f"keyboardHeartbeat={flags.get('keyboardHeartbeatMinutes', 1)}m "
+                f"appUsageHeartbeat={flags.get('appUsageHeartbeatMinutes', 1)}m "
+                f"browserSync={flags.get('browserHistorySyncMinutes', 1)}m"
             )
         except Exception as error:
             _log_startup(f"Failed to initialize monitor settings listener: {str(error)}")

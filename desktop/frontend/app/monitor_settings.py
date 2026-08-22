@@ -32,6 +32,10 @@ DEFAULT_MONITOR_SETTINGS: dict[str, bool | int] = {
     **DEFAULT_FEATURE_FLAGS,
     "screenshotIntervalMinutes": 1,
     "mouseHeartbeatMinutes": 1,
+    "mouseIdleThresholdMinutes": 1,
+    "keyboardHeartbeatMinutes": 1,
+    "appUsageHeartbeatMinutes": 1,
+    "browserHistorySyncMinutes": 1,
 }
 FEATURE_FLAGS_FILE = DATA_ROOT / "monitor_feature_flags.json"
 ALT_FEATURE_FLAGS_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\rigweda-monitor\data\monitor_feature_flags.json"))
@@ -136,6 +140,10 @@ def _load_cached_flags() -> dict[str, bool | int] | None:
         "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(payload.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(payload.get("mouseHeartbeatMinutes", 1), 1),
+        "mouseIdleThresholdMinutes": _normalize_positive_minutes(payload.get("mouseIdleThresholdMinutes", 1), 1),
+        "keyboardHeartbeatMinutes": _normalize_positive_minutes(payload.get("keyboardHeartbeatMinutes", 1), 1),
+        "appUsageHeartbeatMinutes": _normalize_positive_minutes(payload.get("appUsageHeartbeatMinutes", 1), 1),
+        "browserHistorySyncMinutes": _normalize_positive_minutes(payload.get("browserHistorySyncMinutes", 1), 1),
     }
 
 
@@ -169,6 +177,10 @@ def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
         "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(settings.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(settings.get("mouseHeartbeatMinutes", 1), 1),
+        "mouseIdleThresholdMinutes": _normalize_positive_minutes(settings.get("mouseIdleThresholdMinutes", 1), 1),
+        "keyboardHeartbeatMinutes": _normalize_positive_minutes(settings.get("keyboardHeartbeatMinutes", 1), 1),
+        "appUsageHeartbeatMinutes": _normalize_positive_minutes(settings.get("appUsageHeartbeatMinutes", 1), 1),
+        "browserHistorySyncMinutes": _normalize_positive_minutes(settings.get("browserHistorySyncMinutes", 1), 1),
     }
 
 
@@ -191,6 +203,10 @@ def _set_current_flags(flags: dict[str, bool | int]) -> bool:
         "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(flags.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(flags.get("mouseHeartbeatMinutes", 1), 1),
+        "mouseIdleThresholdMinutes": _normalize_positive_minutes(flags.get("mouseIdleThresholdMinutes", 1), 1),
+        "keyboardHeartbeatMinutes": _normalize_positive_minutes(flags.get("keyboardHeartbeatMinutes", 1), 1),
+        "appUsageHeartbeatMinutes": _normalize_positive_minutes(flags.get("appUsageHeartbeatMinutes", 1), 1),
+        "browserHistorySyncMinutes": _normalize_positive_minutes(flags.get("browserHistorySyncMinutes", 1), 1),
     }
     with _state_lock:
         changed = normalized != _current_flags

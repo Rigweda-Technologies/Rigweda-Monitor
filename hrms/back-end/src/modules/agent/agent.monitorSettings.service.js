@@ -18,6 +18,10 @@ const TABLE_SQL = `
     browser_history_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     screenshot_interval_minutes INTEGER NOT NULL DEFAULT 1,
     mouse_heartbeat_minutes INTEGER NOT NULL DEFAULT 1,
+    mouse_idle_threshold_minutes INTEGER NOT NULL DEFAULT 1,
+    keyboard_heartbeat_minutes INTEGER NOT NULL DEFAULT 1,
+    app_usage_heartbeat_minutes INTEGER NOT NULL DEFAULT 1,
+    browser_history_sync_minutes INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
@@ -102,6 +106,18 @@ const getPoolOrThrow = async () => {
   if (!columns.has("mouse_heartbeat_minutes")) {
     alterStatements.push("ADD COLUMN mouse_heartbeat_minutes INTEGER NOT NULL DEFAULT 1");
   }
+  if (!columns.has("mouse_idle_threshold_minutes")) {
+    alterStatements.push("ADD COLUMN mouse_idle_threshold_minutes INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!columns.has("keyboard_heartbeat_minutes")) {
+    alterStatements.push("ADD COLUMN keyboard_heartbeat_minutes INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!columns.has("app_usage_heartbeat_minutes")) {
+    alterStatements.push("ADD COLUMN app_usage_heartbeat_minutes INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!columns.has("browser_history_sync_minutes")) {
+    alterStatements.push("ADD COLUMN browser_history_sync_minutes INTEGER NOT NULL DEFAULT 1");
+  }
   if (alterStatements.length > 0) {
     await pool.query(`ALTER TABLE monitor_cloudinary_settings ${alterStatements.join(", ")}`);
   }
@@ -139,6 +155,10 @@ const toPublicSettings = (row, secret) => row && ({
   browserHistoryEnabled: row.browser_history_enabled ?? false,
   screenshotIntervalMinutes: normalizeMinutes(row.screenshot_interval_minutes, 1),
   mouseHeartbeatMinutes: normalizeMinutes(row.mouse_heartbeat_minutes, 1),
+  mouseIdleThresholdMinutes: normalizeMinutes(row.mouse_idle_threshold_minutes, 1),
+  keyboardHeartbeatMinutes: normalizeMinutes(row.keyboard_heartbeat_minutes, 1),
+  appUsageHeartbeatMinutes: normalizeMinutes(row.app_usage_heartbeat_minutes, 1),
+  browserHistorySyncMinutes: normalizeMinutes(row.browser_history_sync_minutes, 1),
   updatedAt: row.updated_at
 });
 
@@ -162,6 +182,10 @@ const getRawSettings = async (organizationId) => {
     browserHistoryEnabled: row.browser_history_enabled ?? false,
     screenshotIntervalMinutes: normalizeMinutes(row.screenshot_interval_minutes, 1),
     mouseHeartbeatMinutes: normalizeMinutes(row.mouse_heartbeat_minutes, 1),
+    mouseIdleThresholdMinutes: normalizeMinutes(row.mouse_idle_threshold_minutes, 1),
+    keyboardHeartbeatMinutes: normalizeMinutes(row.keyboard_heartbeat_minutes, 1),
+    appUsageHeartbeatMinutes: normalizeMinutes(row.app_usage_heartbeat_minutes, 1),
+    browserHistorySyncMinutes: normalizeMinutes(row.browser_history_sync_minutes, 1),
     updatedAt: row.updated_at
   };
 };
@@ -195,9 +219,10 @@ const saveSettings = async (organizationId, payload) => {
         organization_id, cloud_name, api_key, api_secret_ciphertext,
         api_secret_iv, api_secret_auth_tag, upload_folder_root,
         screenshots_enabled, mouse_enabled, keyboard_enabled, app_usage_enabled, browser_history_enabled,
-        screenshot_interval_minutes, mouse_heartbeat_minutes
+        screenshot_interval_minutes, mouse_heartbeat_minutes, mouse_idle_threshold_minutes,
+        keyboard_heartbeat_minutes, app_usage_heartbeat_minutes, browser_history_sync_minutes
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       ON CONFLICT (organization_id)
       DO UPDATE SET
         cloud_name = EXCLUDED.cloud_name,
@@ -213,6 +238,10 @@ const saveSettings = async (organizationId, payload) => {
         browser_history_enabled = EXCLUDED.browser_history_enabled,
         screenshot_interval_minutes = EXCLUDED.screenshot_interval_minutes,
         mouse_heartbeat_minutes = EXCLUDED.mouse_heartbeat_minutes,
+        mouse_idle_threshold_minutes = EXCLUDED.mouse_idle_threshold_minutes,
+        keyboard_heartbeat_minutes = EXCLUDED.keyboard_heartbeat_minutes,
+        app_usage_heartbeat_minutes = EXCLUDED.app_usage_heartbeat_minutes,
+        browser_history_sync_minutes = EXCLUDED.browser_history_sync_minutes,
         updated_at = NOW()
       RETURNING *
     `,
@@ -230,7 +259,11 @@ const saveSettings = async (organizationId, payload) => {
       normalizeBoolean(payload.appUsageEnabled, true),
       normalizeBoolean(payload.browserHistoryEnabled, false),
       normalizeMinutes(payload.screenshotIntervalMinutes, 1),
-      normalizeMinutes(payload.mouseHeartbeatMinutes, 1)
+      normalizeMinutes(payload.mouseHeartbeatMinutes, 1),
+      normalizeMinutes(payload.mouseIdleThresholdMinutes, 1),
+      normalizeMinutes(payload.keyboardHeartbeatMinutes, 1),
+      normalizeMinutes(payload.appUsageHeartbeatMinutes, 1),
+      normalizeMinutes(payload.browserHistorySyncMinutes, 1)
     ]
   );
   return toPublicSettings(result.rows[0], resolvedSecret);

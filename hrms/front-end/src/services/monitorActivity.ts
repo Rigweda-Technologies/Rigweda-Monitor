@@ -45,6 +45,10 @@ export type MonitorCloudinarySettings = {
   browserHistoryEnabled?: boolean;
   screenshotIntervalMinutes?: number;
   mouseHeartbeatMinutes?: number;
+  mouseIdleThresholdMinutes?: number;
+  keyboardHeartbeatMinutes?: number;
+  appUsageHeartbeatMinutes?: number;
+  browserHistorySyncMinutes?: number;
   updatedAt?: string;
 };
 
@@ -149,9 +153,11 @@ export const getMonitorBrowserHistory = async (date: string, params?: { limit?: 
   return response.data;
 };
 
-export const getMonitorAppKeyUsage = async (date: string) => {
+export const getMonitorAppKeyUsage = async (date: string, params?: { employeeId?: string }) => {
+  const query = new URLSearchParams({ date: String(date) });
+  if (params?.employeeId) query.set("employeeId", params.employeeId);
   const response = await getApiWithToken(
-    `/activity/app-key-usage?date=${encodeURIComponent(date)}`,
+    `/activity/app-key-usage?${query.toString()}`,
     null,
     { requiredPermissions: ["EMP_VIEW"] }
   ) as {
