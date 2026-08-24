@@ -46,6 +46,7 @@ if exist "%BUNDLE_STAGE%" rmdir /s /q "%BUNDLE_STAGE%"
   echo RIGWEDA_MONITOR_DATA_ROOT=%%LOCALAPPDATA%%\rigweda-monitor\data
   echo RIGWEDA_MONITOR_SCREENSHOT_ROOT=%%LOCALAPPDATA%%\rigweda-monitor\screenshots
   echo RIGWEDA_MONITOR_LOG_ROOT=%%LOCALAPPDATA%%\rigweda-monitor\logs
+  echo RIGWEDA_MONITOR_RUNTIME_ROOT=%%LOCALAPPDATA%%\rigweda-monitor
   echo RIGWEDA_MONITOR_SCAN_ROOTS=%%LOCALAPPDATA%%\rigweda-monitor\screenshots
   echo SCREENSHOT_INTERVAL_MS=30000
   echo SCREENSHOT_UPLOAD_BATCH_SIZE=30

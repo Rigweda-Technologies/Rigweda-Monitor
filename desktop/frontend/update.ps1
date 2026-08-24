@@ -1,6 +1,6 @@
 param(
-  [string]$ConfigPath = (Join-Path $PSScriptRoot "config.json"),
-  [string]$VersionPath = (Join-Path $PSScriptRoot "version.json")
+  [string]$ConfigPath = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor\config.json"),
+  [string]$VersionPath = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor\version.json")
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,9 +13,17 @@ function Write-Log([string]$Message) {
   Add-Content -LiteralPath $logPath -Value ("{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message)
 }
 
-function Get-AuthToken {
+function Get-RuntimeRoot {
   $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-  $authFile = Join-Path $config.runtimeRoot "data\auth.json"
+  $runtimeRoot = [string]$config.runtimeRoot
+  if ([string]::IsNullOrWhiteSpace($runtimeRoot)) {
+    $runtimeRoot = Join-Path $env:LOCALAPPDATA "rigweda-monitor"
+  }
+  return $runtimeRoot
+}
+
+function Get-AuthToken {
+  $authFile = Join-Path (Get-RuntimeRoot) "data\auth.json"
   if (-not (Test-Path $authFile)) {
     throw "Auth session not found at $authFile"
   }
@@ -36,8 +44,7 @@ function Get-AuthToken {
 }
 
 function Get-DeviceId {
-  $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-  $deviceIdFile = Join-Path $config.runtimeRoot "data\device_id.txt"
+  $deviceIdFile = Join-Path (Get-RuntimeRoot) "data\device_id.txt"
   if (-not (Test-Path $deviceIdFile)) {
     throw "Device ID file not found at $deviceIdFile"
   }
@@ -67,8 +74,7 @@ function Send-Status([hashtable]$Payload) {
 }
 
 function Get-Lock {
-  $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-  $stateDir = Join-Path $config.runtimeRoot "state"
+  $stateDir = Join-Path (Get-RuntimeRoot) "state"
   New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
   $mutex = New-Object System.Threading.Mutex($false, "Global\RigwedaMonitorUpdate")
   if (-not $mutex.WaitOne(0)) {
@@ -198,9 +204,10 @@ try {
     exit 0
   }
 
-  $downloadDir = Join-Path $config.runtimeRoot "downloads"
-  $backupDir = Join-Path $config.runtimeRoot "backup"
-  $stateDir = Join-Path $config.runtimeRoot "state"
+  $runtimeRoot = Get-RuntimeRoot
+  $downloadDir = Join-Path $runtimeRoot "downloads"
+  $backupDir = Join-Path $runtimeRoot "backup"
+  $stateDir = Join-Path $runtimeRoot "state"
   New-Item -ItemType Directory -Force -Path $downloadDir, $backupDir, $stateDir | Out-Null
   $targetExe = Join-Path $downloadDir ("RigwedaMonitor-{0}.exe" -f $update.version)
   $exePath = Join-Path (Get-InstallRoot) "RigwedaMonitor.exe"
