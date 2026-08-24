@@ -31,15 +31,15 @@ export type CreateMonitorReleasePayload = {
 
 export async function getMonitorReleases() {
   const response = await getApiWithToken("/monitor/releases", null, { suppressPermissionError: true });
-  return (response?.data?.data || []) as MonitorRelease[];
+  return (response?.data || []) as MonitorRelease[];
 }
 
 export async function createMonitorRelease(payload: CreateMonitorReleasePayload) {
   const response = await postApiWithToken("/monitor/releases", payload);
-  return response?.data?.data as MonitorRelease;
+  return response?.data as MonitorRelease;
 }
 
 export async function updateMonitorRelease(releaseId: string, payload: Partial<Pick<CreateMonitorReleasePayload, "status" | "rolloutPercentage">>) {
   const response = await patchApiWithToken(`/monitor/releases/${releaseId}`, payload);
-  return response?.data?.data as MonitorRelease;
+  return response?.data as MonitorRelease;
 }

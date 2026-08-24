@@ -68,6 +68,7 @@ class LoginApp:
         self.startup_notice = startup_notice
         self.profile_photo_image: ctk.CTkImage | None = None
         self.logo_image: ctk.CTkImage | None = None
+        self.app_version = self._read_app_version()
         self._email_prefilled = bool(self.saved_session and self.saved_session.get("email") and not self.auto_resume_saved_session)
         self.login_widgets: list[tk.Widget] = []
         self.auto_close_seconds = 20
@@ -358,13 +359,25 @@ class LoginApp:
         self.signin_button.pack(fill="x", pady=(4, 12))
         self.login_widgets.append(self.signin_button)
 
+        self.footer_row = ctk.CTkFrame(content, fg_color="transparent")
+        self.footer_row.pack(fill="x", pady=(6, 0))
+
         self.footer_label = ctk.CTkLabel(
-            content,
+            self.footer_row,
             text="Secure access to the desktop service backend.",
             text_color=COLORS["text_muted"],
             font=("Segoe UI", 10),
         )
-        self.footer_label.pack(pady=(6, 0))
+        self.footer_label.pack(side="left")
+
+        version_text = f"v{self.app_version}" if self.app_version else ""
+        self.version_label = ctk.CTkLabel(
+            self.footer_row,
+            text=version_text,
+            text_color=COLORS["text_muted"],
+            font=("Segoe UI", 10),
+        )
+        self.version_label.pack(side="right")
 
         self.root.bind("<Return>", self._handle_enter)
 
@@ -376,6 +389,25 @@ class LoginApp:
         if hasattr(sys, "_MEIPASS"):
             return Path(sys._MEIPASS) / "assets" / filename
         return ASSETS_DIR / filename
+
+    def _app_root(self) -> Path:
+        if hasattr(sys, "_MEIPASS"):
+            return Path(sys._MEIPASS)
+        return Path(__file__).resolve().parents[1]
+
+    def _read_app_version(self) -> str:
+        version_candidates = (
+            self._app_root() / "VERSION",
+            Path(__file__).resolve().parents[1] / "VERSION",
+        )
+        for path in version_candidates:
+            try:
+                text = path.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if text:
+                return text
+        return ""
 
     def _build_logo_widget(self, parent: tk.Misc) -> tk.Widget:
         logo_path_candidates = (
@@ -536,7 +568,7 @@ class LoginApp:
             )
             empty_label.pack(fill="x")
         if not self.profile_frame.winfo_ismapped():
-            self.profile_frame.pack(fill="x", pady=(0, 14), before=self.footer_label)
+            self.profile_frame.pack(fill="x", pady=(0, 14), before=self.footer_row)
 
         photo = self._load_profile_photo(employee.get("profileImage"))
         if photo:
