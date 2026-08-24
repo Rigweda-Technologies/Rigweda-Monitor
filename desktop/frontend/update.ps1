@@ -96,6 +96,46 @@ function Get-ResponseData([object]$Response) {
   return $Response
 }
 
+function ConvertTo-Boolean([object]$Value, [bool]$Default = $false) {
+  if ($null -eq $Value) {
+    return $Default
+  }
+
+  if ($Value -is [bool]) {
+    return [bool]$Value
+  }
+
+  $text = ([string]$Value).Trim().ToLower()
+  if ($text -in @("1", "true", "yes", "on")) {
+    return $true
+  }
+  if ($text -in @("0", "false", "no", "off")) {
+    return $false
+  }
+
+  return $Default
+}
+
+function Get-UpdatePolicy {
+  $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+  $allowUnsignedUpdates = $true
+  if ($config.PSObject.Properties.Name -contains 'allowUnsignedUpdates') {
+    $allowUnsignedUpdates = ConvertTo-Boolean $config.allowUnsignedUpdates $true
+  }
+
+  $envValue = ([string]$env:MONITOR_ALLOW_UNSIGNED_UPDATES).Trim().ToLower()
+  if ($envValue -in @("1", "true", "yes")) {
+    $allowUnsignedUpdates = $true
+  } elseif ($envValue -in @("0", "false", "no")) {
+    $allowUnsignedUpdates = $false
+  }
+
+  return @{
+    expectedPublisher = [string]$config.expectedPublisher
+    allowUnsignedUpdates = $allowUnsignedUpdates
+  }
+}
+
 function Get-InstallRoot {
   $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
   $installRoot = [string]$config.installRoot
@@ -143,21 +183,30 @@ function Restart-App {
   Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) | Out-Null
 }
 
-function Test-Signature([string]$FilePath, [string]$Publisher) {
+function Test-Signature([string]$FilePath, [string]$Publisher, [bool]$AllowUnsignedUpdates = $true) {
   if (([string]$env:MONITOR_SKIP_SIGNATURE_CHECK).Trim().ToLower() -in @("1", "true", "yes")) {
     Write-Log "SIGNATURE_CHECK_SKIPPED FILE=$FilePath"
     return
   }
 
+  if ([string]::IsNullOrWhiteSpace($Publisher)) {
+    Write-Log "SIGNATURE_CHECK_SKIPPED_NO_PUBLISHER FILE=$FilePath"
+    return
+  }
+
   $signature = Get-AuthenticodeSignature -FilePath $FilePath
+  if ($signature.Status -eq "NotSigned" -and $AllowUnsignedUpdates) {
+    Write-Log "SIGNATURE_CHECK_BYPASSED FILE=$FilePath REASON=NotSigned"
+    return
+  }
+
   if ($signature.Status -ne "Valid") {
     throw "Signature invalid: $($signature.Status)"
   }
-  if ($Publisher) {
-    $subject = $signature.SignerCertificate.Subject
-    if ($subject -notmatch [regex]::Escape($Publisher)) {
-      throw "Unexpected publisher: $subject"
-    }
+
+  $subject = $signature.SignerCertificate.Subject
+  if ($subject -notmatch [regex]::Escape($Publisher)) {
+    throw "Unexpected publisher: $subject"
   }
 }
 
@@ -171,6 +220,33 @@ function Stop-RigwedaMonitorApp {
   }
 }
 
+function Wait-ForProcessExit([string]$ProcessName, [int]$TimeoutSeconds = 30) {
+  for ($i = 0; $i -lt $TimeoutSeconds; $i++) {
+    if (-not (Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)) {
+      return $true
+    }
+    Start-Sleep -Seconds 1
+  }
+
+  return $false
+}
+
+function Copy-ItemWithRetry([string]$Source, [string]$Destination, [string]$Label) {
+  for ($attempt = 1; $attempt -le 10; $attempt++) {
+    try {
+      Copy-Item -Path $Source -Destination $Destination -Force
+      return
+    } catch {
+      if ($attempt -eq 10) {
+        throw
+      }
+
+      Write-Log "COPY_RETRY LABEL=$Label ATTEMPT=$attempt ERROR=$($_.Exception.Message)"
+      Start-Sleep -Seconds 2
+    }
+  }
+}
+
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $authToken = Get-AuthToken
 $deviceId = Get-DeviceId
@@ -179,6 +255,7 @@ $mutex = Get-Lock
 try {
   $installedVersion = Get-InstalledVersion
   Write-Log "UPDATE_CHECK_STARTED CURRENT_VERSION=$installedVersion"
+  $updatePolicy = Get-UpdatePolicy
   $latestResponse = Invoke-RestMethod -Method Get -Uri "$($config.hrmsBackendUrl.TrimEnd('/'))/monitor/update/latest" -Headers @{
     Authorization = "Bearer $authToken"
     "X-Device-ID" = $deviceId
@@ -240,12 +317,13 @@ try {
     exit 1
   }
 
-  Test-Signature -FilePath $targetExe -Publisher $config.expectedPublisher
+  Test-Signature -FilePath $targetExe -Publisher $updatePolicy.expectedPublisher -AllowUnsignedUpdates $updatePolicy.allowUnsignedUpdates
 
   Stop-RigwedaMonitorApp
+  Wait-ForProcessExit -ProcessName "RigwedaMonitor" -TimeoutSeconds 30 | Out-Null
 
-  Copy-Item -Path $exePath -Destination $backupPath -Force
-  Copy-Item -Path $targetExe -Destination $exePath -Force
+  Copy-ItemWithRetry -Source $exePath -Destination $backupPath -Label "backup"
+  Copy-ItemWithRetry -Source $targetExe -Destination $exePath -Label "install"
   Set-Content -LiteralPath (Join-Path (Get-InstallRoot) "VERSION") -Value $update.version -Encoding ASCII
   Write-Log "INSTALL_STARTED"
   Send-Status @{
@@ -261,7 +339,7 @@ try {
   Start-Sleep -Seconds 20
   $newVersion = Get-InstalledVersion
   if ($newVersion -ne $update.version) {
-    Copy-Item -Path $backupPath -Destination $exePath -Force
+    Copy-ItemWithRetry -Source $backupPath -Destination $exePath -Label "rollback"
     Set-Content -LiteralPath (Join-Path (Get-InstallRoot) "VERSION") -Value $installedVersion -Encoding ASCII
     Restart-App
     Write-Log "ROLLED_BACK VERSION=$installedVersion"
@@ -284,7 +362,7 @@ try {
     installedAt = (Get-Date).ToUniversalTime().ToString("o")
   } | ConvertTo-Json -Depth 4) -Encoding UTF8
 
-  Write-Log "UPDATE_SUCCESS VERSION=$update.version"
+  Write-Log "UPDATE_SUCCESS VERSION=$($update.version)"
   Send-Status @{
     deviceId = $deviceId
     releaseId = $update.releaseId

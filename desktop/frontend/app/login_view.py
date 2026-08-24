@@ -515,7 +515,7 @@ class LoginApp:
         self._enter_profile_mode()
         self.title_label.pack_forget()
         self.subtitle_label.configure(
-            text="Session verified. Employee profile is active. This popup will close automatically.",
+            text="Session verified1. Employee profile is active. This popup will close automatically.",
             text_color=COLORS["text_muted"],
         )
         self.status_label.configure(text="")
@@ -632,7 +632,7 @@ class LoginApp:
                 COLORS["success"],
             )
         self.subtitle_label.configure(
-            text=f"Session verified. Employee profile is active. Popup closes in {self.auto_close_seconds} seconds.",
+            text=f"Session verified2. Employee profile is active. Popup closes in {self.auto_close_seconds} seconds.",
             text_color=COLORS["text_muted"],
         )
         self._start_auto_close(20)
@@ -658,7 +658,7 @@ class LoginApp:
             return
 
         self.subtitle_label.configure(
-            text=f"Session verified. Employee profile is active. Popup closes in {self.auto_close_seconds} seconds.",
+            text=f"Session verified3. Employee profile is active. Popup closes in {self.auto_close_seconds} seconds.",
             text_color=COLORS["text_muted"],
         )
         self.auto_close_seconds -= 1

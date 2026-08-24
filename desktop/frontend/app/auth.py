@@ -352,7 +352,7 @@ def _auth_session_paths() -> list[Path]:
     return [path for path in dict.fromkeys([AUTH_FILE, ALT_AUTH_FILE]) if path.exists()]
 
 
-def load_auth_session(*, validate_token: bool = True) -> dict | None:
+def load_auth_session(*, validate_token: bool = True, hydrate_details: bool = True) -> dict | None:
     """Load a saved login session and expose its token to child monitor processes."""
     session = None
     for auth_path in _auth_session_paths():
@@ -385,7 +385,7 @@ def load_auth_session(*, validate_token: bool = True) -> dict | None:
     missing_visible_details = any(not employee.get(key) for key in ("name", "role", "employeeId", "phone")) or any(
         key not in employee for key in profile_keys
     ) or session.get("profileSchemaVersion") != PROFILE_SCHEMA_VERSION
-    if missing_visible_details:
+    if hydrate_details and missing_visible_details:
         details = _fetch_employee_details(str(session.get("email") or ""), token)
         if details:
             session["employee"] = details
