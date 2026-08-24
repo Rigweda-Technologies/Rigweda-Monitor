@@ -154,7 +154,7 @@ class LoginApp:
 
         self.subtitle_label = ctk.CTkLabel(
             content,
-            text="Welcome back. Enter your credentials to continue.",
+            text="Welcome back Mahesh. Enter your credentials to continue.",
             text_color=COLORS["text_muted"],
             font=FONTS["subtitle"],
         )
