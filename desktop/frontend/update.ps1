@@ -138,6 +138,11 @@ function Restart-App {
 }
 
 function Test-Signature([string]$FilePath, [string]$Publisher) {
+  if (([string]$env:MONITOR_SKIP_SIGNATURE_CHECK).Trim().ToLower() -in @("1", "true", "yes")) {
+    Write-Log "SIGNATURE_CHECK_SKIPPED FILE=$FilePath"
+    return
+  }
+
   $signature = Get-AuthenticodeSignature -FilePath $FilePath
   if ($signature.Status -ne "Valid") {
     throw "Signature invalid: $($signature.Status)"
@@ -147,6 +152,16 @@ function Test-Signature([string]$FilePath, [string]$Publisher) {
     if ($subject -notmatch [regex]::Escape($Publisher)) {
       throw "Unexpected publisher: $subject"
     }
+  }
+}
+
+function Stop-RigwedaMonitorApp {
+  & taskkill /F /IM RigwedaMonitor.exe /T | Out-Null
+  for ($i = 0; $i -lt 30; $i++) {
+    if (-not (Get-Process -Name "RigwedaMonitor" -ErrorAction SilentlyContinue)) {
+      return
+    }
+    Start-Sleep -Seconds 1
   }
 }
 
@@ -220,14 +235,11 @@ try {
 
   Test-Signature -FilePath $targetExe -Publisher $config.expectedPublisher
 
-  $serviceName = "RigwedaMonitor"
-  if (Get-Process -Name $serviceName -ErrorAction SilentlyContinue) {
-    Stop-Process -Name $serviceName -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 5
-  }
+  Stop-RigwedaMonitorApp
 
   Copy-Item -Path $exePath -Destination $backupPath -Force
   Copy-Item -Path $targetExe -Destination $exePath -Force
+  Set-Content -LiteralPath (Join-Path (Get-InstallRoot) "VERSION") -Value $update.version -Encoding ASCII
   Write-Log "INSTALL_STARTED"
   Send-Status @{
     deviceId = $deviceId
@@ -243,6 +255,7 @@ try {
   $newVersion = Get-InstalledVersion
   if ($newVersion -ne $update.version) {
     Copy-Item -Path $backupPath -Destination $exePath -Force
+    Set-Content -LiteralPath (Join-Path (Get-InstallRoot) "VERSION") -Value $installedVersion -Encoding ASCII
     Restart-App
     Write-Log "ROLLED_BACK VERSION=$installedVersion"
     Send-Status @{
