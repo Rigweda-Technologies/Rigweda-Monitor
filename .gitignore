@@ -14,6 +14,8 @@ myapp/env/
 # Build artifacts
 build/
 dist/
+desktop/frontend/build_try/
+desktop/frontend/build_build/
 *.egg-info/
 myapp/build/
 myapp/dist/
@@ -59,6 +61,7 @@ node_modules/
 # ==========================
 .env
 .env.local
+.env.*
 .env.development
 .env.test
 .env.production
@@ -172,7 +175,6 @@ config/secrets.js
 # ==========================
 # Cloud Credentials
 # ==========================
-*.json
 service-account.json
 firebase-adminsdk*.json
 gcp-key.json

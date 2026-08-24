@@ -1,7 +1,41 @@
-const requiredEnv = ["JWT_ACCESS_SECRET", "RIGWEDA_API_BASE_URL", "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"];
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "../../../..");
+const DEFAULT_HRMS_BACKEND_URL = "https://rigweda-hrms-backend.onrender.com/api";
+const DEFAULT_DESKTOP_BACKEND_URL = "https://rigweda-monitor-backend.vercel.app/api";
+
+export const loadEnvFiles = () => {
+  // The HRMS payroll database is the shared Postgres store in local development.
+  // Desktop-specific values loaded below always take precedence.
+  dotenv.config({ path: path.join(repoRoot, "hrms", "back-end", ".env") });
+  dotenv.config({ path: path.join(repoRoot, "rigweda", "backend", ".env") });
+  dotenv.config({ path: path.join(repoRoot, "desktop", "backend", ".env"), override: true });
+
+  // APP_ENV is set by `npm run local` or `npm run server`.  The selected file
+  // overrides the shared .env without changing it on disk.
+  const appEnv = String(process.env.APP_ENV || "").trim();
+  if (appEnv) {
+    dotenv.config({
+      path: path.join(repoRoot, "desktop", "backend", `.env.${appEnv}`),
+      override: true,
+      quiet: true,
+    });
+  }
+};
+
+const requiredEnv = [
+  "JWT_ACCESS_SECRET",
+];
 
 export const validateEnv = () => {
   const missing = requiredEnv.filter((key) => !String(process.env[key] || "").trim());
+
+  if (!String(process.env.MONITOR_DATABASE_URL || process.env.DATABASE_URL || process.env.PAYROLL_DATABASE_URL || "").trim()) {
+    missing.push("MONITOR_DATABASE_URL, PAYROLL_DATABASE_URL, or DATABASE_URL");
+  }
 
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
@@ -10,10 +44,23 @@ export const validateEnv = () => {
 
 export const getEnv = () => ({
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
-  rigwedaApiBaseUrl: String(process.env.RIGWEDA_API_BASE_URL || "").replace(/\/+$/, ""),
+  hrmsBackendUrl: String(process.env.HRMS_BACKEND_URL || DEFAULT_HRMS_BACKEND_URL).replace(/\/+$/, ""),
+  desktopBackendUrl: String(process.env.DESKTOP_BACKEND_URL || DEFAULT_DESKTOP_BACKEND_URL).replace(/\/+$/, ""),
+  corsOrigins: String(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
+  databaseUrl: process.env.MONITOR_DATABASE_URL || process.env.DATABASE_URL || process.env.PAYROLL_DATABASE_URL,
+  databaseSsl: ["1", "true", "yes"].includes(String(process.env.DATABASE_SSL || "").toLowerCase()),
+  databaseSslRejectUnauthorized: ["1", "true", "yes"].includes(
+    String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || "").toLowerCase()
+  ),
+  databasePoolMax: Number(process.env.DATABASE_POOL_MAX || 10),
+  databaseStatementTimeoutMs: Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS || 30000),
+  databaseQueryTimeoutMs: Number(process.env.DATABASE_QUERY_TIMEOUT_MS || 35000),
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "0.0.0.0",
 });

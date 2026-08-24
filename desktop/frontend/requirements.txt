@@ -1,3 +1,9 @@
 customtkinter
+python-dotenv
+mss
+psutil
+pynput
 pywin32; platform_system == "Windows"
-
+Pillow
+PyInstaller
+python-socketio[client]

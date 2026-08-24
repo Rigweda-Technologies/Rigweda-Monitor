@@ -38,10 +38,10 @@ class MainApplication : Application(), ReactApplication {
     val manager = getSystemService(NotificationManager::class.java) ?: return
     val channel = NotificationChannel(
       notificationChannelId,
-      "Upanaya Notifications",
+      "Rigweda Notifications",
       NotificationManager.IMPORTANCE_HIGH
     ).apply {
-      description = "General notifications from Upanaya"
+      description = "General notifications from Rigweda"
       enableVibration(true)
       setShowBadge(true)
     }
@@ -49,5 +49,4 @@ class MainApplication : Application(), ReactApplication {
     manager.createNotificationChannel(channel)
   }
 }
-
 

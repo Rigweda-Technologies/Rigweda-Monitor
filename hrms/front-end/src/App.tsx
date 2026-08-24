@@ -61,6 +61,14 @@ const Expenses = lazyWithRetry(() => import("./pages/Expenses"), "Expenses");
 const Projects = lazyWithRetry(() => import("./pages/Projects"), "Projects");
 const Hiring = lazyWithRetry(() => import("./pages/Hiring"), "Hiring");
 const EmployeeTree = lazyWithRetry(() => import("./pages/EmployeeTree"), "EmployeeTree");
+const MonitorEmployees = lazyWithRetry(() => import("./pages/MonitorEmployees"), "MonitorEmployees");
+const MonitorActivity = lazyWithRetry(() => import("./pages/MonitorActivity"), "MonitorActivity");
+const MonitorAppUsage = lazyWithRetry(() => import("./pages/MonitorAppUsage"), "MonitorAppUsage");
+const MonitorAppKeyUsage = lazyWithRetry(() => import("./pages/MonitorAppKeyUsage"), "MonitorAppKeyUsage");
+const MonitorBrowserHistory = lazyWithRetry(() => import("./pages/MonitorBrowserHistory"), "MonitorBrowserHistory");
+const MonitorScreenshots = lazyWithRetry(() => import("./pages/MonitorScreenshots"), "MonitorScreenshots");
+const MonitorSettings = lazyWithRetry(() => import("./pages/MonitorSettings"), "MonitorSettings");
+const MonitorUpdates = lazyWithRetry(() => import("./pages/MonitorUpdates"), "MonitorUpdates");
 
 const queryClient = new QueryClient();
 
@@ -549,6 +557,90 @@ const App = () => (
                 <RequireAuth>
                   <RequireProfile>
                     <Documentation />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor"
+              element={<Navigate to="/monitor/employees" replace />}
+            />
+            <Route
+              path="/monitor/employees"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorEmployees />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/activity"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorActivity />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/apps"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorAppUsage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/app-keys"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorAppKeyUsage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/browser-history"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorBrowserHistory />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/screenshots"
+              element={
+                <RequireAuth permissions={["ATTENDANCE_VIEW_ALL"]}>
+                  <RequireProfile>
+                    <MonitorScreenshots />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/settings"
+              element={
+                <RequireAuth permissions={["ORG_SETTINGS_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorSettings />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/updates"
+              element={
+                <RequireAuth permissions={["ORG_SETTINGS_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorUpdates />
                   </RequireProfile>
                 </RequireAuth>
               }

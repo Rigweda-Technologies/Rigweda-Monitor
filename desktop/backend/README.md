@@ -25,8 +25,55 @@ Use the same date-based folder for `jpeg`, `jpg`, `png`, and `webp`.
 
 ## Endpoints
 
-- `GET /api/screenshots`
 - `POST /api/screenshots`
+- `POST /api/screenshot-batches/uploads`
+- `POST /api/screenshot-batches/:batchId/complete`
+- `POST /api/activity-events/batch`
+
+Admin/read APIs live in `hrms/back-end` and read the monitor Postgres database directly.
+
+## Scalable Screenshot Upload Flow
+
+The desktop monitor now uses the backend as a metadata/control plane:
+
+1. The desktop agent captures WebP screenshots into `C:\Rigweda_monitor\screenshots`.
+2. It records a durable local SQLite queue at `C:\Rigweda_monitor\data\screenshot_queue.db`.
+3. It asks the backend for a signed Cloudinary batch upload session.
+4. It uploads screenshots directly to Cloudinary.
+5. It commits uploaded/duplicate metadata back to Postgres.
+
+The backend creates these tables automatically on startup:
+
+- `monitor_screenshot_batches`
+- `monitor_screenshots`
+- `monitor_activity_events`
+- `monitor_device_presence`
+
+Required backend env:
+
+```bash
+JWT_ACCESS_SECRET=...
+HRMS_BACKEND_URL=...
+MONITOR_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rigweda_monitor
+DATABASE_SSL=false
+```
+
+Cloudinary credentials are configured in HRMS under Employee Monitor > Settings. The backend fetches them from HRMS to create signed upload payloads, so the desktop agent never receives the API secret.
+
+The backend loads `rigweda/backend/.env` first, then overrides with `desktop/backend/.env` when present.
+
+Required desktop agent env:
+
+```bash
+SCREENSHOT_INTERVAL_MS=60000
+SCREENSHOT_UPLOAD_BATCH_SIZE=30
+SCREENSHOT_UPLOAD_CONCURRENCY=4
+HRMS_BACKEND_URL=http://127.0.0.1:8000/api
+DESKTOP_BACKEND_URL=http://127.0.0.1:3000/api
+MONITOR_ACCESS_TOKEN=<rigweda access token>
+```
+
+`HRMS_BACKEND_URL` should point to the HRMS backend `/api`; the agent code derives `/api/agents` for monitor uploads and settings. Activity events still post to the desktop backend.
 
 ## Run
 
@@ -38,7 +85,6 @@ npm run dev
 ## Example
 
 ```bash
-curl http://localhost:3000/api/screenshots
 curl -X POST http://localhost:3000/api/screenshots \
   -H "content-type: application/json" \
   -d '{

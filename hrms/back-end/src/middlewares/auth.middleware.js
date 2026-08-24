@@ -19,6 +19,22 @@ module.exports = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.userId || decoded._id;
+
+    if (decoded.roleKey === "superadmin" || decoded.role === "superadmin" || decoded.bypassMonitorDb) {
+      req.user = {
+        userId: decoded.userId || decoded._id || decoded.sub || userId,
+        email: decoded.email || null,
+        organizationId: decoded.organizationId || null,
+        roleIds: decoded.roleIds || [],
+        activeRoleId: decoded.activeRoleId || decoded.roleKey || decoded.role || "superadmin",
+        roleKey: decoded.roleKey || decoded.role || "superadmin",
+        employeeId: decoded.employeeId || null,
+        employeeCode: decoded.employeeCode || null,
+        mustChangePassword: false
+      };
+      req.token = token;
+      return next();
+    }
     
     const user = await User.findById(userId).select(
       "_id email organizationIds activeOrganizationId status tokenList passwordChangeRequired"

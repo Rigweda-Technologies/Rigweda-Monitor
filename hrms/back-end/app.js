@@ -18,8 +18,13 @@ const {
   getMetricsSnapshot
 } = require("./src/observability/httpMetrics");
 
-// Load env variables
+// Load the common settings first. `npm run local` and `npm run server` set
+// APP_ENV and can override only the values that differ in .env.<mode>.
 dotenv.config({ quiet: true });
+const appEnv = String(process.env.APP_ENV || "").trim();
+if (appEnv) {
+  dotenv.config({ path: `.env.${appEnv}`, override: true, quiet: true });
+}
 
 // App init
 const app = express();
@@ -47,12 +52,9 @@ const defaultAllowedOrigins = [
   "http://localhost:8081",
   "http://localhost:3002",
   "http://localhost:3001",
-  "https://upanaya.vercel.app",
-  "https://upanaya-new.vercel.app",
-  "https://upanayahr.com",
-  "https://www.upanayahr.com"
+  "https://rigweda-hrms-frontend.vercel.app"
 ];
-const configuredAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "")
+const configuredAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
@@ -116,6 +118,14 @@ if (shouldExposeSwagger) {
 /*                               ROUTES                                       */
 /* -------------------------------------------------------------------------- */
 
+app.get("/", (req, res) => {
+  res.json({
+    message: "Rigweda HRMS API is running",
+    docs: "/swagger-ui",
+    health: "/health"
+  });
+});
+
 // Health check
 app.get("/health", (req, res) => {
   const metrics = getMetricsSnapshot();
@@ -162,6 +172,7 @@ app.use("/api/roles", require("./src/modules/roles/role.routes"));
 app.use("/api/permissions", require("./src/modules/permissions/permission.routes"));
 app.use("/api/employees", require("./src/modules/employees/employee.routes"));
 app.use("/api/agents", require("./src/modules/agent/agent.routes"));
+app.use("/api/monitor", require("./src/modules/monitorUpdates/monitorUpdates.routes"));
 app.use("/api/departments", require("./src/modules/departments/department.routes"));
 app.use("/api/designations", require("./src/modules/designations/designation.routes"));
 app.use("/api/leave-types", require("./src/modules/leaveTypes/leaveType.routes"));
@@ -180,6 +191,7 @@ app.use("/api/projects", require("./src/modules/projects/project.routes"));
 app.use("/api/hiring", require("./src/modules/hiring/hiring.routes"));
 app.use("/api/dashboard", require("./src/modules/dashboard/dashboard.routes"));
 app.use("/api/payroll", require("./src/modules/payroll/payrollAttendance.routes"));
+app.use("/api/activity", require("./src/modules/activity/activity.routes"));
 
 const shouldRunSchedulerInApi = process.env.ENABLE_JOB_SCHEDULER === "true";
 
@@ -236,7 +248,7 @@ const startServer = async () => {
     }
   }
 
-  server.listen(PORT, () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
     if (shouldExposeSwagger) {
       console.log(`📄 Swagger docs: http://localhost:${PORT}/swagger-ui`);

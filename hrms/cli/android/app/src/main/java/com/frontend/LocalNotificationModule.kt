@@ -48,7 +48,7 @@ class LocalNotificationModule(
       val notification =
         NotificationCompat.Builder(context, "upanaya-notifications")
           .setSmallIcon(context.applicationInfo.icon)
-          .setContentTitle(title?.trim().takeUnless { it.isNullOrEmpty() } ?: "Upanaya")
+          .setContentTitle(title?.trim().takeUnless { it.isNullOrEmpty() } ?: "Rigweda")
           .setContentText(resolvedBody)
           .setStyle(NotificationCompat.BigTextStyle().bigText(resolvedBody))
           .setPriority(NotificationCompat.PRIORITY_HIGH)

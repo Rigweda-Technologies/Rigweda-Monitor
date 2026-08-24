@@ -17,7 +17,13 @@ import {
   CalendarDays,
   CalendarOff,
   ClipboardCheck,
-  Network
+  Network,
+  Camera,
+  Monitor,
+  MousePointer2,
+  UsersRound,
+  Keyboard,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -157,6 +163,22 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <Shield size={18} />, label: "Approvals", to: "/approvals", permissions: ["LEAVE_ACTION", "ATTENDANCE_MANAGE"] },
       { icon: <CalendarDays size={20} />, label: "Holidays", to: "/holidays", permissions: ["HOLIDAY_VIEW"] },
       { icon: <Network size={18} />, label: "Organization Tree", to: "/employee-tree", permissions: ["EMP_VIEW", "EMP_ORG_TREE_VIEW"] }
+    ]
+  },
+  {
+    icon: <Monitor size={20} />,
+    label: "Employee Monitor",
+    to: "/monitor",
+    permissions: ["EMP_VIEW", "ATTENDANCE_VIEW_ALL", "ORG_SETTINGS_VIEW"],
+    children: [
+      { icon: <UsersRound size={18} />, label: "Employees", to: "/monitor/employees", permissions: ["EMP_VIEW"] },
+      { icon: <MousePointer2 size={18} />, label: "Mouse Movement", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
+      { icon: <Monitor size={18} />, label: "App Usage", to: "/monitor/apps", permissions: ["EMP_VIEW"] },
+      { icon: <Keyboard size={18} />, label: "Key Presses", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
+      { icon: <Globe size={18} />, label: "Browser History", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
+      { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
+      { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] },
+      { icon: <Settings size={18} />, label: "Updates", to: "/monitor/updates", permissions: ["ORG_SETTINGS_VIEW"] }
     ]
   },
   {
@@ -373,6 +395,11 @@ export const Sidebar = memo(({
           "sidebar-gradient h-screen fixed left-0 top-0 z-50 flex flex-col transition-transform lg:translate-x-0",
           isMobile ? (mobileOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"
         )}
+        style={{
+          backgroundColor: "hsl(var(--sidebar-background))",
+          color: "hsl(var(--sidebar-foreground))",
+          borderRight: "1px solid hsl(var(--sidebar-border))"
+        }}
         initial={false}
         animate={{ width: effectiveCollapsed ? 72 : 260 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -391,7 +418,7 @@ export const Sidebar = memo(({
               className="flex items-center gap-3 px-1 py-1"
             >
               <div className="w-14 h-14 rounded-xl bg-white/8 border border-white/15 flex items-center justify-center overflow-hidden">
-                <img src="/hrms-logo.png" alt="Upanaya logo" className="w-10 h-10 object-contain" />
+                <img src="/hrms-logo.png" alt="Rigweda logo" className="w-10 h-10 object-contain" />
               </div>
               <AnimatePresence>
                 {!effectiveCollapsed && (

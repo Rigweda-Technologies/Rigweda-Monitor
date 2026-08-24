@@ -49,7 +49,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   formatDateInOrgTimeZone,
   formatDateKeyInOrgCalendar,
+  formatDateTimeInOrgTimeZone,
   formatTimeInOrgTimeZone,
+  getOrgTimeZone,
+  subscribeToOrgTimeZone,
   toDateKeyInOrgCalendar,
   toDateKeyInOrgTimeZone
 } from "@/utils/timezone";
@@ -376,6 +379,7 @@ const mergeAttendanceRequestPages = (existing: AttendanceRequest[], incoming: At
 const Timesheets = () => {
   const { profile } = useAuth();
   const [weekStartDate, setWeekStartDate] = useState(getWeekStart(new Date()));
+  const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
   const [attendanceToday, setAttendanceToday] = useState<AttendanceTodayRecord | null>(null);
   const [timesheet, setTimesheet] = useState<TeamTimesheet | null>(null);
   const [entries, setEntries] = useState<WeeklyEntry[]>([]);
@@ -684,6 +688,8 @@ const Timesheets = () => {
     loadPendingAttendanceRequests,
     showEmployeeOnlyPanels
   ]);
+
+  useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
 
   const hasMoreTeamTimesheets = teamCurrentPage < teamTotalPages;
   const hasMoreMyAttendanceRequests = myAttendanceRequestsPage < myAttendanceRequestsTotalPages;
@@ -1139,7 +1145,7 @@ const Timesheets = () => {
                       <div>
                         <div className="font-medium">{toPersonLabel(actionedBy)}</div>
                         {actionedAt && (
-                          <div className="text-muted-foreground">{new Date(actionedAt).toLocaleString()}</div>
+                          <div className="text-muted-foreground">{formatDateTimeInOrgTimeZone(actionedAt, {}, timeZone)}</div>
                         )}
                       </div>
                     ) : "-"}
@@ -1749,7 +1755,7 @@ const Timesheets = () => {
                         {actionedAt && (
                           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {new Date(actionedAt).toLocaleString()}
+                            {formatDateTimeInOrgTimeZone(actionedAt, {}, timeZone)}
                           </p>
                         )}
                       </div>
@@ -1837,7 +1843,7 @@ const Timesheets = () => {
                                     <User className="w-3 h-3" />
                                     {toPersonLabel(step.actionBy)}
                                     {step.actionAt && (
-                                      <> · <Clock className="w-3 h-3" /> {new Date(step.actionAt).toLocaleString()}</>
+                                      <> · <Clock className="w-3 h-3" /> {formatDateTimeInOrgTimeZone(step.actionAt, {}, timeZone)}</>
                                     )}
                                   </p>
                                 )}

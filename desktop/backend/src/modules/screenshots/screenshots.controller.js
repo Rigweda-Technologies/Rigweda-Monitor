@@ -1,5 +1,16 @@
 import { screenshotService } from "./screenshots.service.js";
-import { createScreenshotSchema } from "./screenshots.validation.js";
+import {
+  completeUploadSessionSchema,
+  createScreenshotSchema,
+  createUploadSessionSchema,
+} from "./screenshots.validation.js";
+
+const formatJoiErrors = (error) =>
+  error.details.map((item) => ({
+    field: item.path.join(".") || "body",
+    message: item.message,
+    type: item.type,
+  }));
 
 export const listScreenshotsHandler = async () => {
   const screenshots = await screenshotService.listScreenshots();
@@ -8,25 +19,24 @@ export const listScreenshotsHandler = async () => {
 
 export const createScreenshotHandler = async (request, reply) => {
   const body = request.body ?? {};
+  const screenshotValue = body.screenshot;
 
-  const screenshotPart = await request.file();
-
-  if (!screenshotPart) {
+  if (!screenshotValue) {
     return reply.code(400).send({
       success: false,
       message: "Screenshot file is required",
     });
   }
 
-  const screenshotFile = {
-    filename: screenshotPart.filename || "screenshot",
-    mimetype: screenshotPart.mimetype || "application/octet-stream",
-    buffer: await screenshotPart.toBuffer(),
-    fileSize: screenshotPart.file?.bytesRead || 0,
+  const screenshotPart = {
+    filename: screenshotValue.filename || "screenshot",
+    mimetype: screenshotValue.mimetype || "application/octet-stream",
+    buffer: Buffer.isBuffer(screenshotValue) ? screenshotValue : Buffer.from(screenshotValue),
+    fileSize: Buffer.isBuffer(screenshotValue) ? screenshotValue.length : Buffer.byteLength(String(screenshotValue)),
   };
 
   const employeeProfile = await screenshotService.resolveEmployeeProfile(request.auth.token);
-  const employeeId = employeeProfile?.id;
+  const employeeId = employeeProfile?.employeeDbId || employeeProfile?.employeeId || employeeProfile?.userId;
 
   if (!employeeId) {
     return reply.code(404).send({
@@ -44,7 +54,7 @@ export const createScreenshotHandler = async (request, reply) => {
     employeeId,
     capturedAt: body.capturedAt,
     dateFolder,
-    screenshot: screenshotFile,
+    screenshot: screenshotPart,
   };
 
   const { error, value } = createScreenshotSchema.validate(payloadForValidation, {
@@ -56,14 +66,71 @@ export const createScreenshotHandler = async (request, reply) => {
     return reply.code(400).send({
       success: false,
       message: "Validation failed",
-      errors: error.details.map((item) => item.message),
+      errorCode: "VALIDATION_ERROR",
+      errors: formatJoiErrors(error),
     });
   }
 
-  const payload = value;
+  const payload = {
+    ...value,
+    auth: request.auth,
+  };
+  console.log("Validated payload for screenshot creation:", payload);
   const result = await screenshotService.createScreenshot(payload);
 
   return reply.code(201).send({
+    success: true,
+    data: result,
+  });
+};
+
+export const createUploadSessionHandler = async (request, reply) => {
+  const { error, value } = createUploadSessionSchema.validate(request.body ?? {}, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    return reply.code(400).send({
+      success: false,
+      message: "Validation failed",
+      errorCode: "VALIDATION_ERROR",
+      errors: formatJoiErrors(error),
+    });
+  }
+
+  const result = await screenshotService.createUploadSession({
+    auth: request.auth,
+    ...value,
+  });
+
+  return reply.code(201).send({
+    success: true,
+    data: result,
+  });
+};
+
+export const completeUploadSessionHandler = async (request, reply) => {
+  const { error, value } = completeUploadSessionSchema.validate(request.body ?? {}, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    return reply.code(400).send({
+      success: false,
+      message: "Validation failed",
+      errorCode: "VALIDATION_ERROR",
+      errors: formatJoiErrors(error),
+    });
+  }
+
+  const result = await screenshotService.completeUploadSession({
+    batchId: request.params.batchId,
+    ...value,
+  });
+
+  return reply.send({
     success: true,
     data: result,
   });
