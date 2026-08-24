@@ -177,7 +177,8 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <Keyboard size={18} />, label: "Key Presses", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
       { icon: <Globe size={18} />, label: "Browser History", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
       { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
-      { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] }
+      { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] },
+      { icon: <Settings size={18} />, label: "Updates", to: "/monitor/updates", permissions: ["ORG_SETTINGS_VIEW"] }
     ]
   },
   {

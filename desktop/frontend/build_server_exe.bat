@@ -26,6 +26,8 @@ set "INSTALL_SCRIPT_BAT=..\..\scripts\install-fresh-rigweda-monitor.bat"
 set "UNINSTALL_SCRIPT_PS1=..\..\scripts\uninstall-rigweda-monitor.ps1"
 set "UNINSTALL_SCRIPT_BAT=..\..\scripts\uninstall-rigweda-monitor.bat"
 set "STOP_PROCESSES_PS1=..\..\scripts\stop-rigweda-monitor-processes.ps1"
+set "UPDATE_SCRIPT=update.ps1"
+set "UPDATE_TASK_BAT=install_update_task.bat"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%STOP_PROCESSES_PS1%"
 if not "%errorlevel%"=="0" exit /b %errorlevel%
@@ -75,6 +77,8 @@ copy /Y "%INSTALL_SCRIPT_PS1%" "%BUNDLE_STAGE%\" >nul
 copy /Y "%INSTALL_SCRIPT_BAT%" "%BUNDLE_STAGE%\" >nul
 copy /Y "%UNINSTALL_SCRIPT_PS1%" "%BUNDLE_STAGE%\" >nul
 copy /Y "%UNINSTALL_SCRIPT_BAT%" "%BUNDLE_STAGE%\" >nul
+copy /Y "%UPDATE_SCRIPT%" "%BUNDLE_STAGE%\" >nul
+copy /Y "%UPDATE_TASK_BAT%" "%BUNDLE_STAGE%\" >nul
 if not "%errorlevel%"=="0" exit /b %errorlevel%
 if exist "%BUNDLE_DIR%" rmdir /s /q "%BUNDLE_DIR%"
 robocopy "%BUNDLE_STAGE%" "%BUNDLE_DIR%" /E /NFL /NDL /NJH /NJS /NP >nul

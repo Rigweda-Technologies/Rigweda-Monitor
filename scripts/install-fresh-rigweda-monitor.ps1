@@ -2,7 +2,10 @@ param(
     [string]$Source = "",
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor"),
     [string]$DataRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\data"),
-    [string]$LogRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\logs")
+    [string]$LogRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\logs"),
+    [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor"),
+    [string]$HrmsBackendUrl = $env:HRMS_BACKEND_URL,
+    [string]$ExpectedPublisher = $env:MONITOR_EXPECTED_PUBLISHER
 )
 
 $ErrorActionPreference = "Stop"
@@ -222,6 +225,17 @@ function Copy-FreshBuild([string]$ResolvedSource) {
     Get-ChildItem -LiteralPath $sourceDir -Force | Copy-Item -Destination $InstallDir -Recurse -Force
 }
 
+function Write-UpdateConfig {
+    $configPath = Join-Path $InstallDir 'config.json'
+    $payload = @{
+        hrmsBackendUrl = if ($HrmsBackendUrl) { $HrmsBackendUrl } else { "https://rigweda-hrms-backend.onrender.com/api" }
+        expectedPublisher = if ($ExpectedPublisher) { $ExpectedPublisher } else { "RigwedaMonitor" }
+        runtimeRoot = $RuntimeRoot
+        installRoot = $InstallDir
+    }
+    $payload | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding UTF8
+}
+
 function Register-Startup {
     $exePath = Join-Path $InstallDir 'RigwedaMonitor.exe'
     if (-not (Test-Path $exePath)) {
@@ -239,6 +253,14 @@ function Start-InstalledApp {
     if (Test-Path $exePath) {
         Write-Info "Starting installed app..."
         Start-Process -FilePath $exePath -ArgumentList '--background-start' -WorkingDirectory $InstallDir | Out-Null
+    }
+}
+
+function Install-UpdateTask {
+    $taskScript = Join-Path $InstallDir 'install_update_task.bat'
+    if (Test-Path $taskScript) {
+        Write-Info "Registering scheduled update task..."
+        Start-Process -FilePath $taskScript -WorkingDirectory $InstallDir -Wait | Out-Null
     }
 }
 
@@ -280,6 +302,8 @@ Remove-LegacyService
 Remove-LocalData
 Remove-InstallDir
 Copy-FreshBuild -ResolvedSource $resolvedSource
+Write-UpdateConfig
+Install-UpdateTask
 Register-Startup
 Start-InstalledApp
 

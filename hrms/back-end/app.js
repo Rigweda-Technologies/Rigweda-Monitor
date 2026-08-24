@@ -172,6 +172,7 @@ app.use("/api/roles", require("./src/modules/roles/role.routes"));
 app.use("/api/permissions", require("./src/modules/permissions/permission.routes"));
 app.use("/api/employees", require("./src/modules/employees/employee.routes"));
 app.use("/api/agents", require("./src/modules/agent/agent.routes"));
+app.use("/api/monitor", require("./src/modules/monitorUpdates/monitorUpdates.routes"));
 app.use("/api/departments", require("./src/modules/departments/department.routes"));
 app.use("/api/designations", require("./src/modules/designations/designation.routes"));
 app.use("/api/leave-types", require("./src/modules/leaveTypes/leaveType.routes"));

@@ -68,6 +68,7 @@ const MonitorAppKeyUsage = lazyWithRetry(() => import("./pages/MonitorAppKeyUsag
 const MonitorBrowserHistory = lazyWithRetry(() => import("./pages/MonitorBrowserHistory"), "MonitorBrowserHistory");
 const MonitorScreenshots = lazyWithRetry(() => import("./pages/MonitorScreenshots"), "MonitorScreenshots");
 const MonitorSettings = lazyWithRetry(() => import("./pages/MonitorSettings"), "MonitorSettings");
+const MonitorUpdates = lazyWithRetry(() => import("./pages/MonitorUpdates"), "MonitorUpdates");
 
 const queryClient = new QueryClient();
 
@@ -630,6 +631,16 @@ const App = () => (
                 <RequireAuth permissions={["ORG_SETTINGS_VIEW"]}>
                   <RequireProfile>
                     <MonitorSettings />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/updates"
+              element={
+                <RequireAuth permissions={["ORG_SETTINGS_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorUpdates />
                   </RequireProfile>
                 </RequireAuth>
               }
