@@ -32,6 +32,32 @@ function ensurePositiveInt(value, fallback = 0) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function releaseSortRank(release) {
+  const statusWeight = {
+    active: 3,
+    testing: 2,
+    draft: 1,
+    disabled: 0
+  };
+
+  return {
+    status: statusWeight[String(release?.status || "draft")] || 0,
+    createdAt: new Date(release?.createdAt || 0).getTime(),
+    releasedAt: new Date(release?.releasedAt || 0).getTime()
+  };
+}
+
+function sortReleasesDesc(a, b) {
+  const versionDelta = compareVersions(b.version, a.version);
+  if (versionDelta !== 0) return versionDelta;
+
+  const aRank = releaseSortRank(a);
+  const bRank = releaseSortRank(b);
+  if (bRank.status !== aRank.status) return bRank.status - aRank.status;
+  if (bRank.releasedAt !== aRank.releasedAt) return bRank.releasedAt - aRank.releasedAt;
+  return bRank.createdAt - aRank.createdAt;
+}
+
 function isEligible(deviceId, release) {
   const rollout = Number.isFinite(release?.rolloutPercentage) ? release.rolloutPercentage : 100;
   if (rollout >= 100) return true;
@@ -49,19 +75,19 @@ function resolveDownloadUrl(release) {
 }
 
 exports.listReleases = async () => {
-  const items = await MonitorRelease.find().sort({ releasedAt: -1, build: -1 }).lean();
-  return items;
+  const items = await MonitorRelease.find().sort({ createdAt: -1, build: -1 }).lean();
+  return items.sort(sortReleasesDesc);
 };
 
 exports.getLatestRelease = async ({ deviceId, appVersion }) => {
-  const now = new Date();
-  const latestRelease = await MonitorRelease.findOne({
+  const releases = await MonitorRelease.find({
     channel: "stable",
-    status: { $in: ["testing", "active"] },
-    releasedAt: { $lte: now }
+    status: { $in: ["testing", "active"] }
   })
-    .sort({ releasedAt: -1, build: -1 })
+    .sort({ createdAt: -1, build: -1 })
     .lean();
+
+  const latestRelease = releases.sort(sortReleasesDesc)[0];
 
   if (!latestRelease) {
     return { updateAvailable: false, version: appVersion || "0.0.0" };

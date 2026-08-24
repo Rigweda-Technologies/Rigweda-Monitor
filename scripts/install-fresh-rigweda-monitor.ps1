@@ -1,9 +1,9 @@
 param(
     [string]$Source = "",
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor"),
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\data"),
-    [string]$LogRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor\logs"),
-    [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA "rigweda-monitor"),
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\RigwedaMonitor'),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'rigweda-monitor\data'),
+    [string]$LogRoot = (Join-Path $env:LOCALAPPDATA 'rigweda-monitor\logs'),
+    [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA 'rigweda-monitor'),
     [string]$HrmsBackendUrl = $env:HRMS_BACKEND_URL,
     [string]$ExpectedPublisher = $env:MONITOR_EXPECTED_PUBLISHER
 )
