@@ -1,6 +1,6 @@
 param(
-  [string]$ConfigPath = "C:\Program Files\RigwedaMonitor\config.json",
-  [string]$VersionPath = "C:\Program Files\RigwedaMonitor\version.json"
+  [string]$ConfigPath = (Join-Path $PSScriptRoot "config.json"),
+  [string]$VersionPath = (Join-Path $PSScriptRoot "version.json")
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,7 +55,7 @@ function Send-Status([hashtable]$Payload) {
     $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
     $token = Get-AuthToken
     $deviceId = Get-DeviceId
-    $uri = "{0}/api/monitor/update/status" -f $config.hrmsBackendUrl.TrimEnd("/")
+    $uri = "{0}/monitor/update/status" -f $config.hrmsBackendUrl.TrimEnd("/")
     Invoke-RestMethod -Method Post -Uri $uri -Headers @{
       Authorization = "Bearer $token"
       "Content-Type" = "application/json"
@@ -78,11 +78,54 @@ function Get-Lock {
   return $mutex
 }
 
-function Get-InstalledVersion {
-  if (Test-Path $VersionPath) {
-    try { return (Get-Content -LiteralPath $VersionPath -Raw | ConvertFrom-Json).version } catch {}
+function Get-ResponseData([object]$Response) {
+  if ($null -eq $Response) {
+    return $null
   }
-  $exe = "C:\Program Files\RigwedaMonitor\RigwedaMonitor.exe"
+
+  if ($Response.PSObject.Properties.Name -contains 'data' -and $null -ne $Response.data) {
+    return $Response.data
+  }
+
+  return $Response
+}
+
+function Get-InstallRoot {
+  $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+  $installRoot = [string]$config.installRoot
+  if ([string]::IsNullOrWhiteSpace($installRoot)) {
+    $installRoot = $PSScriptRoot
+  }
+  return $installRoot
+}
+
+function Get-InstalledVersion {
+  if (Test-Path (Join-Path (Get-InstallRoot) "VERSION")) {
+    try {
+      $plainVersion = (Get-Content -LiteralPath (Join-Path (Get-InstallRoot) "VERSION") -Raw).Trim()
+      if ($plainVersion) {
+        return $plainVersion
+      }
+    } catch {}
+  }
+
+  if (Test-Path $VersionPath) {
+    try {
+      $versionFile = Get-Content -LiteralPath $VersionPath -Raw
+      try {
+        $versionJson = $versionFile | ConvertFrom-Json
+        if ($versionJson.version) {
+          return [string]$versionJson.version
+        }
+      } catch {}
+
+      $plainVersion = [string]$versionFile.Trim()
+      if ($plainVersion) {
+        return $plainVersion
+      }
+    } catch {}
+  }
+  $exe = Join-Path (Get-InstallRoot) "RigwedaMonitor.exe"
   if (Test-Path $exe) {
     return [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe).FileVersion
   }
@@ -90,8 +133,8 @@ function Get-InstalledVersion {
 }
 
 function Restart-App {
-  $exe = "C:\Program Files\RigwedaMonitor\RigwedaMonitor.exe"
-  Start-Process -FilePath $exe -WindowStyle Hidden | Out-Null
+  $exe = Join-Path (Get-InstallRoot) "RigwedaMonitor.exe"
+  Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) | Out-Null
 }
 
 function Test-Signature([string]$FilePath, [string]$Publisher) {
@@ -115,13 +158,19 @@ $mutex = Get-Lock
 try {
   $installedVersion = Get-InstalledVersion
   Write-Log "UPDATE_CHECK_STARTED CURRENT_VERSION=$installedVersion"
-  $latestResponse = Invoke-RestMethod -Method Get -Uri "$($config.hrmsBackendUrl.TrimEnd('/'))/api/monitor/update/latest" -Headers @{
+  $latestResponse = Invoke-RestMethod -Method Get -Uri "$($config.hrmsBackendUrl.TrimEnd('/'))/monitor/update/latest" -Headers @{
     Authorization = "Bearer $authToken"
     "X-Device-ID" = $deviceId
     "X-App-Version" = $installedVersion
   }
+  if ($null -eq $latestResponse) {
+    throw "Latest update response was empty."
+  }
 
-  $update = $latestResponse.data
+  $update = Get-ResponseData $latestResponse
+  if ($null -eq $update) {
+    throw "Latest update response did not include update data."
+  }
   if (-not $update.updateAvailable) {
     Write-Log "UP_TO_DATE"
     Send-Status @{
@@ -139,7 +188,7 @@ try {
   $stateDir = Join-Path $config.runtimeRoot "state"
   New-Item -ItemType Directory -Force -Path $downloadDir, $backupDir, $stateDir | Out-Null
   $targetExe = Join-Path $downloadDir ("RigwedaMonitor-{0}.exe" -f $update.version)
-  $exePath = "C:\Program Files\RigwedaMonitor\RigwedaMonitor.exe"
+  $exePath = Join-Path (Get-InstallRoot) "RigwedaMonitor.exe"
   $backupPath = Join-Path $backupDir ("RigwedaMonitor-{0}.exe" -f $installedVersion)
 
   Write-Log "DOWNLOAD_STARTED RELEASE=$($update.version)"

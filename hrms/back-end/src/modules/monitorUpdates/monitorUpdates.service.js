@@ -244,7 +244,10 @@ exports.createRelease = async (payload) => {
     status: payload.status || "draft",
     rolloutPercentage: ensurePositiveInt(payload.rolloutPercentage, 100),
     minimumSupportedVersion: payload.minimumSupportedVersion || "0.0.0",
-    releasedAt: payload.releasedAt ? new Date(payload.releasedAt) : null,
+    releasedAt:
+      payload.releasedAt
+        ? new Date(payload.releasedAt)
+        : ["testing", "active"].includes(String(payload.status || "draft")) ? new Date() : null,
     signedDownloadUrl
   });
 
@@ -256,6 +259,6 @@ exports.activateRelease = async ({ releaseId, status, rolloutPercentage }) => {
   const update = {};
   if (status) update.status = status;
   if (typeof rolloutPercentage !== "undefined") update.rolloutPercentage = ensurePositiveInt(rolloutPercentage, 100);
-  if (status === "active" && !update.releasedAt) update.releasedAt = new Date();
+  if (["testing", "active"].includes(status) && !update.releasedAt) update.releasedAt = new Date();
   return MonitorRelease.findByIdAndUpdate(releaseId, { $set: update }, { new: true }).lean();
 };

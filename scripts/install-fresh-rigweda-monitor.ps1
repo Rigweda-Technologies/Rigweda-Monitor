@@ -225,6 +225,26 @@ function Copy-FreshBuild([string]$ResolvedSource) {
     Get-ChildItem -LiteralPath $sourceDir -Force | Copy-Item -Destination $InstallDir -Recurse -Force
 }
 
+function Copy-InstallHelpers {
+    $helperFiles = @(
+        'update.ps1',
+        'install_update_task.bat',
+        'uninstall-rigweda-monitor.ps1',
+        'uninstall-rigweda-monitor.bat'
+    )
+
+    foreach ($helperFile in $helperFiles) {
+        $sourcePath = Join-Path $PSScriptRoot $helperFile
+        if (Test-Path $sourcePath) {
+            Copy-Item -LiteralPath $sourcePath -Destination $InstallDir -Force
+        }
+    }
+}
+
+function Initialize-RuntimeRoots {
+    New-Item -ItemType Directory -Path $RuntimeRoot, $DataRoot, $LogRoot -Force | Out-Null
+}
+
 function Write-UpdateConfig {
     $configPath = Join-Path $InstallDir 'config.json'
     $payload = @{
@@ -302,6 +322,8 @@ Remove-LegacyService
 Remove-LocalData
 Remove-InstallDir
 Copy-FreshBuild -ResolvedSource $resolvedSource
+Copy-InstallHelpers
+Initialize-RuntimeRoots
 Write-UpdateConfig
 Install-UpdateTask
 Register-Startup
