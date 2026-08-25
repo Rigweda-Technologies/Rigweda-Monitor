@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 from pathlib import Path
 import sys
 import threading
@@ -396,15 +397,27 @@ class LoginApp:
         return Path(__file__).resolve().parents[1]
 
     def _read_app_version(self) -> str:
+        install_root = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else None
         version_candidates = (
+            install_root / "version.json" if install_root else None,
+            install_root / "VERSION" if install_root else None,
             self._app_root() / "VERSION",
             Path(__file__).resolve().parents[1] / "VERSION",
         )
         for path in version_candidates:
+            if path is None:
+                continue
             try:
-                text = path.read_text(encoding="utf-8").strip()
+                raw = path.read_text(encoding="utf-8").strip()
             except OSError:
                 continue
+            if path.name == "version.json":
+                try:
+                    text = str(json.loads(raw).get("version") or "").strip()
+                except (TypeError, ValueError):
+                    continue
+            else:
+                text = raw
             if text:
                 return text
         return ""
