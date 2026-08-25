@@ -227,15 +227,12 @@ def main() -> None:
     if "--background-start" in sys.argv:
         raise SystemExit(_resume_monitor_in_background())
 
-    startup_session = load_auth_session()
+    startup_session = load_auth_session(hydrate_details=False)
     if startup_session:
         try:
-            refreshed_flags = refresh_monitor_feature_flags(startup_session)
             flags = start_monitor_settings_listener(startup_session, on_change=apply_monitor_feature_flags)
-            if refreshed_flags:
-                flags = apply_monitor_feature_flags(refreshed_flags)
             _log_startup(
-                "Initial monitor settings loaded: "
+                "Initial monitor settings listener started with cached values: "
                 f"screenshots={flags.get('screenshotsEnabled', True)} "
                 f"mouse={flags.get('mouseEnabled', True)} "
                 f"keyboard={flags.get('keyboardEnabled', True)} "
@@ -266,7 +263,7 @@ def main() -> None:
     except Exception as e:
         _log_startup(f"Failed to bind interface browser tracking thread: {str(e)}")
 
-    app = LoginApp(load_auth_session())
+    app = LoginApp(startup_session or load_auth_session())
     app.run()
 
 

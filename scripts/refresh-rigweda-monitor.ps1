@@ -1,7 +1,10 @@
 param(
     [string]$Source = (Join-Path $PSScriptRoot "..\desktop\frontend\dist\RigwedaMonitorFreshInstall\RigwedaMonitor"),
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Programs\RigwedaMonitor"),
-    [switch]$PurgeLegacyData
+    [switch]$PurgeLegacyData,
+    [string]$HrmsBackendUrl = $env:HRMS_BACKEND_URL,
+    [string]$ExpectedPublisher = $env:MONITOR_EXPECTED_PUBLISHER,
+    [bool]$AllowUnsignedUpdates = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -158,6 +161,52 @@ function Copy-FreshBuild {
     Get-ChildItem -LiteralPath $sourceDir -Force | Copy-Item -Destination $InstallDir -Recurse -Force
 }
 
+function Copy-InstallHelpers {
+    $helperFiles = @(
+        'update.ps1',
+        'install_update_task.bat',
+        'uninstall-rigweda-monitor.ps1',
+        'uninstall-rigweda-monitor.bat'
+    )
+
+    foreach ($helperFile in $helperFiles) {
+        $sourcePath = Join-Path $PSScriptRoot $helperFile
+        if (Test-Path $sourcePath) {
+            Copy-Item -LiteralPath $sourcePath -Destination $InstallDir -Force
+        }
+    }
+}
+
+function Initialize-RuntimeRoots {
+    $runtimeRoot = Join-Path $env:LOCALAPPDATA 'rigweda-monitor'
+    $dataRoot = Join-Path $runtimeRoot 'data'
+    $logRoot = Join-Path $runtimeRoot 'logs'
+    New-Item -ItemType Directory -Path $runtimeRoot, $dataRoot, $logRoot -Force | Out-Null
+}
+
+function Write-UpdateConfig {
+    $configPath = Join-Path $InstallDir 'config.json'
+    $payload = @{
+        hrmsBackendUrl = if ($HrmsBackendUrl) { $HrmsBackendUrl } else { "https://rigweda-hrms-backend.onrender.com/api" }
+        expectedPublisher = if ($ExpectedPublisher) { $ExpectedPublisher } else { "" }
+        allowUnsignedUpdates = $AllowUnsignedUpdates
+        runtimeRoot = Join-Path $env:LOCALAPPDATA 'rigweda-monitor'
+        installRoot = $InstallDir
+    }
+    $payload | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding UTF8
+}
+
+function Install-UpdateTask {
+    $taskScript = Join-Path $InstallDir 'install_update_task.bat'
+    if (Test-Path $taskScript) {
+        Write-Info "Registering scheduled update task..."
+        $process = Start-Process -FilePath $taskScript -WorkingDirectory $InstallDir -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            throw "Failed to register scheduled update task. Exit code: $($process.ExitCode)"
+        }
+    }
+}
+
 function Register-Startup {
     $exePath = Join-Path $InstallDir 'RigwedaMonitor.exe'
     if (-not (Test-Path $exePath)) {
@@ -213,6 +262,10 @@ if ($PurgeLegacyData) {
 }
 Remove-InstallDir
 Copy-FreshBuild
+Copy-InstallHelpers
+Initialize-RuntimeRoots
+Write-UpdateConfig
+Install-UpdateTask
 Register-Startup
 Start-InstalledApp
 

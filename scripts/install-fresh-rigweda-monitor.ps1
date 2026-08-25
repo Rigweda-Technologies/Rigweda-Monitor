@@ -5,7 +5,8 @@ param(
     [string]$LogRoot = (Join-Path $env:LOCALAPPDATA 'rigweda-monitor\logs'),
     [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA 'rigweda-monitor'),
     [string]$HrmsBackendUrl = $env:HRMS_BACKEND_URL,
-    [string]$ExpectedPublisher = $env:MONITOR_EXPECTED_PUBLISHER
+    [string]$ExpectedPublisher = $env:MONITOR_EXPECTED_PUBLISHER,
+    [bool]$AllowUnsignedUpdates = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -249,7 +250,8 @@ function Write-UpdateConfig {
     $configPath = Join-Path $InstallDir 'config.json'
     $payload = @{
         hrmsBackendUrl = if ($HrmsBackendUrl) { $HrmsBackendUrl } else { "https://rigweda-hrms-backend.onrender.com/api" }
-        expectedPublisher = if ($ExpectedPublisher) { $ExpectedPublisher } else { "RigwedaMonitor" }
+        expectedPublisher = if ($ExpectedPublisher) { $ExpectedPublisher } else { "" }
+        allowUnsignedUpdates = $AllowUnsignedUpdates
         runtimeRoot = $RuntimeRoot
         installRoot = $InstallDir
     }
@@ -280,7 +282,10 @@ function Install-UpdateTask {
     $taskScript = Join-Path $InstallDir 'install_update_task.bat'
     if (Test-Path $taskScript) {
         Write-Info "Registering scheduled update task..."
-        Start-Process -FilePath $taskScript -WorkingDirectory $InstallDir -Wait | Out-Null
+        $process = Start-Process -FilePath $taskScript -WorkingDirectory $InstallDir -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            throw "Failed to register scheduled update task. Exit code: $($process.ExitCode)"
+        }
     }
 }
 
