@@ -25,6 +25,7 @@ const validatePayload = (body) => {
   const keyboardEnabled = parseBoolean(body.keyboardEnabled, true);
   const appUsageEnabled = parseBoolean(body.appUsageEnabled, true);
   const browserHistoryEnabled = parseBoolean(body.browserHistoryEnabled, false);
+  const usbEnabled = parseBoolean(body.usbEnabled, true);
   const screenshotIntervalMinutes = Math.max(Math.trunc(Number(body.screenshotIntervalMinutes) || 1), 1);
   const mouseHeartbeatMinutes = Math.max(Math.trunc(Number(body.mouseHeartbeatMinutes) || 1), 1);
   const mouseIdleThresholdMinutes = Math.max(Math.trunc(Number(body.mouseIdleThresholdMinutes) || 1), 1);
@@ -46,6 +47,7 @@ const validatePayload = (body) => {
     keyboardEnabled,
     appUsageEnabled,
     browserHistoryEnabled,
+    usbEnabled,
     screenshotIntervalMinutes,
     mouseHeartbeatMinutes,
     mouseIdleThresholdMinutes,
@@ -106,6 +108,18 @@ exports.getCloudinaryUploadConfig = async (req, res) => {
   return res.status(200).json(buildSuccessResponse({
     code: 200,
     message: "Cloudinary upload config fetched successfully",
+    data
+  }));
+};
+
+exports.getUsbControlConfig = async (req, res) => {
+  const data = await service.getUsbControlConfig(req.user.organizationId);
+  if (!data) {
+    throw { code: 404, message: "USB monitor settings are not configured for this organization." };
+  }
+  return res.status(200).json(buildSuccessResponse({
+    code: 200,
+    message: "USB control config fetched successfully",
     data
   }));
 };
