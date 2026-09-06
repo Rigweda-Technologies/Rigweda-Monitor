@@ -11,6 +11,7 @@ const TABLE_SQL = `
     api_secret_iv TEXT NOT NULL,
     api_secret_auth_tag TEXT NOT NULL,
     upload_folder_root TEXT NOT NULL DEFAULT 'rigweda-monitor',
+    usb_mode TEXT NOT NULL DEFAULT 'allow',
     screenshots_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     mouse_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     keyboard_enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -26,6 +27,8 @@ const TABLE_SQL = `
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
 `;
+
+const USB_MODES = new Set(["allow", "block_storage", "block_all"]);
 
 const getEncryptionKey = () =>
   crypto
@@ -118,6 +121,9 @@ const getPoolOrThrow = async () => {
   if (!columns.has("browser_history_sync_minutes")) {
     alterStatements.push("ADD COLUMN browser_history_sync_minutes INTEGER NOT NULL DEFAULT 1");
   }
+  if (!columns.has("usb_mode")) {
+    alterStatements.push("ADD COLUMN usb_mode TEXT NOT NULL DEFAULT 'allow'");
+  }
   if (alterStatements.length > 0) {
     await pool.query(`ALTER TABLE monitor_cloudinary_settings ${alterStatements.join(", ")}`);
   }
@@ -143,11 +149,44 @@ const normalizeMinutes = (value, fallback = 1, min = 1, max = 240) => {
   return Math.min(Math.max(Math.trunc(parsed), min), max);
 };
 
+const normalizeUsbMode = (value) => {
+  if (value && typeof value === "object") {
+    return normalizeUsbMode(value.usbMode ?? value.mode ?? value.usbEnabled);
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "allow" : "block_all";
+  }
+
+  const normalized = String(value || "").trim().toLowerCase();
+  if (USB_MODES.has(normalized)) {
+    return normalized;
+  }
+
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return "allow";
+  }
+
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return "block_all";
+  }
+
+  return "allow";
+};
+
+const toPublicUsbSettings = (row) => ({
+  usbMode: normalizeUsbMode(row?.usb_mode ?? "allow"),
+  usbEnabled: normalizeUsbMode(row?.usb_mode ?? "allow") === "allow",
+  updatedAt: row?.updated_at || null
+});
+
 const toPublicSettings = (row, secret) => row && ({
   cloudName: row.cloud_name,
   apiKey: row.api_key,
   apiSecretMasked: maskSecret(secret),
   uploadFolderRoot: row.upload_folder_root || "rigweda-monitor",
+  usbMode: normalizeUsbMode(row.usb_mode ?? "allow"),
+  usbEnabled: normalizeUsbMode(row.usb_mode ?? "allow") === "allow",
   screenshotsEnabled: row.screenshots_enabled ?? true,
   mouseEnabled: row.mouse_enabled ?? true,
   keyboardEnabled: row.keyboard_enabled ?? true,
@@ -175,6 +214,8 @@ const getRawSettings = async (organizationId) => {
     apiKey: row.api_key,
     apiSecret: decryptSecret(row),
     uploadFolderRoot: row.upload_folder_root || "rigweda-monitor",
+    usbMode: normalizeUsbMode(row.usb_mode ?? "allow"),
+    usbEnabled: normalizeUsbMode(row.usb_mode ?? "allow") === "allow",
     screenshotsEnabled: row.screenshots_enabled ?? true,
     mouseEnabled: row.mouse_enabled ?? true,
     keyboardEnabled: row.keyboard_enabled ?? true,
@@ -269,6 +310,47 @@ const saveSettings = async (organizationId, payload) => {
   return toPublicSettings(result.rows[0], resolvedSecret);
 };
 
+const getUsbSettings = async (organizationId) => {
+  const pool = await getPoolOrThrow();
+  const result = await pool.query(
+    "SELECT usb_mode, updated_at FROM monitor_cloudinary_settings WHERE organization_id = $1",
+    [String(organizationId)]
+  );
+  const row = result.rows[0] || null;
+  return row
+    ? toPublicUsbSettings(row)
+    : {
+        usbMode: "allow",
+        usbEnabled: true,
+        updatedAt: null
+      };
+};
+
+const saveUsbSettings = async (organizationId, payload) => {
+  const pool = await getPoolOrThrow();
+  const usbMode = normalizeUsbMode(payload);
+  const result = await pool.query(
+    `
+      UPDATE monitor_cloudinary_settings
+      SET
+        usb_mode = $2,
+        updated_at = NOW()
+      WHERE organization_id = $1
+      RETURNING *
+    `,
+    [String(organizationId), usbMode]
+  );
+
+  if (!result.rows[0]) {
+    throw {
+      code: 400,
+      message: "Cloudinary settings must be saved before USB settings can be updated."
+    };
+  }
+
+  return toPublicUsbSettings(result.rows[0]);
+};
+
 const testSettings = async (settings) => {
   cloudinary.config({
     cloud_name: settings.cloudName,
@@ -284,6 +366,8 @@ const testSettings = async (settings) => {
 module.exports = {
   getRawSettings,
   getPublicSettings,
+  getUsbSettings,
+  saveUsbSettings,
   saveSettings,
   testSettings
 };

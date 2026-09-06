@@ -8,6 +8,7 @@ import {
   Keyboard,
   Monitor,
   MousePointer2,
+  Plug,
   RefreshCw,
   Save,
   ShieldCheck,
@@ -20,15 +21,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   getMonitorCloudinarySettings,
+  getMonitorUsbSettings,
   saveMonitorCloudinarySettings,
+  saveMonitorUsbSettings,
   testMonitorCloudinarySettings
 } from "@/services/monitorActivity";
 import { toast } from "sonner";
 
 type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled" | "appUsageEnabled" | "browserHistoryEnabled";
+type MonitorUsbMode = "allow" | "block_storage" | "block_all";
 type MonitorNumericKey =
   | "screenshotIntervalMinutes"
   | "mouseHeartbeatMinutes"
@@ -48,6 +53,7 @@ type MonitorSettingsForm = {
   keyboardEnabled: boolean;
   appUsageEnabled: boolean;
   browserHistoryEnabled: boolean;
+  usbMode: MonitorUsbMode;
   screenshotIntervalMinutes: number;
   mouseHeartbeatMinutes: number;
   mouseIdleThresholdMinutes: number;
@@ -85,6 +91,28 @@ const MONITOR_CONTROLS: Array<{
     key: "browserHistoryEnabled",
     label: "Browser history",
     description: "Record approved browser navigation activity.",
+  },
+];
+
+const USB_MODE_OPTIONS: Array<{
+  value: MonitorUsbMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "allow",
+    label: "Allow USB",
+    description: "Keep USB storage and removable device installation enabled.",
+  },
+  {
+    value: "block_storage",
+    label: "Block storage",
+    description: "Disable USB mass storage while leaving other device installs unchanged.",
+  },
+  {
+    value: "block_all",
+    label: "Block all",
+    description: "Disable USB storage and try to disable USB controller/root-hub devices. This can also stop USB keyboards and mice.",
   },
 ];
 
@@ -184,6 +212,7 @@ const MonitorSettings = () => {
     keyboardEnabled: true,
     appUsageEnabled: true,
     browserHistoryEnabled: false,
+    usbMode: "allow",
     screenshotIntervalMinutes: 1,
     mouseHeartbeatMinutes: 1,
     mouseIdleThresholdMinutes: 1,
@@ -193,6 +222,7 @@ const MonitorSettings = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [usbSaving, setUsbSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const hasSecret = Boolean(form.apiSecret.trim() || form.apiSecretMasked);
   const enabledCount = [form.screenshotsEnabled, form.mouseEnabled, form.keyboardEnabled, form.appUsageEnabled, form.browserHistoryEnabled].filter(Boolean).length;
@@ -201,9 +231,15 @@ const MonitorSettings = () => {
   useEffect(() => {
     void (async () => {
       try {
-        const settings = await getMonitorCloudinarySettings();
-        if (settings) {
-          setForm({
+        const [cloudinaryResult, usbResult] = await Promise.allSettled([
+          getMonitorCloudinarySettings(),
+          getMonitorUsbSettings(),
+        ]);
+
+        if (cloudinaryResult.status === "fulfilled" && cloudinaryResult.value) {
+          const settings = cloudinaryResult.value;
+          setForm((prev) => ({
+            ...prev,
             cloudName: settings.cloudName || "",
             apiKey: settings.apiKey || "",
             apiSecret: "",
@@ -220,7 +256,22 @@ const MonitorSettings = () => {
             keyboardHeartbeatMinutes: Math.max(Number(settings.keyboardHeartbeatMinutes || 1), 1),
             appUsageHeartbeatMinutes: Math.max(Number(settings.appUsageHeartbeatMinutes || 1), 1),
             browserHistorySyncMinutes: Math.max(Number(settings.browserHistorySyncMinutes || 1), 1)
-          });
+          }));
+        }
+
+        if (usbResult.status === "fulfilled" && usbResult.value) {
+          const usbSettings = usbResult.value;
+          setForm((prev) => ({
+            ...prev,
+            usbMode: usbSettings.usbMode || "allow",
+          }));
+        }
+
+        if (cloudinaryResult.status === "rejected") {
+          toast.error(cloudinaryResult.reason instanceof Error ? cloudinaryResult.reason.message : "Could not load monitor settings.");
+        }
+        if (usbResult.status === "rejected") {
+          toast.error(usbResult.reason instanceof Error ? usbResult.reason.message : "Could not load USB settings.");
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not load monitor settings.");
@@ -247,6 +298,12 @@ const MonitorSettings = () => {
     appUsageHeartbeatMinutes: form.appUsageHeartbeatMinutes,
     browserHistorySyncMinutes: form.browserHistorySyncMinutes
   });
+
+  const buildUsbPayload = () => ({
+    usbMode: form.usbMode,
+  });
+
+  const selectedUsbMode = USB_MODE_OPTIONS.find((item) => item.value === form.usbMode) || USB_MODE_OPTIONS[0];
 
   const handleTest = async () => {
     try {
@@ -277,6 +334,22 @@ const MonitorSettings = () => {
     }
   };
 
+  const handleSaveUsb = async () => {
+    try {
+      setUsbSaving(true);
+      const settings = await saveMonitorUsbSettings(buildUsbPayload());
+      setForm((prev) => ({
+        ...prev,
+        usbMode: settings.usbMode || prev.usbMode,
+      }));
+      toast.success("USB settings saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save USB settings.");
+    } finally {
+      setUsbSaving(false);
+    }
+  };
+
   return (
     <MainLayout title="Monitor Settings" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Settings" }]}>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -302,7 +375,7 @@ const MonitorSettings = () => {
               </div>
               <div className="mt-2 text-lg font-semibold">{enabledCount} of {totalControls} signals enabled</div>
               <p className="mt-1 text-sm text-white/70">
-                Screenshot, mouse, keyboard, and browser-history permissions are controlled from this page.
+                Screenshot, mouse, keyboard, browser-history, and USB controls are managed from this page.
               </p>
             </div>
           </div>
@@ -443,6 +516,54 @@ const MonitorSettings = () => {
             </Card>
 
             <Card className="overflow-hidden border-slate-200/80 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+              <CardHeader className="border-b bg-muted/20">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Plug className="h-5 w-5 text-primary" />
+                  USB control
+                </CardTitle>
+                <CardDescription>
+                  Control how the desktop agent handles USB storage and removable device installs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="usbMode" className="flex items-center gap-2">
+                    <Plug className="h-4 w-4 text-muted-foreground" />
+                    USB mode
+                  </Label>
+                  <Select
+                    value={form.usbMode}
+                    disabled={loading}
+                    onValueChange={(value) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        usbMode: value as MonitorUsbMode,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="usbMode">
+                      <SelectValue placeholder="Choose USB mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USB_MODE_OPTIONS.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{selectedUsbMode.description}</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button onClick={handleSaveUsb} disabled={loading || usbSaving}>
+                    <Save className="mr-2 h-4 w-4" />
+                    {usbSaving ? "Saving..." : "Save USB settings"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-slate-200/80 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
               <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm font-medium">
@@ -479,6 +600,17 @@ const MonitorSettings = () => {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {form.apiSecretMasked || form.apiSecret.trim() ? "A saved secret is already available." : "Enter a secret before testing or saving a new config."}
                   </p>
+                </div>
+
+                <div className="rounded-2xl border bg-background p-4">
+                  <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">USB mode</div>
+                  <div className="mt-2 text-sm font-medium">{selectedUsbMode.label}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">{selectedUsbMode.description}</p>
+                  {form.usbMode === "block_all" && (
+                    <p className="mt-2 text-xs font-medium text-amber-700">
+                      Strict mode can disable USB storage, hubs, and connected USB peripherals on the laptop.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid gap-3">
@@ -525,7 +657,7 @@ const MonitorSettings = () => {
                     Tip
                   </div>
                   <p className="mt-2 text-xs leading-5 text-amber-800">
-                    Save the current config after changing a switch so the desktop client can pick up the new flag set.
+                    Save the current config after changing a switch, and save USB settings separately when you change the USB mode.
                   </p>
                 </div>
               </CardContent>

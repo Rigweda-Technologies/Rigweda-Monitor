@@ -15,7 +15,7 @@ const resolveUsbMode = (body) => {
   }
 
   if (typeof body.usbEnabled === "boolean") {
-    return body.usbEnabled ? "allow" : "block_storage";
+    return body.usbEnabled ? "allow" : "block_all";
   }
 
   return "allow";

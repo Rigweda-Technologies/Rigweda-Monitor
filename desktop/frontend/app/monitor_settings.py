@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import importlib
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.auth import DATA_ROOT, load_auth_session
-from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url
+from app.env import HOSTED_DESKTOP_BACKEND_URL, HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url
 
 try:
     import socketio
@@ -77,6 +78,21 @@ def _hrms_api_url(path: str) -> str:
     return f"{base_url}/api{normalized_path}"
 
 
+def _desktop_backend_base_url() -> str:
+    configured = os.getenv("DESKTOP_BACKEND_URL", "").strip()
+    if configured:
+        return prefer_hosted_backend_url(configured, hosted_default=HOSTED_DESKTOP_BACKEND_URL)
+    return HOSTED_DESKTOP_BACKEND_URL
+
+
+def _desktop_api_url(path: str) -> str:
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    base_url = _desktop_backend_base_url()
+    if base_url.endswith("/api"):
+        return f"{base_url}{normalized_path}"
+    return f"{base_url}/api{normalized_path}"
+
+
 def _hrms_socket_url() -> tuple[str, str]:
     base_url = _hrms_backend_base_url()
     if base_url.endswith("/api"):
@@ -109,6 +125,161 @@ def _request_json(url: str, *, token: str) -> dict[str, Any] | None:
         return None
 
     return payload if isinstance(payload, dict) else None
+
+
+USB_DISABLE_CLASSES = ("USB", "USBController", "HIDClass", "DiskDrive")
+USB_DISABLE_INSTANCE_ID_PATTERNS = (
+    r"^USB\\ROOT_HUB",
+    r"^USB\\VID_",
+    r"^HID\\VID_",
+    r"^USBSTOR\\",
+)
+DEVICE_INSTALL_RESTRICTIONS_KEY = r"HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions"
+
+
+def _usb_mode_from_value(value: Any) -> str:
+    if isinstance(value, dict):
+        return _usb_mode_from_value(value.get("usbMode") or value.get("mode") or value.get("usbEnabled"))
+
+    if isinstance(value, bool):
+        return "allow" if value else "block_all"
+
+    normalized = str(value or "").strip().lower()
+    if normalized in {"allow", "block_storage", "block_all"}:
+        return normalized
+    if normalized in {"1", "true", "yes", "on"}:
+        return "allow"
+    if normalized in {"0", "false", "no", "off"}:
+        return "block_all"
+    return "allow"
+
+
+def _run_windows_command(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        list(args),
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+
+
+def _run_reg(args: list[str]) -> None:
+    _run_windows_command("reg", *args)
+
+
+def _run_powershell(script: str) -> None:
+    _run_windows_command(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        script,
+    )
+
+
+def _set_usb_storage_enabled(enabled: bool) -> None:
+    _run_reg([
+        "add",
+        r"HKLM\SYSTEM\CurrentControlSet\Services\USBSTOR",
+        "/v",
+        "Start",
+        "/t",
+        "REG_DWORD",
+        "/d",
+        "3" if enabled else "4",
+        "/f",
+    ])
+
+
+def _set_usb_install_restriction(value_name: str, enabled: bool) -> None:
+    if enabled:
+        _run_reg([
+            "add",
+            DEVICE_INSTALL_RESTRICTIONS_KEY,
+            "/v",
+            value_name,
+            "/t",
+            "REG_DWORD",
+            "/d",
+            "1",
+            "/f",
+        ])
+        return
+
+    _run_reg(["delete", DEVICE_INSTALL_RESTRICTIONS_KEY, "/v", value_name, "/f"])
+
+
+def _set_usb_hardware_state(enabled: bool) -> None:
+    action = "Enable-PnpDevice" if enabled else "Disable-PnpDevice"
+    class_filter = ", ".join(f"'{item}'" for item in USB_DISABLE_CLASSES)
+    instance_id_filter = " -or ".join(
+        f"($device.InstanceId -match '{pattern}')" for pattern in USB_DISABLE_INSTANCE_ID_PATTERNS
+    )
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$devices = Get-PnpDevice -PresentOnly:$false | Where-Object {{
+  $null -ne $_.Class -and (
+    @({class_filter}) -contains $_.Class -or
+    ({instance_id_filter})
+  )
+}}
+foreach ($device in $devices) {{
+  try {{
+    {action} -InstanceId $device.InstanceId -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+  }} catch {{
+  }}
+}}
+"""
+    _run_powershell(script)
+
+
+def _apply_usb_control_policy(usb_mode: str) -> dict[str, Any]:
+    normalized = _usb_mode_from_value(usb_mode)
+    if os.name != "nt":
+        return {
+            "supported": False,
+            "applied": False,
+            "usbMode": normalized,
+            "usbEnabled": normalized == "allow",
+        }
+
+    try:
+        if normalized == "allow":
+            _set_usb_storage_enabled(True)
+            _set_usb_hardware_state(True)
+            _set_usb_install_restriction("DenyRemovableDevices", False)
+            _set_usb_install_restriction("DenyUnspecified", False)
+            enforcement = "allow"
+        elif normalized == "block_storage":
+            _set_usb_storage_enabled(False)
+            _set_usb_hardware_state(True)
+            _set_usb_install_restriction("DenyRemovableDevices", False)
+            _set_usb_install_restriction("DenyUnspecified", False)
+            enforcement = "storage_only"
+        else:
+            _set_usb_storage_enabled(False)
+            _set_usb_hardware_state(False)
+            _set_usb_install_restriction("DenyRemovableDevices", True)
+            _set_usb_install_restriction("DenyUnspecified", True)
+            enforcement = "hardware_disable_plus_restrictions"
+
+        return {
+            "supported": True,
+            "applied": True,
+            "usbMode": normalized,
+            "usbEnabled": normalized == "allow",
+            "enforcement": enforcement,
+        }
+    except Exception as error:
+        return {
+            "supported": True,
+            "applied": False,
+            "usbMode": normalized,
+            "usbEnabled": normalized == "allow",
+            "error": str(error),
+        }
 
 
 def _normalize_positive_minutes(value: Any, fallback: int = 1) -> int:
@@ -268,6 +439,22 @@ def refresh_monitor_feature_flags(session: dict | None = None) -> dict[str, bool
     return get_monitor_feature_flags()
 
 
+def refresh_usb_control_policy(session: dict | None = None) -> dict[str, Any] | None:
+    """Fetch the current USB policy and apply it locally on Windows."""
+    session = session or load_auth_session() or {}
+    token = str(session.get("token") or "").strip()
+
+    if not token:
+        return None
+
+    payload = _request_json(_hrms_api_url("/agents/usb/control-config"), token=token)
+    data = payload.get("data") if payload else None
+    if not isinstance(data, dict):
+        return None
+
+    return _apply_usb_control_policy(_usb_mode_from_value(data))
+
+
 def _import_monitor_functions(module_name: str, start_name: str, stop_name: str):
     module = sys.modules.get(module_name)
     if module is None:
@@ -401,6 +588,10 @@ def _listener_worker(token: str) -> None:
         changed = _set_current_flags(flags)
         if changed:
             apply_monitor_feature_flags(flags)
+        try:
+            refresh_usb_control_policy({"token": token})
+        except Exception:
+            pass
 
     @client.event
     def connect() -> None:  # noqa: D401
@@ -467,6 +658,12 @@ def start_monitor_settings_listener(
             target=refresh_monitor_feature_flags,
             args=(session,),
             name="MonitorSettingsRefresh",
+            daemon=True,
+        ).start()
+        threading.Thread(
+            target=refresh_usb_control_policy,
+            args=(session,),
+            name="UsbControlRefresh",
             daemon=True,
         ).start()
 

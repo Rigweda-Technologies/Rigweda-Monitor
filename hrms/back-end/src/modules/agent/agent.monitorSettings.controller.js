@@ -1,6 +1,7 @@
 const service = require("./agent.monitorSettings.service");
 const { buildSuccessResponse } = require("../../utils/responseBuilder");
 const { emitMonitorSettingsUpdate } = require("../../realtime/socket");
+const Joi = require("joi");
 
 const parseBoolean = (value, fallback = true) => {
   if (value === undefined || value === null || value === "") {
@@ -63,6 +64,23 @@ const validateTestPayload = (body) => {
   return payload;
 };
 
+const usbSettingsSchema = Joi.object({
+  usbMode: Joi.string().valid("allow", "block_storage", "block_all").optional(),
+  usbEnabled: Joi.boolean().optional()
+}).min(1);
+
+const resolveUsbMode = (body) => {
+  if (body.usbMode) {
+    return body.usbMode;
+  }
+
+  if (typeof body.usbEnabled === "boolean") {
+    return body.usbEnabled ? "allow" : "block_all";
+  }
+
+  return "allow";
+};
+
 exports.getCloudinarySettings = async (req, res) => {
   const data = await service.getPublicSettings(req.user.organizationId);
   return res.status(200).json(buildSuccessResponse({
@@ -105,6 +123,42 @@ exports.getCloudinaryUploadConfig = async (req, res) => {
   return res.status(200).json(buildSuccessResponse({
     code: 200,
     message: "Cloudinary upload config fetched successfully",
+    data
+  }));
+};
+
+exports.getUsbControlConfig = async (req, res) => {
+  const data = await service.getUsbSettings(req.user.organizationId);
+  return res.status(200).json(buildSuccessResponse({
+    code: 200,
+    message: "USB control config fetched successfully",
+    data
+  }));
+};
+
+exports.saveUsbControlConfig = async (req, res) => {
+  const { error, value } = usbSettingsSchema.validate(req.body || {}, {
+    abortEarly: false,
+    stripUnknown: true
+  });
+
+  if (error) {
+    throw {
+      code: 400,
+      message: "Validation failed",
+      details: error.details.map((item) => ({ field: item.path.join("."), message: item.message }))
+    };
+  }
+
+  const data = await service.saveUsbSettings(req.user.organizationId, resolveUsbMode(value));
+  emitMonitorSettingsUpdate({ organizationId: req.user.organizationId }, {
+    settings: data,
+    updatedAt: data.updatedAt,
+    source: "usb-settings-save"
+  });
+  return res.status(200).json(buildSuccessResponse({
+    code: 200,
+    message: "USB control config saved successfully",
     data
   }));
 };

@@ -52,6 +52,14 @@ export type MonitorCloudinarySettings = {
   updatedAt?: string;
 };
 
+export type MonitorUsbMode = "allow" | "block_storage" | "block_all";
+
+export type MonitorUsbSettings = {
+  usbMode: MonitorUsbMode;
+  usbEnabled?: boolean;
+  updatedAt?: string | null;
+};
+
 export type MonitorAppUsageApp = {
   appName: string;
   processName: string;
@@ -291,6 +299,33 @@ export const testMonitorCloudinarySettings = async (payload: MonitorCloudinarySe
 
   if (!response.success) {
     throw new Error(response.message || "Could not verify Cloudinary settings.");
+  }
+  return response.data;
+};
+
+export const getMonitorUsbSettings = async () => {
+  const response = await getApiWithToken(
+    "/agents/usb/control-config",
+    null,
+    { requiredPermissions: ["ORG_SETTINGS_VIEW", "ATTENDANCE_VIEW_ALL"] }
+  ) as { success?: boolean; message?: string; data?: MonitorUsbSettings | null };
+
+  if (!response.success || !response.data) {
+    throw new Error(response.message || "Could not load USB settings.");
+  }
+  return response.data;
+};
+
+export const saveMonitorUsbSettings = async (payload: MonitorUsbSettings) => {
+  const response = await putApiWithToken(
+    "/agents/usb/control-config",
+    payload,
+    null,
+    { requiredPermissions: ["ORG_SETTINGS_VIEW"] }
+  ) as { success?: boolean; message?: string; data?: MonitorUsbSettings };
+
+  if (!response.success || !response.data) {
+    throw new Error(response.message || "Could not save USB settings.");
   }
   return response.data;
 };

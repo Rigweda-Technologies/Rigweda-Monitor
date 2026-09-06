@@ -8,7 +8,7 @@ const normalizeUsbMode = (value) => {
   }
 
   if (typeof value === "boolean") {
-    return value ? "allow" : "block_storage";
+    return value ? "allow" : "block_all";
   }
 
   const normalized = String(value || "").trim().toLowerCase();
@@ -21,7 +21,7 @@ const normalizeUsbMode = (value) => {
   }
 
   if (["0", "false", "no", "off"].includes(normalized)) {
-    return "block_storage";
+    return "block_all";
   }
 
   return "allow";

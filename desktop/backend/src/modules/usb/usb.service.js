@@ -14,6 +14,13 @@ const TABLE_SQL = `
 
 const DEVICE_INSTALL_RESTRICTIONS_KEY =
   "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceInstall\\Restrictions";
+const USB_DISABLE_CLASSES = ["USB", "USBController", "HIDClass", "DiskDrive"];
+const USB_DISABLE_INSTANCE_ID_PATTERNS = [
+  "^USB\\\\ROOT_HUB",
+  "^USB\\\\VID_",
+  "^HID\\\\VID_",
+  "^USBSTOR\\\\",
+];
 
 let configuredUsbMode = null;
 
@@ -71,6 +78,13 @@ const runReg = async (args) => {
   await execFileAsync("reg", args, { windowsHide: true });
 };
 
+const runPowerShell = async (script) => {
+  const shell = process.env.SystemRoot ? "powershell.exe" : "powershell.exe";
+  await execFileAsync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    windowsHide: true,
+  });
+};
+
 const setUsbStorageEnabled = async (enabled) => {
   await runReg([
     "add",
@@ -108,7 +122,29 @@ const setUsbInstallRestriction = async (key, valueName, enabled) => {
   }
 };
 
-const applyUsbControlPolicy = async (usbModeInput) => {
+const setUsbHardwareState = async (enabled) => {
+  const action = enabled ? "Enable-PnpDevice" : "Disable-PnpDevice";
+  const classFilter = USB_DISABLE_CLASSES.map((item) => `'${item}'`).join(", ");
+  const instanceIdFilter = USB_DISABLE_INSTANCE_ID_PATTERNS.map((item) => `($device.InstanceId -match '${item}')`).join(" -or ");
+  const script = `
+$ErrorActionPreference = 'SilentlyContinue'
+$devices = Get-PnpDevice -PresentOnly:$false | Where-Object {
+  $null -ne $_.Class -and (
+    @(${classFilter}) -contains $_.Class -or
+    (${instanceIdFilter})
+  )
+}
+foreach ($device in $devices) {
+  try {
+    ${action} -InstanceId $device.InstanceId -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+  } catch {
+  }
+}
+`;
+  await runPowerShell(script);
+};
+
+const applyUsbControlPolicy = async (usbModeInput, { force = false } = {}) => {
   const usbMode = normalizeUsbMode(usbModeInput);
   const changed = configuredUsbMode !== usbMode;
 
@@ -123,7 +159,7 @@ const applyUsbControlPolicy = async (usbModeInput) => {
     };
   }
 
-  if (!changed) {
+  if (!force && !changed) {
     return {
       supported: true,
       applied: false,
@@ -136,14 +172,17 @@ const applyUsbControlPolicy = async (usbModeInput) => {
   try {
     if (usbMode === "allow") {
       await setUsbStorageEnabled(true);
+      await setUsbHardwareState(true);
       await setUsbInstallRestriction(DEVICE_INSTALL_RESTRICTIONS_KEY, "DenyRemovableDevices", false);
       await setUsbInstallRestriction(DEVICE_INSTALL_RESTRICTIONS_KEY, "DenyUnspecified", false);
     } else if (usbMode === "block_storage") {
       await setUsbStorageEnabled(false);
+      await setUsbHardwareState(true);
       await setUsbInstallRestriction(DEVICE_INSTALL_RESTRICTIONS_KEY, "DenyRemovableDevices", false);
       await setUsbInstallRestriction(DEVICE_INSTALL_RESTRICTIONS_KEY, "DenyUnspecified", false);
     } else {
       await setUsbStorageEnabled(false);
+      await setUsbHardwareState(false);
       await setUsbInstallRestriction(DEVICE_INSTALL_RESTRICTIONS_KEY, "DenyRemovableDevices", true);
       await setUsbInstallRestriction(DEVICE_INSTALL_RESTRICTIONS_KEY, "DenyUnspecified", true);
     }
@@ -155,7 +194,7 @@ const applyUsbControlPolicy = async (usbModeInput) => {
       changed: true,
       usbMode,
       usbEnabled: usbMode === "allow",
-      enforcement: usbMode === "block_all" ? "device_install_restrictions" : usbMode === "block_storage" ? "storage_only" : "allow",
+      enforcement: usbMode === "block_all" ? "hardware_disable_plus_restrictions" : usbMode === "block_storage" ? "storage_only" : "allow",
     };
   } catch (error) {
     return {
@@ -172,8 +211,8 @@ const applyUsbControlPolicy = async (usbModeInput) => {
 const resolveRemoteUsbMode = (remoteSettings) =>
   remoteSettings?.usbMode ??
   remoteSettings?.settings?.usbMode ??
-  (remoteSettings?.usbEnabled === false ? "block_storage" : remoteSettings?.usbEnabled === true ? "allow" : null) ??
-  (remoteSettings?.settings?.usbEnabled === false ? "block_storage" : remoteSettings?.settings?.usbEnabled === true ? "allow" : null);
+  (remoteSettings?.usbEnabled === false ? "block_all" : remoteSettings?.usbEnabled === true ? "allow" : null) ??
+  (remoteSettings?.settings?.usbEnabled === false ? "block_all" : remoteSettings?.settings?.usbEnabled === true ? "allow" : null);
 
 const resolveUsbControlSettings = async ({ auth, refresh = true } = {}) => {
   const organizationId = auth?.organizationId || null;
@@ -195,7 +234,7 @@ const resolveUsbControlSettings = async ({ auth, refresh = true } = {}) => {
     resolvedSettings = getUsbSettingsFallback();
   }
 
-  const appliedOnDevice = await applyUsbControlPolicy(resolvedSettings.usbMode);
+  const appliedOnDevice = await applyUsbControlPolicy(resolvedSettings.usbMode, { force: true });
   return {
     ...resolvedSettings,
     appliedOnDevice,
@@ -210,7 +249,7 @@ export const usbControlService = {
   async saveSettings({ auth, usbMode, usbEnabled }) {
     const organizationId = auth?.organizationId || null;
     const settings = await saveLocalSettings(organizationId, usbMode ?? usbEnabled);
-    const appliedOnDevice = await applyUsbControlPolicy(settings.usbMode);
+    const appliedOnDevice = await applyUsbControlPolicy(settings.usbMode, { force: true });
     return {
       ...settings,
       appliedOnDevice,

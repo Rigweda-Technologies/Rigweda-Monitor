@@ -15,13 +15,13 @@ if __package__ in {None, ""}:
     from app.auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from app.env import writable_runtime_path
     from app import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
-    from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
+    from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, refresh_usb_control_policy, start_monitor_settings_listener
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
     from . import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
-    from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
+    from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, refresh_usb_control_policy, start_monitor_settings_listener
     from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -145,6 +145,7 @@ def _resume_monitor_in_background() -> int:
 
         try:
             refreshed_flags = refresh_monitor_feature_flags(session)
+            refresh_usb_control_policy(session)
             _log_startup(
                 "Refreshed monitor settings before starting workers: "
                 f"screenshots={refreshed_flags.get('screenshotsEnabled', True)} "
@@ -231,6 +232,7 @@ def main() -> None:
     if startup_session:
         try:
             refreshed_flags = refresh_monitor_feature_flags(startup_session)
+            refresh_usb_control_policy(startup_session)
             flags = start_monitor_settings_listener(startup_session, on_change=apply_monitor_feature_flags)
             if refreshed_flags:
                 flags = apply_monitor_feature_flags(refreshed_flags)
