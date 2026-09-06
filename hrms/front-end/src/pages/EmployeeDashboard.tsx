@@ -133,6 +133,7 @@ type CheckInPolicy = {
   localGeoFenceFallbackEnabled: boolean;
   attendanceGeoRadiusMeters: number;
   minWorkHoursPerDay: number;
+  attendanceHoursSource: "monitor_agent" | "manual" | "biometric" | "access_card";
 };
 
 type WeeklyEntry = {
@@ -433,7 +434,8 @@ const EmployeeDashboard = () => {
     attendanceGeoLongitude: null,
     localGeoFenceFallbackEnabled: false,
     attendanceGeoRadiusMeters: 200,
-    minWorkHoursPerDay: 8
+    minWorkHoursPerDay: 8,
+    attendanceHoursSource: "manual"
   });
   const hasShownMatrixCompatibilityErrorRef = useRef(false);
 
@@ -593,7 +595,8 @@ const EmployeeDashboard = () => {
             : Number(checkInPolicyRes.data.attendanceGeoLongitude),
         localGeoFenceFallbackEnabled: Boolean(checkInPolicyRes.data.localGeoFenceFallbackEnabled),
         attendanceGeoRadiusMeters: Number(checkInPolicyRes.data.attendanceGeoRadiusMeters || 200),
-        minWorkHoursPerDay: Number(checkInPolicyRes.data.minWorkHoursPerDay || 8)
+        minWorkHoursPerDay: Number(checkInPolicyRes.data.minWorkHoursPerDay || 8),
+        attendanceHoursSource: checkInPolicyRes.data.attendanceHoursSource || "manual"
       });
     }
     if (!silent) setDashboardLoading(false);
@@ -1228,6 +1231,11 @@ const EmployeeDashboard = () => {
             <p className="text-sm text-muted-foreground mt-1">
               Shift: {shiftNameText} • {shiftTimingsText}
             </p>
+            {checkInPolicy.attendanceHoursSource === "monitor_agent" && (
+              <p className="text-xs text-teal-700 mt-1">
+                Working hours are collected automatically by the Rigweda Monitor agent. Manual check-in and checkout are disabled.
+              </p>
+            )}
             {!hasCheckedInToday && checkInWindowStartText && shiftStartText && (
               <p className="text-xs text-teal-700 mt-1">
                 Check-in is allowed only within 2 hours before shift start, from {checkInWindowStartText} to {shiftStartText}.
@@ -1255,7 +1263,7 @@ const EmployeeDashboard = () => {
                     event.stopPropagation();
                     handleCheckIn();
                   }}
-                  disabled={checkinLoading || (!checkInPolicy.attendanceMultiPunchEnabled && hasCheckedInToday)}
+                  disabled={checkInPolicy.attendanceHoursSource === "monitor_agent" || checkinLoading || (!checkInPolicy.attendanceMultiPunchEnabled && hasCheckedInToday)}
                 >
                   <LogIn className="w-4 h-4 mr-2" /> Check In
                 </Button>
@@ -1268,7 +1276,7 @@ const EmployeeDashboard = () => {
                     event.stopPropagation();
                     handleCheckOut();
                   }}
-                  disabled={checkoutLoading || (!isCheckedIn && !checkInPolicy.attendanceMultiPunchEnabled)}
+                  disabled={checkInPolicy.attendanceHoursSource === "monitor_agent" || checkoutLoading || (!isCheckedIn && !checkInPolicy.attendanceMultiPunchEnabled)}
                 >
                   <LogOut className="w-4 h-4 mr-2" /> Check Out
                 </Button>

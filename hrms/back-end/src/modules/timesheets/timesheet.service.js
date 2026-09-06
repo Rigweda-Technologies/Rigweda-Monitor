@@ -42,6 +42,7 @@ const {
 } = require("../../utils/timezone");
 const { analyzeLeaveDateKeys } = require("../leaves/leavePolicy.util");
 const { emitAttendanceUpdate } = require("../../realtime/socket");
+const { getMonitorPgPool } = require("../../config/monitorDb");
 
 const REQUEST_APPROVER_ROLE_SLUGS = new Set([
   "manager",
@@ -52,8 +53,40 @@ const REQUEST_APPROVER_ROLE_SLUGS = new Set([
 ]);
 
 const ATTENDANCE_SELFIE_VIEW_ROLE_SLUGS = new Set(["hr", "org-admin"]);
+const ATTENDANCE_HOURS_SOURCES = new Set(["monitor_agent", "manual", "biometric", "access_card"]);
 const FACEPP_COMPARE_URL = process.env.FACEPP_COMPARE_URL || "https://api-us.faceplusplus.com/facepp/v3/compare";
 const FACE_MATCH_MIN_CONFIDENCE = Number(process.env.FACE_MATCH_MIN_CONFIDENCE || 70);
+
+const getMonitorAttendanceHours = async ({ organizationId, start, end, timeZone, employees }) => {
+  const pool = await getMonitorPgPool();
+  const employeeMap = new Map();
+  for (const employee of employees || []) {
+    const details = String(employee._id);
+    employeeMap.set(details, details);
+    if (employee.employeeCode) employeeMap.set(String(employee.employeeCode), details);
+    if (employee.userId) employeeMap.set(String(employee.userId), details);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT employee_id, to_char((observed_at AT TIME ZONE $4)::date, 'YYYY-MM-DD') AS date_key,
+       COALESCE(SUM(active_seconds + idle_seconds), 0)::bigint AS total_seconds,
+       MIN(observed_at) AS first_seen_at, MAX(observed_at) AS last_seen_at
+     FROM monitor_activity_events
+     WHERE organization_id = $1 AND observed_at >= $2 AND observed_at <= $3
+     GROUP BY employee_id, (observed_at AT TIME ZONE $4)::date`,
+    [String(organizationId), start, end, timeZone]
+  );
+
+  return new Map(rows.map((row) => {
+    const employeeId = employeeMap.get(String(row.employee_id));
+    return [`${employeeId || row.employee_id}|${row.date_key}`, {
+      employeeId: employeeId || String(row.employee_id),
+      totalMinutes: Math.max(0, Math.round(Number(row.total_seconds || 0) / 60)),
+      firstSeenAt: row.first_seen_at,
+      lastSeenAt: row.last_seen_at
+    }];
+  }));
+};
 
 const parseDateValue = (value) => {
   if (value instanceof Date) return new Date(value);
@@ -2499,7 +2532,7 @@ exports.checkIn = async (req) => {
 exports.getCheckInPolicy = async (req) => {
   const settings = await OrgSettings.findOne({ organizationId: req.user.organizationId })
     .select(
-      "attendanceIpEnabled attendanceSelfieRequired attendanceMultiPunchEnabled attendanceGeoFenceEnabled attendanceGeoLatitude attendanceGeoLongitude attendanceGeoRadiusMeters minWorkHoursPerDay"
+      "attendanceIpEnabled attendanceSelfieRequired attendanceMultiPunchEnabled attendanceGeoFenceEnabled attendanceGeoLatitude attendanceGeoLongitude attendanceGeoRadiusMeters minWorkHoursPerDay attendanceHoursSource"
     );
   const localGeoFenceFallbackEnabled = process.env.NODE_ENV !== "production";
 
@@ -2512,7 +2545,10 @@ exports.getCheckInPolicy = async (req) => {
     attendanceGeoLongitude: localGeoFenceFallbackEnabled ? settings?.attendanceGeoLongitude ?? null : null,
     localGeoFenceFallbackEnabled,
     attendanceGeoRadiusMeters: Number(settings?.attendanceGeoRadiusMeters || 200),
-    minWorkHoursPerDay: Number(settings?.minWorkHoursPerDay || 8)
+    minWorkHoursPerDay: Number(settings?.minWorkHoursPerDay || 8),
+    attendanceHoursSource: ATTENDANCE_HOURS_SOURCES.has(settings?.attendanceHoursSource)
+      ? settings.attendanceHoursSource
+      : "manual"
   };
 };
 
@@ -2829,7 +2865,7 @@ exports.getAttendanceMatrix = async (req) => {
   const totalEmployees = await Employee.countDocuments(employeeQuery);
 
   let employeeCursor = Employee.find(employeeQuery)
-    .select("_id firstName lastName employeeCode shiftId")
+    .select("_id firstName lastName employeeCode userId shiftId")
     .sort(
       sortBy === "firstName"
         ? { firstName: sortOrder, lastName: sortOrder, employeeCode: 1 }
@@ -2890,10 +2926,22 @@ exports.getAttendanceMatrix = async (req) => {
       employees
     }),
     OrgSettings.findOne({ organizationId: req.user.organizationId })
-      .select("minHalfDayHours minWorkHoursPerDay attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay")
+      .select("minHalfDayHours minWorkHoursPerDay attendanceHoursSource attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay")
   ]);
 
   const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsRaw, organizationTimeZone);
+  const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
+    ? orgSettings.attendanceHoursSource
+    : "manual";
+  const monitorHours = attendanceHoursSource === "monitor_agent"
+    ? await getMonitorAttendanceHours({
+        organizationId: req.user.organizationId,
+        start,
+        end,
+        timeZone: organizationTimeZone,
+        employees
+      })
+    : new Map();
   const pendingCheckoutCount = await countPendingCheckoutForMonth({
     organizationId: req.user.organizationId,
     start,
@@ -2975,6 +3023,46 @@ exports.getAttendanceMatrix = async (req) => {
       }
     }
   });
+
+  if (attendanceHoursSource === "monitor_agent") {
+    monitorHours.forEach((monitorRow, key) => {
+      const [employeeId, dateKey] = key.split("|");
+      const day = getDayInTimeZone(startOfDayInTimeZone(dateKey, organizationTimeZone), organizationTimeZone);
+      const totalMinutes = monitorRow.totalMinutes;
+      const firstSeenAt = monitorRow.firstSeenAt ? new Date(monitorRow.firstSeenAt).toISOString() : null;
+      const lastSeenAt = monitorRow.lastSeenAt ? new Date(monitorRow.lastSeenAt).toISOString() : null;
+      attendanceMap.set(`${employeeId}-${day}`, {
+        status: resolveAttendanceMatrixStatus({ checkInAt: firstSeenAt, checkOutAt: lastSeenAt, totalMinutes }, {
+          minHalfDayHours: Number(orgSettings?.minHalfDayHours ?? 4),
+          minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
+        }),
+        checkInAt: firstSeenAt,
+        checkOutAt: lastSeenAt,
+        checkInIp: null,
+        checkOutIp: null,
+        checkInSelfieProvided: false,
+        checkOutSelfieProvided: false,
+        totalMinutes,
+        hoursSource: "monitor_agent",
+        isOpenSession: false,
+        excludeFromPayroll: false,
+        payrollReconciledByLeave: false,
+        missedCheckout: false,
+        missedCheckoutMarkedAt: null,
+        overriddenBy: null,
+        overriddenAt: null,
+        shiftName: null,
+        shiftCode: null,
+        shiftStartTime: null,
+        shiftEndTime: null,
+        lateByMinutes: 0,
+        earlyLoginByMinutes: 0,
+        earlyCheckoutByMinutes: 0,
+        overtimeMinutes: resolveOvertimeMinutes(totalMinutes, Number(orgSettings?.minWorkHoursPerDay ?? 8)),
+        workFromHomePortion: null
+      });
+    });
+  }
 
   const leaveMap = new Map();
   approvedLeaves.forEach((leave) => {
@@ -3082,6 +3170,7 @@ exports.getAttendanceMatrix = async (req) => {
     year,
     month,
     daysInMonth,
+    attendanceHoursSource,
     employees: data,
     lockAttendance,
     pagination: {
@@ -3132,10 +3221,22 @@ exports.getMyAttendanceMatrix = async (req) => {
       shiftId: employee.shiftId
     }),
     OrgSettings.findOne({ organizationId: req.user.organizationId })
-      .select("minHalfDayHours minWorkHoursPerDay attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay")
+      .select("minHalfDayHours minWorkHoursPerDay attendanceHoursSource attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay")
   ]);
 
   const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsRaw, organizationTimeZone);
+  const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
+    ? orgSettings.attendanceHoursSource
+    : "manual";
+  const monitorHours = attendanceHoursSource === "monitor_agent"
+    ? await getMonitorAttendanceHours({
+        organizationId: req.user.organizationId,
+        start,
+        end,
+        timeZone: organizationTimeZone,
+        employees: [employee]
+      })
+    : new Map();
   const pendingCheckoutCount = await countPendingCheckoutForMonth({
     organizationId: req.user.organizationId,
     start,
@@ -3253,6 +3354,30 @@ exports.getMyAttendanceMatrix = async (req) => {
     }
   });
 
+  if (attendanceHoursSource === "monitor_agent") {
+    monitorHours.forEach((monitorRow, key) => {
+      const [, dateKey] = key.split("|");
+      const day = getDayInTimeZone(startOfDayInTimeZone(dateKey, organizationTimeZone), organizationTimeZone);
+      const totalMinutes = monitorRow.totalMinutes;
+      const firstSeenAt = monitorRow.firstSeenAt ? new Date(monitorRow.firstSeenAt).toISOString() : null;
+      const lastSeenAt = monitorRow.lastSeenAt ? new Date(monitorRow.lastSeenAt).toISOString() : null;
+      days[day] = {
+        ...days[day],
+        status: resolveAttendanceMatrixStatus({ checkInAt: firstSeenAt, checkOutAt: lastSeenAt, totalMinutes }, {
+          minHalfDayHours: Number(orgSettings?.minHalfDayHours ?? 4),
+          minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
+        }),
+        checkInAt: firstSeenAt,
+        checkOutAt: lastSeenAt,
+        totalMinutes,
+        hoursSource: "monitor_agent",
+        isOpenSession: false,
+        excludeFromPayroll: false,
+        overtimeMinutes: resolveOvertimeMinutes(totalMinutes, Number(orgSettings?.minWorkHoursPerDay ?? 8))
+      };
+    });
+  }
+
   approvedLeaves.forEach((leave) => {
     getLeaveDateKeysForDisplay({
       leave,
@@ -3297,6 +3422,7 @@ exports.getMyAttendanceMatrix = async (req) => {
     year,
     month,
     daysInMonth,
+    attendanceHoursSource,
     lockAttendance,
     employees: [{
       employeeId: String(employee._id),

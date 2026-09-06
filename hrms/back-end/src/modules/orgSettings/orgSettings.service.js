@@ -22,6 +22,7 @@ const DEFAULTS = {
   payrollEnabled: false,
   minWorkHoursPerDay: 8,
   minHalfDayHours: 4,
+  attendanceHoursSource: "manual",
   attendanceIpEnabled: false,
   attendanceAllowedIp: "",
   attendanceSelfieRequired: false,
@@ -105,6 +106,7 @@ exports.upsert = async (req) => {
     payrollEnabled,
     minWorkHoursPerDay,
     minHalfDayHours,
+    attendanceHoursSource,
     attendanceIpEnabled,
     attendanceAllowedIp,
     attendanceSelfieRequired,
@@ -180,6 +182,9 @@ exports.upsert = async (req) => {
       payrollEnabled,
       minWorkHoursPerDay,
       minHalfDayHours,
+      attendanceHoursSource: ["monitor_agent", "manual", "biometric", "access_card"].includes(attendanceHoursSource)
+        ? attendanceHoursSource
+        : "manual",
       attendanceIpEnabled,
       attendanceAllowedIp: (attendanceAllowedIp || "").trim(),
       attendanceSelfieRequired,

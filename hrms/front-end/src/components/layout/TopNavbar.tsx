@@ -22,7 +22,7 @@ import { clearAuth, setToken, updateActiveRoleInProfile } from "@/utils/auth";
 import { useAuth } from "@/context/useAuth";
 import { toast } from "sonner";
 import { formatDateTimeInOrgTimeZone } from "@/utils/timezone";
-import { applyThemeToDocument, THEME_PRESETS, OrgThemeConfig, OrgThemePreset, OrgThemeSettings } from "@/utils/theme";
+import { applyThemeToDocument, getResolvedThemeConfig, SIDEBAR_COLOR_OPTIONS, THEME_COLOR_OPTIONS, THEME_PRESETS, OrgThemeConfig, OrgThemePreset, OrgThemeSettings } from "@/utils/theme";
 import {
   RealtimeNotification,
   disconnectRealtimeSocket,
@@ -60,6 +60,7 @@ type OrgSettingsSnapshot = {
   payrollSalaryPayDay?: number;
   payrollEnabled?: boolean;
   minWorkHoursPerDay?: number;
+  attendanceHoursSource?: "monitor_agent" | "manual" | "biometric" | "access_card";
   minHalfDayHours?: number;
   attendanceIpEnabled?: boolean;
   attendanceAllowedIp?: string;
@@ -140,6 +141,8 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
         background: res.data?.themeConfig?.background || "",
         foreground: res.data?.themeConfig?.foreground || "",
         sidebar: res.data?.themeConfig?.sidebar || "",
+        sidebarGradientStart: res.data?.themeConfig?.sidebarGradientStart || "",
+        sidebarGradientEnd: res.data?.themeConfig?.sidebarGradientEnd || "",
         sidebarForeground: res.data?.themeConfig?.sidebarForeground || "",
         accent: res.data?.themeConfig?.accent || "",
         card: res.data?.themeConfig?.card || "",
@@ -242,6 +245,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
           payrollEnabled: Boolean(orgSettings.payrollEnabled),
           minWorkHoursPerDay: Number(orgSettings.minWorkHoursPerDay ?? 8),
           minHalfDayHours: Number(orgSettings.minHalfDayHours ?? 4),
+          attendanceHoursSource: orgSettings.attendanceHoursSource || "manual",
           attendanceIpEnabled: Boolean(orgSettings.attendanceIpEnabled),
           attendanceAllowedIp: orgSettings.attendanceAllowedIp || "",
           attendanceSelfieRequired: Boolean(orgSettings.attendanceSelfieRequired),
@@ -307,6 +311,19 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
       themePreset: preset,
       themeConfig: presetConfig
     };
+    setOrgSettings((prev) => (prev ? { ...prev, ...nextTheme } : prev));
+    applyThemeToDocument(nextTheme);
+    void saveTheme(nextTheme);
+  };
+
+  const updateThemeConfig = (config: Partial<OrgThemeConfig>) => {
+    const current = getResolvedThemeConfig(orgSettings);
+    const nextTheme = {
+      themeMode: "custom" as const,
+      themePreset: currentThemePreset,
+      themeConfig: { ...current, ...config }
+    };
+    setCustomTheme(nextTheme.themeConfig);
     setOrgSettings((prev) => (prev ? { ...prev, ...nextTheme } : prev));
     applyThemeToDocument(nextTheme);
     void saveTheme(nextTheme);
@@ -424,13 +441,51 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
                 Organization Theme
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Sidebar color</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-52">
+                  {SIDEBAR_COLOR_OPTIONS.map((option) => {
+                    const current = getResolvedThemeConfig(orgSettings);
+                    const active = current.sidebarGradientStart === option.start && current.sidebarGradientEnd === option.end;
+                    return (
+                      <DropdownMenuItem key={option.key} onClick={() => updateThemeConfig({
+                        sidebar: option.start,
+                        sidebarGradientStart: option.start,
+                        sidebarGradientEnd: option.end,
+                        sidebarForeground: option.foreground
+                      })}>
+                        <span className="flex items-center gap-2">
+                          <span className="h-3.5 w-3.5 rounded-full border" style={{ background: `linear-gradient(135deg, hsl(${option.start}), hsl(${option.end}))` }} />
+                          {option.label}{active ? " (active)" : ""}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Theme color</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-52">
+                  {THEME_COLOR_OPTIONS.map((option) => {
+                    const current = getResolvedThemeConfig(orgSettings);
+                    const active = current.primary === option.primary;
+                    return (
+                      <DropdownMenuItem key={option.key} onClick={() => updateThemeConfig({ primary: option.primary, accent: option.primary, ring: option.primary })}>
+                        <span className="flex items-center gap-2">
+                          <span className="h-3.5 w-3.5 rounded-full border" style={{ backgroundColor: `hsl(${option.primary})` }} />
+                          {option.label}{active ? " (active)" : ""}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Complete presets</DropdownMenuLabel>
               {Object.entries(THEME_PRESETS).map(([key, preset]) => (
                 <DropdownMenuItem key={key} onClick={() => updateThemePreset(key as OrgThemePreset)}>
                   <span className="flex items-center gap-2">
-                    <span
-                      className="h-3.5 w-3.5 rounded-full border"
-                      style={{ backgroundColor: `hsl(${preset.config.primary})` }}
-                    />
+                    <span className="h-3.5 w-3.5 rounded-full border" style={{ backgroundColor: `hsl(${preset.config.primary})` }} />
                     {preset.label}
                     {currentThemeMode === "preset" && currentThemePreset === key ? " (active)" : ""}
                   </span>

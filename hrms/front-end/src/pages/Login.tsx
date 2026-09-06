@@ -6,40 +6,40 @@ import { useAuth } from "@/context/useAuth";
 import { getIsSuperAdmin, getToken, setAdminRoleId, setAdminUserId, setIsSuperAdmin, setToken } from "@/utils/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShieldCheck, Clock3, Users2, CalendarCheck2, Sparkles, Camera } from "lucide-react";
+import { Activity, Users2, Laptop, Sparkles, Camera, Monitor, HardDrive, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { InlineLoader } from "@/components/ui/loaders";
 
 const slides = [
   {
-    title: "One Workspace For Your Entire Team",
+    title: "See Work Clearly, Without Guesswork",
     description:
-      "Rigweda HRMS unifies employee data, attendance, leaves, approvals, and documentation in one reliable system.",
-    metric: "42% faster HR operations"
+      "Rigweda Monitor brings employee activity, application usage, browser activity, and screenshots into one focused workspace.",
+    metric: "One view for every monitored device"
   },
   {
-    title: "Faster Attendance and Shift Operations",
+    title: "Know Which Devices Need Attention",
     description:
-      "Track check-in and check-out, shifts, week offs, holidays, and corrections with complete visibility.",
-    metric: "99.9% attendance traceability"
+      "Track laptop health, memory, storage, temperature, uptime, and installed agent versions before small issues become blockers.",
+    metric: "Live laptop health snapshots"
   },
   {
-    title: "Smarter Leave and Approval Controls",
+    title: "Review Activity With Context",
     description:
-      "Automate leave balances, approval flows, and role-based actions so requests move quickly and correctly.",
-    metric: "3x faster request approvals"
+      "Move from an employee row directly to the activity, app usage, browser history, or screenshots that explain the workday.",
+    metric: "Activity, apps, history, screenshots"
   },
   {
-    title: "Reliable Insights For Managers",
+    title: "Ship Agent Updates Safely",
     description:
-      "Use dashboards, attendance matrix, and timesheet views to monitor performance and team health daily.",
-    metric: "Single-view team visibility"
+      "Manage desktop builds, rollout status, checksums, testing, activation, and downloads from one release console.",
+    metric: "Controlled desktop rollouts"
   },
   {
-    title: "Built For Scale and Governance",
+    title: "Monitoring With Boundaries",
     description:
-      "Permission-aware modules and organization-level controls help run HR operations securely across teams.",
-    metric: "Enterprise-ready controls"
+      "Permission-aware access and organization-level controls keep monitoring data visible only to the people who need it.",
+    metric: "Secure, role-based visibility"
   }
 ];
 
@@ -325,32 +325,44 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-slate-950">
-      <section className="hidden lg:flex relative overflow-hidden bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-700 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.22),transparent_25%),radial-gradient(circle_at_85%_85%,rgba(125,211,252,0.25),transparent_35%)]" />
-        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-white/20 blur-2xl" />
-        <div className="absolute -bottom-28 -right-20 h-96 w-96 rounded-full bg-teal-200/20 blur-3xl" />
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[1.12fr_0.88fr] bg-slate-950">
+      <section className="hidden lg:flex relative overflow-hidden bg-[#071b2d] text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(45,212,191,0.28),transparent_28%),radial-gradient(circle_at_88%_82%,rgba(56,189,248,0.2),transparent_32%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(148,163,184,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.16)_1px,transparent_1px)] [background-size:42px_42px]" />
+        <div className="absolute -top-28 -left-20 h-80 w-80 rounded-full bg-teal-400/20 blur-3xl" />
+        <div className="absolute -bottom-32 -right-20 h-[28rem] w-[28rem] rounded-full bg-sky-400/15 blur-3xl" />
 
         <div className="relative z-10 w-full p-14 flex flex-col">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/90">Rigweda HRMS Platform</p>
-            <h1 className="mt-5 text-4xl font-semibold leading-tight max-w-[18ch]">
-              Human resources, reimagined for real operations
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-teal-200/30 bg-teal-300/15 text-teal-200"><Monitor className="h-5 w-5" /></div>
+              <p className="text-xs uppercase tracking-[0.24em] text-teal-100/90">Rigweda Monitor</p>
+            </div>
+            <h1 className="mt-7 text-5xl font-semibold leading-[1.05] max-w-[15ch]">
+              Visibility for every workday.
             </h1>
-            <div className="mt-6 grid grid-cols-2 gap-3 max-w-lg">
-              <div className="rounded-xl bg-white/10 border border-white/20 p-3">
-                <p className="text-xs text-emerald-100">Attendance Engine</p>
-                <p className="font-semibold mt-1 flex items-center gap-2"><Clock3 className="w-4 h-4" /> Real-time</p>
+            <p className="mt-5 max-w-xl text-base leading-7 text-slate-300">A focused command center for employee activity, device health, screenshots, and desktop agent operations.</p>
+            <div className="mt-7 grid grid-cols-3 gap-3 max-w-2xl">
+              <div className="rounded-2xl border border-teal-200/20 bg-white/[0.07] p-4 backdrop-blur">
+                <Activity className="h-5 w-5 text-teal-300" />
+                <p className="mt-4 text-sm font-semibold">Live activity</p>
+                <p className="mt-1 text-xs text-slate-400">Apps and usage</p>
               </div>
-              <div className="rounded-xl bg-white/10 border border-white/20 p-3">
-                <p className="text-xs text-emerald-100">Access Governance</p>
-                <p className="font-semibold mt-1 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Role-based</p>
+              <div className="rounded-2xl border border-sky-200/20 bg-white/[0.07] p-4 backdrop-blur">
+                <Laptop className="h-5 w-5 text-sky-300" />
+                <p className="mt-4 text-sm font-semibold">Device health</p>
+                <p className="mt-1 text-xs text-slate-400">RAM and storage</p>
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/[0.07] p-4 backdrop-blur">
+                <HardDrive className="h-5 w-5 text-amber-300" />
+                <p className="mt-4 text-sm font-semibold">Agent control</p>
+                <p className="mt-1 text-xs text-slate-400">Safe releases</p>
               </div>
             </div>
           </div>
 
           <div className="mt-auto">
-            <div className="rounded-2xl border border-white/25 bg-white/10 backdrop-blur p-7 min-h-[250px]">
+            <div className="rounded-3xl border border-white/15 bg-slate-900/55 backdrop-blur p-7 min-h-[250px] shadow-2xl shadow-slate-950/20">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={slideIndex}
@@ -359,12 +371,12 @@ const Login = () => {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.35 }}
                 >
-                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/85 flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5" /> Why teams choose us
+                  <p className="text-xs uppercase tracking-[0.2em] text-teal-200/85 flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5" /> Monitor intelligence
                   </p>
                   <p className="text-2xl font-semibold mt-2">{slides[slideIndex].title}</p>
-                  <p className="mt-3 text-emerald-50/95 leading-relaxed">{slides[slideIndex].description}</p>
-                  <div className="mt-4 inline-flex rounded-full border border-teal-200/35 bg-teal-100/10 px-3 py-1 text-sm font-medium">
+                  <p className="mt-3 text-slate-300 leading-relaxed">{slides[slideIndex].description}</p>
+                  <div className="mt-4 inline-flex rounded-full border border-teal-200/25 bg-teal-300/10 px-3 py-1 text-sm font-medium text-teal-100">
                     {slides[slideIndex].metric}
                   </div>
                 </motion.div>
@@ -388,12 +400,13 @@ const Login = () => {
         </div>
       </section>
 
-      <section className="flex items-center justify-center p-5 sm:p-8 bg-slate-100">
-        <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8">
+      <section className="relative flex items-center justify-center overflow-hidden p-5 sm:p-8 bg-[#f4f8fa]">
+        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-teal-100/70 blur-3xl" />
+        <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-[0_24px_70px_rgba(15,23,42,0.12)] p-6 sm:p-8">
           <div className="mb-6">
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-emerald-600">Welcome Back</p>
-            <h2 className="text-2xl font-semibold mt-2 text-slate-900">Sign in to Rigweda HRMS</h2>
-            <p className="text-sm text-slate-500 mt-2">Manage attendance, leaves, approvals, and people operations in one place.</p>
+            <div className="flex items-center gap-2 text-teal-700"><Monitor className="h-4 w-4" /><p className="text-xs font-semibold uppercase tracking-[0.22em]">Monitor console</p></div>
+            <h2 className="text-2xl font-semibold mt-3 text-slate-900">Sign in to Rigweda Monitor</h2>
+            <p className="text-sm text-slate-500 mt-2">Review activity, screenshots, laptop health, and agent releases from one secure workspace.</p>
           </div>
 
           {error && (
@@ -431,7 +444,7 @@ const Login = () => {
                 Forgot password?
               </Link>
             </div>
-            <Button type="submit" className="w-full h-11" disabled={Boolean(submittingMode)}>
+            <Button type="submit" className="w-full h-11 bg-teal-600 hover:bg-teal-700" disabled={Boolean(submittingMode)}>
               {submittingMode === "password" ? <InlineLoader label="Signing in..." className="text-white" /> : "Login"}
             </Button>
             <Button type="button" variant="outline" className="w-full h-11" disabled={Boolean(submittingMode)} onClick={handleSelfieLogin}>
@@ -440,17 +453,17 @@ const Login = () => {
           </form>
 
           <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg border bg-slate-50 py-2 px-1">
-              <Users2 className="w-4 h-4 mx-auto text-slate-600" />
-              <p className="text-[11px] text-slate-500 mt-1">Employees</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 py-3 px-1">
+              <Users2 className="w-4 h-4 mx-auto text-teal-700" />
+              <p className="text-[11px] text-slate-500 mt-1">Activity</p>
             </div>
-            <div className="rounded-lg border bg-slate-50 py-2 px-1">
-              <CalendarCheck2 className="w-4 h-4 mx-auto text-slate-600" />
-              <p className="text-[11px] text-slate-500 mt-1">Attendance</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 py-3 px-1">
+              <Laptop className="w-4 h-4 mx-auto text-teal-700" />
+              <p className="text-[11px] text-slate-500 mt-1">Health</p>
             </div>
-            <div className="rounded-lg border bg-slate-50 py-2 px-1">
-              <ShieldCheck className="w-4 h-4 mx-auto text-slate-600" />
-              <p className="text-[11px] text-slate-500 mt-1">Secure</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 py-3 px-1">
+              <Download className="w-4 h-4 mx-auto text-teal-700" />
+              <p className="text-[11px] text-slate-500 mt-1">Releases</p>
             </div>
           </div>
         </div>

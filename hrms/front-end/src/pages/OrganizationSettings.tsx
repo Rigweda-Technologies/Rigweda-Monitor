@@ -41,6 +41,7 @@ const OrganizationSettings = () => {
   const [payrollEnabled, setPayrollEnabled] = useState(false);
   const [minWorkHoursPerDay, setMinWorkHoursPerDay] = useState(8);
   const [minHalfDayHours, setMinHalfDayHours] = useState(4);
+  const [attendanceHoursSource, setAttendanceHoursSource] = useState("manual");
   const [attendanceAllowedIp, setAttendanceAllowedIp] = useState("");
   const [attendanceIpEnabled, setAttendanceIpEnabled] = useState(false);
   const [attendanceSelfieRequired, setAttendanceSelfieRequired] = useState(false);
@@ -106,6 +107,7 @@ const OrganizationSettings = () => {
       setMinHalfDayHours(
         typeof res.data?.minHalfDayHours === "number" ? res.data.minHalfDayHours : 4
       );
+      setAttendanceHoursSource(res.data?.attendanceHoursSource || "manual");
       setAttendanceAllowedIp(String(res.data?.attendanceAllowedIp || ""));
       setAttendanceIpEnabled(Boolean(res.data?.attendanceIpEnabled));
       setAttendanceSelfieRequired(Boolean(res.data?.attendanceSelfieRequired));
@@ -161,6 +163,7 @@ const OrganizationSettings = () => {
         payrollEnabled,
         minWorkHoursPerDay: Number(minWorkHoursPerDay),
         minHalfDayHours: Number(minHalfDayHours),
+        attendanceHoursSource,
         attendanceIpEnabled,
         attendanceAllowedIp,
         attendanceSelfieRequired,
@@ -405,6 +408,19 @@ const OrganizationSettings = () => {
               <p className="text-xs text-muted-foreground">
                 Hours below half-day threshold are treated as invalid on timesheet submission.
               </p>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Working Hours Source</label>
+                <Select value={attendanceHoursSource} onValueChange={setAttendanceHoursSource} disabled={!canManage}>
+                  <SelectTrigger><SelectValue placeholder="Select working hours source" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monitor_agent">Monitor agent</SelectItem>
+                    <SelectItem value="manual">Manual check-in / checkout</SelectItem>
+                    <SelectItem value="biometric">Biometric device</SelectItem>
+                    <SelectItem value="access_card">Access card</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Attendance hours and full-day status use this source. Monitor agent uses productive plus idle activity hours.</p>
+              </div>
 
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 <Checkbox
