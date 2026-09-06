@@ -335,7 +335,7 @@ const EmployeeAttendanceDetails = () => {
                 </div>
                 <Badge variant="outline">Performance</Badge>
               </div>
-              <ChartContainer config={{ hours: { label: "Hours", color: "#2563eb" } }} className="h-[280px] w-full">
+              <ChartContainer config={{ hours: { label: "Hours", color: "#29b37e" } }} className="h-[280px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trendData}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -352,7 +352,7 @@ const EmployeeAttendanceDetails = () => {
                     ) : mode === "missed" ? (
                       <Area type="monotone" dataKey="missed" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} />
                     ) : (
-                      <Area type="monotone" dataKey="hours" stroke="#2563eb" fill="#2563eb" fillOpacity={0.2} />
+                      <Area type="monotone" dataKey="hours" stroke="#29b37e" fill="#29b37e" fillOpacity={0.2} />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>
@@ -381,10 +381,10 @@ const EmployeeAttendanceDetails = () => {
                     <YAxis tickLine={false} axisLine={false} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     {mode === "absent" ? (
-                      <Bar dataKey="hours" fill="#2563eb" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="hours" fill="#29b37e" radius={[8, 8, 0, 0]} />
                     ) : mode === "missed" ? (
                       <>
-                        <Bar dataKey="hours" fill="#2563eb" radius={[8, 8, 0, 0]} />
+                        <Bar dataKey="hours" fill="#29b37e" radius={[8, 8, 0, 0]} />
                         <Bar dataKey="late" fill="#f97316" radius={[8, 8, 0, 0]} />
                       </>
                     ) : (

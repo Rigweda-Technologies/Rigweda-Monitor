@@ -88,29 +88,29 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
       <div
         className={cn(
           "group flex items-center justify-between rounded-xl border border-transparent transition-all duration-300",
-          "hover:border-white/15 hover:bg-white/10",
-          isActive && "border-white/20 bg-white/16 text-white shadow-[0_8px_24px_-14px_rgba(2,6,23,0.9)]"
+          "hover:border-emerald-100 hover:bg-emerald-50",
+          isActive && "border-emerald-100 bg-emerald-500 text-white shadow-sm"
         )}
         onClick={() => hasChildren && setOpen(!open)}
       >
         <NavLink
           to={hasChildren ? "#" : to}
           className={cn(
-            "flex w-full items-center gap-3 px-4 py-3 text-white/85 transition-colors",
-            isActive && "text-white font-medium"
+            "flex w-full items-center gap-3 px-4 py-3 text-slate-600 transition-colors",
+            isActive && "text-white font-semibold"
           )}
           onClick={() => {
             if (!hasChildren) onNavigate?.();
           }}
         >
-          <span className={cn("h-5 w-5 transition-colors", isActive ? "text-white" : "text-white/85")}>{icon}</span>
+          <span className={cn("h-5 w-5 transition-colors", isActive ? "text-white" : "text-slate-400 group-hover:text-emerald-600")}>{icon}</span>
           {!collapsed && <span>{label}</span>}
         </NavLink>
 
         {!collapsed && hasChildren && (
           <ChevronRight
             size={16}
-            className={cn("mr-3 text-white/70 transition-transform duration-300", open && "rotate-90")}
+            className={cn("mr-3 text-slate-400 transition-transform duration-300", isActive && "text-white", open && "rotate-90")}
           />
         )}
       </div>
@@ -124,14 +124,14 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
             transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="ml-4 mt-2 space-y-1 border-l border-white/12 pl-3">
+            <div className="ml-4 mt-2 space-y-1 border-l border-slate-100 pl-3">
               {children?.map((child) => (
                 <NavLink key={child.to} to={child.to} onClick={onNavigate} className="block">
                   <div
                     className={cn(
-                      "flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm text-white/80 transition-all duration-300",
-                      "hover:border-white/14 hover:bg-white/10 hover:text-white",
-                      location.pathname === child.to && "border-white/20 bg-white/16 text-white font-medium shadow-[0_8px_20px_-16px_rgba(2,6,23,1)]"
+                      "flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm text-slate-500 transition-all duration-300",
+                      "hover:border-emerald-100 hover:bg-emerald-50 hover:text-emerald-700",
+                      location.pathname === child.to && "border-emerald-100 bg-emerald-50 text-emerald-700 font-semibold"
                     )}
                   >
                     {child.icon}
@@ -392,16 +392,14 @@ export const Sidebar = memo(({
 
       <motion.aside
         className={cn(
-          "sidebar-gradient h-screen fixed left-0 top-0 z-50 flex flex-col transition-transform lg:translate-x-0",
+          "fixed left-0 top-0 z-50 flex h-screen flex-col bg-white transition-transform lg:translate-x-0",
           isMobile ? (mobileOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"
         )}
         style={{
-          backgroundColor: "hsl(var(--sidebar-background))",
-          color: "hsl(var(--sidebar-foreground))",
-          borderRight: "1px solid hsl(var(--sidebar-border))"
+          borderRight: "1px solid rgb(241 245 249)"
         }}
         initial={false}
-        animate={{ width: effectiveCollapsed ? 72 : 260 }}
+        animate={{ width: effectiveCollapsed ? 72 : 230 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
         onMouseEnter={() => {
           if (!isMobile && collapsed) setHoverExpanded(true);
@@ -410,15 +408,15 @@ export const Sidebar = memo(({
           if (!isMobile) setHoverExpanded(false);
         }}
       >
-        <div className="p-4 border-b border-white/10">
+        <div className="border-b border-slate-100 p-4">
           <div className="flex items-center justify-between">
             <NavLink
               to={effectiveDashboardPath}
               onClick={() => isMobile && onMobileClose?.()}
-              className="flex items-center gap-3 px-1 py-1"
+              className="flex items-center gap-2 px-1 py-1"
             >
-              <div className="w-14 h-14 rounded-xl bg-white/8 border border-white/15 flex items-center justify-center overflow-hidden">
-                <img src="/hrms-logo.png" alt="Rigweda logo" className="w-10 h-10 object-contain" />
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-emerald-50">
+                <img src="/hrms-logo.png" alt="Rigweda logo" className="h-6 w-6 object-contain" />
               </div>
               <AnimatePresence>
                 {!effectiveCollapsed && (
@@ -426,9 +424,9 @@ export const Sidebar = memo(({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="text-white font-bold text-xl"
+                    className="text-base font-bold text-slate-950"
                   >
-                    HRMS
+                    HR Dashboard
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -437,7 +435,7 @@ export const Sidebar = memo(({
               <button
                 onClick={() => setCollapsed(!collapsed)}
                 disabled={isMobile}
-                className="w-8 h-8 rounded-lg border border-white/12 bg-white/10 hover:bg-white/18 disabled:opacity-50 flex items-center justify-center text-white transition-all"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-400 transition-all hover:bg-slate-50 disabled:opacity-50"
               >
                 {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
               </button>
@@ -445,7 +443,7 @@ export const Sidebar = memo(({
           </div>
         </div>
 
-        <nav className="flex-1 py-4 px-3 overflow-y-auto scroll-smooth custom-scroll">
+        <nav className="custom-scroll flex-1 overflow-y-auto scroll-smooth px-3 py-4">
           <div className="space-y-1">
             {filteredMenuItems.map((item) => (
               <NavItem

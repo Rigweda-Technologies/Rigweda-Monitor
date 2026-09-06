@@ -89,7 +89,7 @@ const ForgotPassword = () => {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border bg-white shadow-xl p-6 sm:p-8">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-blue-600">Password Recovery</p>
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-600">Password Recovery</p>
         <h1 className="text-2xl font-semibold mt-2 text-slate-900">Forgot password</h1>
         <p className="text-sm text-slate-500 mt-2">
           {step === "email" && "Enter your registered email to receive OTP."}
@@ -161,7 +161,7 @@ const ForgotPassword = () => {
 
         <p className="text-sm text-slate-500 mt-6 text-center">
           Back to{" "}
-          <Link className="text-blue-600 hover:text-blue-700 font-medium" to="/login">
+          <Link className="text-emerald-600 hover:text-emerald-700 font-medium" to="/login">
             Login
           </Link>
         </p>

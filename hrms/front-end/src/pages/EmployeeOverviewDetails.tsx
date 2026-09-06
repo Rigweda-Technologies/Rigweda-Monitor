@@ -269,14 +269,14 @@ const EmployeeOverviewDetails = () => {
                     </div>
                     <Badge variant="outline">Performance</Badge>
                   </div>
-                  <ChartContainer config={{ hours: { label: "Hours", color: "#2563eb" } }} className="h-[280px] w-full">
+                  <ChartContainer config={{ hours: { label: "Hours", color: "#29b37e" } }} className="h-[280px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={attendanceTrend}>
                         <CartesianGrid vertical={false} strokeDasharray="3 3" />
                         <XAxis dataKey="date" tickLine={false} axisLine={false} minTickGap={24} />
                         <YAxis tickLine={false} axisLine={false} />
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        <Area type="monotone" dataKey="hours" stroke="#2563eb" fill="#2563eb" fillOpacity={0.18} />
+                        <Area type="monotone" dataKey="hours" stroke="#29b37e" fill="#29b37e" fillOpacity={0.18} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </ChartContainer>

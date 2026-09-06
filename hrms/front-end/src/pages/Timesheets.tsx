@@ -1132,7 +1132,7 @@ const Timesheets = () => {
                       </Badge>
                     )}
                     {r.calendarDayType === "holiday" && (
-                      <Badge className="mt-1 border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-100">
+                      <Badge className="mt-1 border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-100">
                         Holiday{r.holidayName ? `: ${r.holidayName}` : ""}
                       </Badge>
                     )}
@@ -1649,7 +1649,7 @@ const Timesheets = () => {
                 : "Provide one or both times to request correction."}
           </p>
           {attendanceRequestForm.requestType === "correction" && attendanceToday?.checkOutAt && (
-            <p className="text-xs text-sky-700 mt-1">
+            <p className="text-xs text-teal-700 mt-1">
               Existing checkout found for this attendance day. New requests will be submitted as a correction.
             </p>
           )}
@@ -1685,7 +1685,7 @@ const Timesheets = () => {
             const steps = req.approvalSteps || [];
             const isApproved = status === "approved";
             const isRejected = status === "rejected";
-            const headerBg = "from-blue-500 to-blue-700";
+            const headerBg = "from-emerald-500 to-emerald-600";
             const typeIcon = req.requestType === "work_from_home"
               ? <Home className="w-5 h-5" />
               : req.requestType === "missed_checkout"
@@ -1743,12 +1743,12 @@ const Timesheets = () => {
 
                   {/* Actioned by card */}
                   {actionedBy ? (
-                    <div className="rounded-xl border p-4 flex items-center gap-4 bg-blue-50 border-blue-100">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 bg-blue-600">
+                    <div className="rounded-xl border p-4 flex items-center gap-4 bg-emerald-50 border-emerald-100">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 bg-emerald-500">
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium uppercase tracking-wider mb-0.5 text-blue-600">
+                        <p className="text-xs font-medium uppercase tracking-wider mb-0.5 text-emerald-600">
                           {isApproved ? "Approved by" : isRejected ? "Rejected by" : "Actioned by"}
                         </p>
                         <p className="font-semibold text-sm truncate">{toPersonLabel(actionedBy)}</p>

@@ -395,7 +395,7 @@ const ApprovalFlows = () => {
         <div className="flex gap-3">
           <PermissionGate permissions={["APPROVAL_FLOW_MANAGE"]}>
             <Pencil
-              className="w-4 h-4 text-blue-600 cursor-pointer hover:scale-110"
+              className="w-4 h-4 text-emerald-600 cursor-pointer hover:scale-110"
               onClick={() => openEdit(row)}
             />
           </PermissionGate>

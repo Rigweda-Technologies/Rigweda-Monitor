@@ -494,9 +494,9 @@ const OrganizationDocuments = () => {
             <div className="rounded-xl border bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Expiring Soon</p>
-                <FileText className="h-4 w-4 text-indigo-600" />
+                <FileText className="h-4 w-4 text-emerald-600" />
               </div>
-              <p className="mt-2 text-2xl font-semibold text-indigo-700">{summary.expiringSoonDocuments}</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-700">{summary.expiringSoonDocuments}</p>
             </div>
           </div>
 
@@ -644,7 +644,7 @@ const OrganizationDocuments = () => {
 
               <section className="rounded-xl border bg-card p-4 shadow-sm">
                 <h2 className="flex items-center gap-2 text-base font-semibold">
-                  <AlertTriangle className="h-4 w-4 text-indigo-600" />
+                  <AlertTriangle className="h-4 w-4 text-emerald-600" />
                   Expiring Soon
                 </h2>
                 <div className="mt-3 space-y-2">
@@ -671,7 +671,7 @@ const OrganizationDocuments = () => {
             <div
               className={cn(
                 "flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-slate-50 p-6 text-center transition-colors",
-                dragging && "border-indigo-500 bg-indigo-50"
+                dragging && "border-emerald-500 bg-emerald-50"
               )}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(event) => {

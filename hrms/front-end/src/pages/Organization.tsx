@@ -218,8 +218,8 @@ const OrganizationPage = () => {
                         ? "text-gray-400 cursor-not-allowed"
                         : `
                 cursor-pointer
-                text-blue-600
-                hover:text-blue-700
+                text-emerald-600
+                hover:text-emerald-700
                 hover:scale-110
                 hover:-translate-y-0.5
               `

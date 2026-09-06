@@ -937,7 +937,7 @@ const Expenses = () => {
                     <TableCell>{paymentModeOptions.find((p) => p.value === row.paymentMode)?.label || row.paymentMode}</TableCell>
                     <TableCell>
                       {row.receiptUrl ? (
-                        <a className="text-blue-600 underline inline-flex items-center gap-1" href={toReceiptLink(row.receiptUrl)} target="_blank" rel="noreferrer">
+                        <a className="text-emerald-600 underline inline-flex items-center gap-1" href={toReceiptLink(row.receiptUrl)} target="_blank" rel="noreferrer">
                           <LinkIcon className="w-3 h-3" /> View
                         </a>
                       ) : "-"}
@@ -975,7 +975,7 @@ const Expenses = () => {
                           {canManage && !row.isDeleted && row.status === "pending" && (
                             <>
                               <Pencil
-                                className="w-4 h-4 text-blue-600 cursor-pointer hover:scale-110"
+                                className="w-4 h-4 text-emerald-600 cursor-pointer hover:scale-110"
                                 onClick={() => openEdit(row)}
                               />
                               <Trash2
@@ -1172,7 +1172,7 @@ const Expenses = () => {
                 {uploading && <span className="text-sm text-muted-foreground">Uploading receipt...</span>}
               </div>
               {form.receiptUrl && (
-                <a className="text-blue-600 underline text-sm mt-2 inline-block" href={toReceiptLink(form.receiptUrl)} target="_blank" rel="noreferrer">
+                <a className="text-emerald-600 underline text-sm mt-2 inline-block" href={toReceiptLink(form.receiptUrl)} target="_blank" rel="noreferrer">
                   View uploaded receipt
                 </a>
               )}

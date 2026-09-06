@@ -189,8 +189,8 @@ const CompleteProfile = () => {
   return (
     <MainLayout title="Complete Profile" breadcrumb={[{ label: "Home" }, { label: "Complete Profile" }]}>
       <div className="max-w-5xl space-y-6">
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-blue-50/60 to-cyan-50/40 p-6">
-          <div className="absolute -right-10 -top-10 h-44 w-44 rounded-full bg-blue-200/30 blur-2xl" />
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-emerald-50/60 to-teal-50/40 p-6">
+          <div className="absolute -right-10 -top-10 h-44 w-44 rounded-full bg-emerald-200/30 blur-2xl" />
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">

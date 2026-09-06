@@ -266,7 +266,7 @@ const getLeaveTypeIcon = (type: string) => {
     case "Sick Leave":
       return <Stethoscope className="w-4 h-4 text-red-600" />;
     case "Business Trip":
-      return <Briefcase className="w-4 h-4 text-blue-600" />;
+      return <Briefcase className="w-4 h-4 text-emerald-600" />;
     default:
       return null;
   }

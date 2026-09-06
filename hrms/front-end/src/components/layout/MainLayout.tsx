@@ -65,7 +65,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
 
   return (
     <MainLayoutContext.Provider value={contextValue}>
-      <div key={timeZoneVersion} className="min-h-screen bg-background flex">
+      <div key={timeZoneVersion} className="flex min-h-screen bg-[#f8f8f6]">
         <Sidebar
           mobileOpen={mobileSidebarOpen}
           onMobileClose={handleMobileClose}
@@ -74,7 +74,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
         />
         <div className={cn(
           "relative flex-1 min-w-0 flex flex-col transition-all duration-300",
-          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[260px]"
+          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[230px]"
         )}>
           <div
             className={cn(
@@ -82,7 +82,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
               routeLoading ? "opacity-100" : "opacity-0"
             )}
           >
-            <div className="h-full w-1/3 animate-[pulse_900ms_ease-in-out_infinite] bg-gradient-to-r from-blue-400/0 via-blue-400 to-cyan-300/0" />
+            <div className="h-full w-1/3 animate-[pulse_900ms_ease-in-out_infinite] bg-gradient-to-r from-emerald-400/0 via-emerald-400 to-teal-300/0" />
           </div>
           <TopNavbar
             title={header.title}
@@ -91,7 +91,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
           />
           <main
             className={cn(
-              "flex-1 min-w-0 p-3 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden animate-fade-in transition-opacity duration-200",
+              "min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 transition-opacity duration-200 animate-fade-in sm:p-4 lg:p-5",
               routeLoading ? "opacity-[0.985]" : "opacity-100"
             )}
           >

@@ -240,7 +240,7 @@ const EmployeeLeaveDetails = () => {
               </div>
               <ChartContainer
                 config={{
-                  value: { label: "Requests", color: "#3b82f6" }
+                  value: { label: "Requests", color: "#29b37e" }
                 }}
                 className="h-[260px] w-full"
               >

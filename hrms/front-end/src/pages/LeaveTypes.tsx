@@ -177,7 +177,7 @@ const LeaveTypes = () => {
         <div className="flex gap-3">
           <PermissionGate permissions={["LEAVE_TYPE_MANAGE"]}>
             <Pencil
-              className="w-4 h-4 text-blue-600 cursor-pointer hover:scale-110"
+              className="w-4 h-4 text-emerald-600 cursor-pointer hover:scale-110"
               onClick={() => {
                 setIsEdit(true);
                 setForm({

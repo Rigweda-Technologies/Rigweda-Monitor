@@ -200,7 +200,7 @@ const Designations = () => {
         <div className="flex gap-3">
           <PermissionGate permissions={["DESIG_UPDATE"]}>
             <Pencil
-              className="w-4 h-4 cursor-pointer text-blue-500 hover:text-blue-700"
+              className="w-4 h-4 cursor-pointer text-emerald-500 hover:text-emerald-700"
               onClick={() => {
                 setIsEdit(true);
                 setForm(des);

@@ -339,7 +339,7 @@ const PendingApprovals = () => {
             </Badge>
           )}
           {row.request.calendarDayType === "holiday" && (
-            <Badge className="border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-100">
+            <Badge className="border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-100">
               Holiday{row.request.holidayName ? `: ${row.request.holidayName}` : ""}
             </Badge>
           )}
@@ -402,8 +402,8 @@ const PendingApprovals = () => {
                 value: kpis.total,
                 note: requestDateFilter ? `For ${requestDateFilter}` : "Requests waiting for your action",
                 icon: ClipboardList,
-                shell: "from-sky-500/15 via-cyan-500/10 to-white",
-                accent: "bg-sky-500/15 text-sky-700 border-sky-200",
+                shell: "from-teal-500/15 via-emerald-500/10 to-white",
+                accent: "bg-teal-500/15 text-teal-700 border-teal-200",
                 glow: "shadow-[0_20px_45px_-30px_rgba(14,165,233,0.55)]"
               },
               {
@@ -411,8 +411,8 @@ const PendingApprovals = () => {
                 value: kpis.uniqueEmployees,
                 note: "Unique employees in queue",
                 icon: Users,
-                shell: "from-violet-500/15 via-fuchsia-500/10 to-white",
-                accent: "bg-violet-500/15 text-violet-700 border-violet-200",
+                shell: "from-amber-500/15 via-orange-500/10 to-white",
+                accent: "bg-amber-500/15 text-amber-700 border-amber-200",
                 glow: "shadow-[0_20px_45px_-30px_rgba(139,92,246,0.55)]"
               },
               {
@@ -562,7 +562,7 @@ const PendingApprovals = () => {
                   {selectedRequest.calendarDayType !== "working_day" && (
                     <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${
                       selectedRequest.calendarDayType === "holiday"
-                        ? "border-violet-300 bg-violet-50 text-violet-900"
+                        ? "border-amber-300 bg-amber-50 text-amber-900"
                         : "border-amber-300 bg-amber-50 text-amber-900"
                     }`}>
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

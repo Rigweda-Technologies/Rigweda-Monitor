@@ -480,7 +480,7 @@ const LeaveApply = () => {
                       pending: pendingDates
                     }}
                     modifiersClassNames={{
-                      weekOff: "bg-sky-100 text-sky-700 border border-sky-300 rounded-md !opacity-100",
+                      weekOff: "bg-teal-100 text-teal-700 border border-teal-300 rounded-md !opacity-100",
                       holiday: "bg-rose-100 text-rose-700 border border-rose-300 rounded-md !opacity-100",
                       approved: "bg-green-100 text-green-700 border border-green-300 font-semibold rounded-md !opacity-100",
                       pending: "bg-orange-100 text-orange-700 border border-orange-300 font-semibold rounded-md !opacity-100"
@@ -497,7 +497,7 @@ const LeaveApply = () => {
                     Pending leave
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-block h-3 w-3 rounded bg-sky-100 border border-sky-300" />
+                    <span className="inline-block h-3 w-3 rounded bg-teal-100 border border-teal-300" />
                     Week off
                   </div>
                   <div className="flex items-center gap-2">

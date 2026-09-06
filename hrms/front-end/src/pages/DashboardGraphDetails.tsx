@@ -138,7 +138,7 @@ const DashboardGraphDetails = () => {
 
     const approvalSeries: GraphSeries[] = [
       { key: "leaveRequests", label: "Leave Requests", color: "#f59e0b" },
-      { key: "timesheets", label: "Timesheets", color: "#3b82f6" }
+      { key: "timesheets", label: "Timesheets", color: "#29b37e" }
     ];
     const approvalWeekly = seedPoints(weeklyKeys, approvalSeries, "weekly");
     const approvalMonthly = seedPoints(monthlyKeys, approvalSeries, "monthly");
@@ -159,7 +159,7 @@ const DashboardGraphDetails = () => {
 
     const timesheetSeries: GraphSeries[] = [
       { key: "draft", label: "Draft", color: "#94a3b8" },
-      { key: "submitted", label: "Submitted", color: "#3b82f6" },
+      { key: "submitted", label: "Submitted", color: "#29b37e" },
       { key: "approved", label: "Approved", color: "#22c55e" },
       { key: "rejected", label: "Rejected", color: "#ef4444" }
     ];
@@ -176,7 +176,7 @@ const DashboardGraphDetails = () => {
 
     const lifecycleSeries: GraphSeries[] = [
       { key: "joiners", label: "Joiners", color: "#14b8a6" },
-      { key: "probation", label: "Probation", color: "#8b5cf6" }
+      { key: "probation", label: "Probation", color: "#f59e0b" }
     ];
     const lifecycleWeekly = seedPoints(weeklyKeys, lifecycleSeries, "weekly");
     const lifecycleMonthly = seedPoints(monthlyKeys, lifecycleSeries, "monthly");

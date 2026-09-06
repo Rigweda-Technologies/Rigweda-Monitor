@@ -114,7 +114,7 @@ const Shifts = () => {
         <div className="flex gap-3">
           <PermissionGate permissions={["SHIFT_MANAGE"]}>
             <Pencil
-              className="w-4 h-4 text-blue-600 cursor-pointer"
+              className="w-4 h-4 text-emerald-600 cursor-pointer"
               onClick={() => {
                 setIsEdit(true);
                 setForm({
