@@ -2,34 +2,95 @@ import { getPool } from "../../database/pool.js";
 
 const ACTIVE_PRESENCE_WINDOW_SECONDS = 75;
 const FRESH_EVENT_WINDOW_SECONDS = 120;
+const DEFAULT_ACTIVITY_TIMEZONE = "Asia/Kolkata";
+
+const isValidTimeZone = (timeZone) => {
+  try {
+    if (!timeZone || typeof timeZone !== "string") return false;
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const toDateKeyInTimeZone = (dateValue, timeZone = DEFAULT_ACTIVITY_TIMEZONE) => {
+  const date = new Date(dateValue);
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const safeTimeZone = isValidTimeZone(timeZone) ? timeZone : DEFAULT_ACTIVITY_TIMEZONE;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: safeTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(safeDate);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value;
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+};
+
+const buildDailyKey = ({ organizationId, employeeId, activityDate }) =>
+  `${organizationId || ""}:${employeeId}:${activityDate}`;
 
 export const activityModel = {
-  async saveEvents({ organizationId, employeeId, employeeName, events }) {
+  async saveEvents({ organizationId, employeeId, employeeName, events, activityTimeZone }) {
     const pool = getPool();
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      let inserted = 0;
+      let saved = 0;
+      let duplicateCount = 0;
       for (const event of events) {
+        const activityDate = toDateKeyInTimeZone(event.observedAt, activityTimeZone);
+        const dailyKey = buildDailyKey({ organizationId, employeeId, activityDate });
         const result = await client.query(
           `INSERT INTO monitor_activity_events (
-            id, organization_id, employee_id, employee_name, device_id, observed_at,
-            status, active_seconds, idle_seconds
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT (device_id, id) DO NOTHING`,
+            id, daily_key, organization_id, employee_id, employee_name, device_id,
+            activity_date, observed_at, status, active_seconds, idle_seconds, event_ids
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10, $11, ARRAY[$1])
+          ON CONFLICT (daily_key) WHERE daily_key IS NOT NULL DO UPDATE SET
+            employee_name = COALESCE(EXCLUDED.employee_name, monitor_activity_events.employee_name),
+            device_id = CASE
+              WHEN EXCLUDED.observed_at >= monitor_activity_events.observed_at THEN EXCLUDED.device_id
+              ELSE monitor_activity_events.device_id
+            END,
+            observed_at = GREATEST(monitor_activity_events.observed_at, EXCLUDED.observed_at),
+            status = CASE
+              WHEN EXCLUDED.observed_at >= monitor_activity_events.observed_at THEN EXCLUDED.status
+              ELSE monitor_activity_events.status
+            END,
+            active_seconds = CASE
+              WHEN monitor_activity_events.event_ids @> ARRAY[EXCLUDED.id] THEN monitor_activity_events.active_seconds
+              ELSE monitor_activity_events.active_seconds + EXCLUDED.active_seconds
+            END,
+            idle_seconds = CASE
+              WHEN monitor_activity_events.event_ids @> ARRAY[EXCLUDED.id] THEN monitor_activity_events.idle_seconds
+              ELSE monitor_activity_events.idle_seconds + EXCLUDED.idle_seconds
+            END,
+            event_ids = CASE
+              WHEN monitor_activity_events.event_ids @> ARRAY[EXCLUDED.id] THEN monitor_activity_events.event_ids
+              ELSE array_append(monitor_activity_events.event_ids, EXCLUDED.id)
+            END
+          WHERE NOT (monitor_activity_events.event_ids @> ARRAY[EXCLUDED.id])
+          RETURNING xmax = 0 AS inserted`,
           [
             event.eventId,
+            dailyKey,
             organizationId || null,
             employeeId,
             employeeName || null,
             event.deviceId,
+            activityDate,
             event.observedAt,
             event.status,
             event.activeSeconds,
             event.idleSeconds,
           ]
         );
-        inserted += result.rowCount;
+        if (result.rowCount > 0) {
+          saved += 1;
+        } else {
+          duplicateCount += 1;
+        }
 
         await client.query(
           `INSERT INTO monitor_device_presence (
@@ -64,7 +125,7 @@ export const activityModel = {
         );
       }
       await client.query("COMMIT");
-      return { inserted, duplicateCount: events.length - inserted };
+      return { inserted: saved, saved, duplicateCount };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
