@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, Settings, ChevronDown, Menu, Paintbrush, Save, SlidersHorizontal } from "lucide-react";
+import { Search, Bell, ChevronDown, Menu, Paintbrush, Save, SlidersHorizontal, FileText, Newspaper, WalletCards, BarChart3 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
@@ -84,7 +84,6 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   const { profile, setProfile, setPermissions, hasAnyPermission } = useAuth();
   const roles = useMemo(() => profile?.roles || [], [profile]);
   const activeRole = useMemo(() => profile?.activeRole || roles?.[0] || null, [profile, roles]);
-  const organizationName = profile?.organization?.name || profile?.activeOrganization?.name || "Organization";
   const profileImageUrl = /^https?:\/\//i.test(String(profile?.profileImage || "")) ||
     /^data:image\//i.test(String(profile?.profileImage || ""))
     ? profile?.profileImage
@@ -317,59 +316,59 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
     setCustomTheme((prev) => ({ ...prev, [key]: value }));
   };
 
+  const quickLinks = [
+    { label: "Documents", icon: FileText, path: "/organization/documents" },
+    { label: "News", icon: Newspaper, path: "/documentation" },
+    { label: "Payslip", icon: WalletCards, path: "/employee-dashboard/payslips" },
+    { label: "Report", icon: BarChart3, path: "/performance" },
+  ];
+
   return (
-    <header className="relative h-16 bg-card border-b border-border flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-40">
-      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 hidden md:flex items-center pointer-events-none">
-        <div className="max-w-[320px] rounded-full border border-border/80 bg-muted/50 px-4 py-1 text-sm font-medium text-foreground truncate">
-          {organizationName}
-        </div>
-      </div>
-      {/* Left Section */}
-      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+    <header className="sticky top-0 z-40 flex h-[76px] items-center justify-between border-b border-slate-100 bg-[#f8f8f6]/95 px-3 backdrop-blur sm:px-5 lg:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           type="button"
-          className="lg:hidden p-2 rounded-md hover:bg-muted"
+          className="rounded-xl p-2 text-slate-500 hover:bg-white lg:hidden"
           aria-label="Open sidebar"
           onClick={onOpenSidebar}
         >
-          <Menu className="w-5 h-5 text-muted-foreground" />
+          <Menu className="h-5 w-5" />
         </button>
-        {breadcrumb && breadcrumb.length > 0 && (
-          <nav className="breadcrumb hidden md:flex">
-            {/* {breadcrumb.map((item, index) => (
-              <span key={index} className="flex items-center gap-2">
-                {index > 0 && <span>/</span>}
-                {item.href ? (
-                  <a href={item.href} className="hover:text-primary transition-colors">
-                    {item.label}
-                  </a>
-                ) : (
-                  <span className="text-foreground font-medium">{item.label}</span>
-                )}
-              </span>
-            ))} */}
-          </nav>
-        )}
-        {title && <h1 className="page-header truncate">{title}</h1>}
+        <div className="relative hidden w-full max-w-[270px] sm:block">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="Search anything..."
+            className="h-11 rounded-xl border-0 bg-white pl-10 pr-12 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-emerald-400"
+          />
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-500 md:block">
+            Cmd F
+          </kbd>
+        </div>
+        <nav className="hidden items-center gap-1 xl:flex">
+          {quickLinks.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => navigate(item.path)}
+                className="flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-950"
+              >
+                <Icon className="h-4 w-4 text-slate-400" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        {title && <h1 className="truncate text-sm font-semibold text-slate-400 xl:hidden">{title}</h1>}
       </div>
 
-      {/* Right Section */}
-      <div className="flex items-center gap-2 sm:gap-4">
-        {/* Search */}
-        {/*<div className="relative hidden xl:block w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search..."
-            className="pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-primary"
-          />
-        </div>*/}
-
-        {/* Notifications */}
+      <div className="flex items-center gap-2">
         <DropdownMenu onOpenChange={(open) => open && loadNotifications(true)}>
-          <DropdownMenuTrigger className="relative p-2 rounded-lg hover:bg-muted transition-colors">
-            <Bell className="w-5 h-5 text-muted-foreground" />
+          <DropdownMenuTrigger className="relative rounded-xl bg-white p-2.5 shadow-sm transition-colors hover:bg-slate-50">
+            <Bell className="h-4 w-4 text-slate-600" />
             {unreadCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 min-w-5 h-5 flex items-center justify-center px-1 text-xs bg-destructive">
+              <Badge className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px]">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Badge>
             )}
@@ -416,9 +415,8 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
 
         {canManageSettings && (
           <DropdownMenu>
-            <DropdownMenuTrigger className="relative flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted transition-colors">
-              <Paintbrush className="h-4 w-4 text-muted-foreground" />
-              <span className="hidden sm:inline">Theme</span>
+            <DropdownMenuTrigger className="relative flex items-center gap-2 rounded-xl bg-white p-2.5 text-sm shadow-sm transition-colors hover:bg-slate-50">
+              <Paintbrush className="h-4 w-4 text-slate-600" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel className="flex items-center gap-2">
@@ -453,10 +451,10 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
 
         {/* User Menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 pl-4 border-l border-border">
-            <Avatar className="w-9 h-9">
+          <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl bg-white py-1.5 pl-1.5 pr-2 shadow-sm">
+            <Avatar className="h-8 w-8">
               <AvatarImage src={profileImageUrl} />
-              <AvatarFallback>
+              <AvatarFallback className="bg-emerald-50 text-xs font-semibold text-emerald-700">
                {profile?.firstName && profile?.lastName
               ? `${profile.firstName[0]}${profile.lastName[0]}`
               : profile?.firstName?.[0] ||
@@ -465,17 +463,17 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
                 "U"}
               </AvatarFallback>
             </Avatar>
-            <div className="text-left hidden lg:block">
-              <p className="text-sm font-medium">
+            <div className="hidden text-left lg:block">
+              <p className="max-w-32 truncate text-sm font-semibold text-slate-900">
                 {profile?.firstName || profile?.lastName
                   ? `${profile?.firstName || ""} ${profile?.lastName || ""}`.trim()
                   : profile?.email || "User"}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="max-w-32 truncate text-xs text-slate-400">
                 {activeRole?.name || "Role"}
               </p>
             </div>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-slate-400" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
@@ -521,7 +519,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
           <DialogHeader>
             <DialogTitle>Custom Theme</DialogTitle>
             <DialogDescription>
-              Set your organization palette. Use HSL values like `217 89% 45%` for best results.
+              Set your organization palette. Use HSL values like `156 62% 43%` for best results.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-2">
@@ -531,7 +529,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
                 <Input
                   value={customTheme[field] || ""}
                   onChange={(e) => updateCustomThemeField(field, e.target.value)}
-                  placeholder="e.g. 217 89% 45%"
+                  placeholder="e.g. 156 62% 43%"
                 />
               </label>
             ))}

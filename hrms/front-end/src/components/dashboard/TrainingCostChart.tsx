@@ -79,10 +79,10 @@ export const TrainingCostChart = () => {
               type="monotone"
               dataKey="netCost"
               name="Net Cost"
-              stroke="#0F5BD3"
+              stroke="#29b37e"
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 6, fill: '#0F5BD3' }}
+              activeDot={{ r: 6, fill: '#29b37e' }}
             />
             <Line
               type="monotone"

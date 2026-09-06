@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
@@ -138,16 +138,19 @@ export function DataTable<T>({
   const endIndex = Math.min(currentPage * pageSize, totalItems);
 
   return (
-    <div className={cn("bg-card rounded-xl border card-shadow flex flex-col", containerClassName)}>
+    <div className={cn("overflow-hidden rounded-[28px] border border-slate-100 bg-white shadow-sm flex flex-col", containerClassName)}>
       {/* 🔍 Header */}
       {searchKey && (
-        <div className="p-4 border-b flex items-center shrink-0">
-          <Input
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-72"
-          />
+        <div className="flex shrink-0 items-center border-b border-slate-100 p-4 sm:p-5">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-12 rounded-2xl border-slate-200 bg-slate-50 pl-11 text-slate-700 placeholder:text-slate-400"
+            />
+          </div>
         </div>
       )}
 
@@ -158,13 +161,13 @@ export function DataTable<T>({
         className={cn("min-h-0 flex-1 overflow-auto max-h-[60vh]", viewportClassName)}
       >
         <Table className={tableClassName || "w-full min-w-[600px] border-collapse"}>
-          <TableHeader className="sticky top-0 z-30 bg-card">
+          <TableHeader className="sticky top-0 z-30 bg-slate-50/90">
             {renderHeader ? (
               renderHeader(columns, selectable)
             ) : (
-              <TableRow className="bg-muted/40">
+              <TableRow className="border-b border-slate-100 bg-slate-50/90 hover:bg-slate-50/90">
                 {selectable && (
-                  <TableHead className="w-10">
+                  <TableHead className="w-12 bg-slate-50/90 px-5 py-4">
                     <Checkbox />
                   </TableHead>
                 )}
@@ -172,7 +175,7 @@ export function DataTable<T>({
                 {columns.map((col, columnIndex) => (
                   <TableHead
                     key={String(col.accessor)}
-                    className={`text-muted-foreground font-medium bg-muted/40 ${
+                    className={`h-auto bg-slate-50/90 px-5 py-4 text-sm font-medium text-slate-500 ${
                       col.sortable ? "cursor-pointer" : ""
                     } ${getStickyLeftClass(columnIndex)} ${col.className || ""}`}
                     onClick={() =>
@@ -181,9 +184,7 @@ export function DataTable<T>({
                   >
                     <div className="flex items-center gap-1">
                       {col.header}
-                      {col.sortable && (
-                        <ArrowUpDown className="w-4 h-4 opacity-60" />
-                      )}
+                      {col.sortable && <ArrowUpDown className="h-4 w-4 opacity-50" />}
                     </div>
                   </TableHead>
                 ))}
@@ -199,7 +200,7 @@ export function DataTable<T>({
                     columnsCountOverride ??
                     columns.length + (selectable ? 1 : 0)
                   }
-                  className="text-center py-10 text-muted-foreground"
+                  className="py-12 text-center text-slate-500"
                 >
                   No data found
                 </TableCell>
@@ -210,17 +211,17 @@ export function DataTable<T>({
               renderRow ? (
                 <TableRow
                   key={String(row[rowKey])}
-                  className="hover:bg-muted/40 transition"
+                  className="border-b border-slate-100 transition hover:bg-emerald-50/30"
                 >
                   {renderRow(row)}
                 </TableRow>
               ) : (
                 <TableRow
                   key={String(row[rowKey])}
-                  className="hover:bg-muted/40 transition"
+                  className="border-b border-slate-100 transition hover:bg-emerald-50/30"
                 >
                   {selectable && (
-                    <TableCell>
+                    <TableCell className="px-5 py-4">
                       <Checkbox />
                     </TableCell>
                   )}
@@ -228,7 +229,7 @@ export function DataTable<T>({
                   {columns.map((col, columnIndex) => (
                     <TableCell
                       key={String(col.accessor)}
-                      className={`py-4 bg-card ${getStickyLeftClass(columnIndex)} ${col.className || ""}`}
+                      className={`bg-white px-5 py-4 text-slate-800 ${getStickyLeftClass(columnIndex)} ${col.className || ""}`}
                     >
                       {col.render
                         ? col.render(row)
@@ -244,14 +245,14 @@ export function DataTable<T>({
 
       {/* 📌 Footer */}
       {!hideFooter && (
-        <div className="sticky bottom-0 z-10 px-4 py-3 text-sm text-muted-foreground border-t bg-card shrink-0">
+        <div className="sticky bottom-0 z-10 shrink-0 border-t border-slate-100 bg-white px-4 py-3 text-sm text-slate-500">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span>
                 Showing {startIndex}-{endIndex} of {totalItems}
               </span>
               <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
-                <SelectTrigger className="h-8 w-[120px]">
+                <SelectTrigger className="h-10 w-[128px] rounded-xl border-slate-200 bg-slate-50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

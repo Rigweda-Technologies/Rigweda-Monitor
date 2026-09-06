@@ -226,7 +226,11 @@ const startServer = async () => {
       console.log("SuperAdmin Email     :", bootstrapResult.email);
       console.log("SuperAdmin Password  :", bootstrapResult.password);
     }
+  } catch (err) {
+    console.error("❌ Failed to bootstrap system org:", err);
+  }
 
+  try {
     const organizations = await Organization.find({
       code: { $ne: "SYSTEM" }
     }).select("_id");

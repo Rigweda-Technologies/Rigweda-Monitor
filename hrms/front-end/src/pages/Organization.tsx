@@ -31,6 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import PermissionGate from "@/components/PermissionGate";
 import { useAuth } from "@/context/useAuth";
 
@@ -218,8 +224,8 @@ const OrganizationPage = () => {
                         ? "text-gray-400 cursor-not-allowed"
                         : `
                 cursor-pointer
-                text-blue-600
-                hover:text-blue-700
+                text-emerald-600
+                hover:text-emerald-700
                 hover:scale-110
                 hover:-translate-y-0.5
               `
@@ -355,16 +361,16 @@ const OrganizationPage = () => {
         />
       )}
 
-      {/* 📝 Add/Edit Modal */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
+      {/* Add/Edit Drawer */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
               {isEdit ? "Edit Organization" : "Add Organization"}
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+          </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <Input
               placeholder="Organization Name"
               validationType="name"
@@ -429,12 +435,15 @@ const OrganizationPage = () => {
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleSubmit} className="w-full">
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmit}>
               {isEdit ? "Update Organization" : "Create Organization"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={payrollClearOpen} onOpenChange={setPayrollClearOpen}>
         <DialogContent>

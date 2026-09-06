@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
 
 const data = [
-  { name: "Hybrid", value: 35, color: "#0F5BD3" },
+  { name: "Hybrid", value: 35, color: "#29b37e" },
   { name: "Remote", value: 25, color: "#16A34A" },
   { name: "On-site", value: 40, color: "#F59E0B" },
 ];

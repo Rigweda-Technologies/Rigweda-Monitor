@@ -9,6 +9,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -344,12 +350,12 @@ const SuperAdminDashboard = () => {
         </div>
       </div>
 
-      <Dialog open={showCreateOrg} onOpenChange={setShowCreateOrg}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Organization</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+      <Sheet open={showCreateOrg} onOpenChange={setShowCreateOrg}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Create Organization</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             {createOrgError && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {createOrgError}
@@ -377,17 +383,20 @@ const SuperAdminDashboard = () => {
               value={createOrgForm.currency}
               onChange={(e) => setCreateOrgForm({ ...createOrgForm, currency: e.target.value })}
             />
-            <Button onClick={handleCreateOrganization} className="w-full">Create</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setShowCreateOrg(false)}>Cancel</Button>
+            <Button onClick={handleCreateOrganization}>Create</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Admin User</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+      <Sheet open={showCreateUser} onOpenChange={setShowCreateUser}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Create Admin User</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             {createUserError && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {createUserError}
@@ -513,10 +522,13 @@ const SuperAdminDashboard = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleCreateUser} className="w-full">Create User</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setShowCreateUser(false)}>Cancel</Button>
+            <Button onClick={handleCreateUser}>Create User</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={showLifecycleDialog} onOpenChange={setShowLifecycleDialog}>
         <DialogContent>

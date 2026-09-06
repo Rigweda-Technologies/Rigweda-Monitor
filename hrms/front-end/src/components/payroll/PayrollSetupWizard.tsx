@@ -577,7 +577,7 @@ const getRuleStatusLabel = (status: TelanganaRuleItem["status"]) => {
 const getRuleStatusClass = (status: TelanganaRuleItem["status"]) => {
   if (status === "auto_default") return "bg-green-100 text-green-700";
   if (status === "legal_update_required") return "bg-amber-100 text-amber-700";
-  return "bg-blue-100 text-blue-700";
+  return "bg-emerald-100 text-emerald-700";
 };
 
 const getScopeLabel = (scope: ComponentDraft["scope"]) => {

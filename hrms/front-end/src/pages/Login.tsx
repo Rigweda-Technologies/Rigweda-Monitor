@@ -326,24 +326,24 @@ const Login = () => {
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-slate-950">
-      <section className="hidden lg:flex relative overflow-hidden bg-gradient-to-br from-blue-800 via-blue-700 to-cyan-700 text-white">
+      <section className="hidden lg:flex relative overflow-hidden bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-700 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.22),transparent_25%),radial-gradient(circle_at_85%_85%,rgba(125,211,252,0.25),transparent_35%)]" />
         <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-white/20 blur-2xl" />
-        <div className="absolute -bottom-28 -right-20 h-96 w-96 rounded-full bg-cyan-200/20 blur-3xl" />
+        <div className="absolute -bottom-28 -right-20 h-96 w-96 rounded-full bg-teal-200/20 blur-3xl" />
 
         <div className="relative z-10 w-full p-14 flex flex-col">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-blue-100/90">Rigweda HRMS Platform</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/90">Rigweda HRMS Platform</p>
             <h1 className="mt-5 text-4xl font-semibold leading-tight max-w-[18ch]">
               Human resources, reimagined for real operations
             </h1>
             <div className="mt-6 grid grid-cols-2 gap-3 max-w-lg">
               <div className="rounded-xl bg-white/10 border border-white/20 p-3">
-                <p className="text-xs text-blue-100">Attendance Engine</p>
+                <p className="text-xs text-emerald-100">Attendance Engine</p>
                 <p className="font-semibold mt-1 flex items-center gap-2"><Clock3 className="w-4 h-4" /> Real-time</p>
               </div>
               <div className="rounded-xl bg-white/10 border border-white/20 p-3">
-                <p className="text-xs text-blue-100">Access Governance</p>
+                <p className="text-xs text-emerald-100">Access Governance</p>
                 <p className="font-semibold mt-1 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Role-based</p>
               </div>
             </div>
@@ -359,12 +359,12 @@ const Login = () => {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.35 }}
                 >
-                  <p className="text-xs uppercase tracking-[0.2em] text-blue-100/85 flex items-center gap-2">
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/85 flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5" /> Why teams choose us
                   </p>
                   <p className="text-2xl font-semibold mt-2">{slides[slideIndex].title}</p>
-                  <p className="mt-3 text-blue-50/95 leading-relaxed">{slides[slideIndex].description}</p>
-                  <div className="mt-4 inline-flex rounded-full border border-cyan-200/35 bg-cyan-100/10 px-3 py-1 text-sm font-medium">
+                  <p className="mt-3 text-emerald-50/95 leading-relaxed">{slides[slideIndex].description}</p>
+                  <div className="mt-4 inline-flex rounded-full border border-teal-200/35 bg-teal-100/10 px-3 py-1 text-sm font-medium">
                     {slides[slideIndex].metric}
                   </div>
                 </motion.div>
@@ -391,7 +391,7 @@ const Login = () => {
       <section className="flex items-center justify-center p-5 sm:p-8 bg-slate-100">
         <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8">
           <div className="mb-6">
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-blue-600">Welcome Back</p>
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-emerald-600">Welcome Back</p>
             <h2 className="text-2xl font-semibold mt-2 text-slate-900">Sign in to Rigweda HRMS</h2>
             <p className="text-sm text-slate-500 mt-2">Manage attendance, leaves, approvals, and people operations in one place.</p>
           </div>
@@ -427,7 +427,7 @@ const Login = () => {
               className="h-11"
             />
             <div className="text-right -mt-2">
-              <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">
+              <Link to="/forgot-password" className="text-sm text-emerald-600 hover:text-emerald-700">
                 Forgot password?
               </Link>
             </div>

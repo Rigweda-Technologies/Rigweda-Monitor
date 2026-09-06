@@ -10,6 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Plus, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import PermissionGate from "@/components/PermissionGate";
@@ -180,7 +186,7 @@ const Roles = () => {
             <>
               <PermissionGate permissions={["ROLE_UPDATE"]}>
                 <Pencil
-                  className="w-4 h-4 text-blue-600 cursor-pointer hover:scale-110"
+                  className="w-4 h-4 text-emerald-600 cursor-pointer hover:scale-110"
                   onClick={() => {
                     setIsEdit(true);
                     setForm(role);
@@ -250,16 +256,16 @@ const Roles = () => {
         />
       )}
 
-      {/* Add / Edit Modal */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
+      {/* Add / Edit Drawer */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
               {isEdit ? "Edit Role" : "Add Role"}
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+          </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <Input
               placeholder="Role Name"
               validationType="name"
@@ -278,13 +284,15 @@ const Roles = () => {
                 setForm({ ...form, slug: e.target.value })
               }
             />
-
-            <Button onClick={handleSubmit} className="w-full">
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmit}>
               {isEdit ? "Update Role" : "Create Role"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

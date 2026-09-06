@@ -67,7 +67,7 @@ export const JobStatisticsChart = () => {
               <Bar 
                 dataKey="jobView" 
                 name="Job View"
-                fill="#0F5BD3" 
+                fill="#29b37e" 
                 radius={[4, 4, 0, 0]}
               />
             )}

@@ -865,13 +865,13 @@ const EmployeeDashboard = () => {
     ? "border-amber-200/80 bg-[linear-gradient(135deg,rgba(255,251,235,0.98),rgba(254,243,199,0.84)_42%,rgba(255,255,255,0.98))]"
     : isCheckedIn
       ? "border-emerald-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.98),rgba(220,252,231,0.84)_42%,rgba(255,255,255,0.98))]"
-      : "border-sky-200/80 bg-[linear-gradient(135deg,rgba(239,246,255,0.98),rgba(224,242,254,0.84)_42%,rgba(255,255,255,0.98))]";
+      : "border-teal-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.98),rgba(204,251,241,0.84)_42%,rgba(255,255,255,0.98))]";
   const balanceCardClassName =
     "stat-card border-emerald-200/70 bg-[linear-gradient(135deg,rgba(236,253,245,0.92),rgba(209,250,229,0.72)_48%,rgba(255,255,255,0.96))]";
   const weeklyCardClassName =
-    "stat-card border-blue-200/70 bg-[linear-gradient(135deg,rgba(239,246,255,0.94),rgba(219,234,254,0.78)_48%,rgba(255,255,255,0.96))]";
+    "stat-card border-emerald-200/70 bg-[linear-gradient(135deg,rgba(236,253,245,0.94),rgba(209,250,229,0.78)_48%,rgba(255,255,255,0.96))]";
   const teamCardClassName =
-    "stat-card border-violet-200/70 bg-[linear-gradient(135deg,rgba(245,243,255,0.94),rgba(233,213,255,0.72)_48%,rgba(255,255,255,0.96))]";
+    "stat-card border-amber-200/70 bg-[linear-gradient(135deg,rgba(255,251,235,0.94),rgba(254,243,199,0.72)_48%,rgba(255,255,255,0.96))]";
   const pendingCardClassName =
     "stat-card border-amber-200/70 bg-[linear-gradient(135deg,rgba(255,251,235,0.94),rgba(254,243,199,0.76)_48%,rgba(255,255,255,0.96))]";
   const panelGradientClassName =
@@ -882,14 +882,14 @@ const EmployeeDashboard = () => {
     ? "bg-[linear-gradient(180deg,#f59e0b_0%,#fbbf24_55%,#fde68a_100%)] ring-1 ring-amber-200/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_14px_28px_rgba(245,158,11,0.18)]"
     : isCheckedIn
       ? "bg-[linear-gradient(180deg,#059669_0%,#10b981_55%,#6ee7b7_100%)] ring-1 ring-emerald-200/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_14px_28px_rgba(16,185,129,0.18)]"
-      : "bg-[linear-gradient(180deg,#1d4ed8_0%,#2563eb_55%,#60a5fa_100%)] ring-1 ring-sky-200/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_14px_28px_rgba(37,99,235,0.18)]";
+      : "bg-[linear-gradient(180deg,#15803d_0%,#29b37e_55%,#6ee7b7_100%)] ring-1 ring-emerald-200/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_14px_28px_rgba(41,179,126,0.18)]";
   const secondaryHeroButtonClassName =
     "h-10 rounded-xl border-white/70 bg-white/75 px-4 text-slate-700 shadow-sm backdrop-blur transition hover:bg-white hover:text-slate-900";
   const primaryHeroButtonClassName = isCheckedOut
     ? "h-10 rounded-xl border-emerald-700 bg-[linear-gradient(135deg,#047857,#10b981)] px-4 text-white shadow-[0_10px_24px_rgba(16,185,129,0.24)] transition hover:brightness-105"
     : isCheckedIn
       ? "h-10 rounded-xl border-amber-700 bg-[linear-gradient(135deg,#b45309,#f59e0b)] px-4 text-white shadow-[0_10px_24px_rgba(245,158,11,0.24)] transition hover:brightness-105"
-      : "h-10 rounded-xl border-sky-700 bg-[linear-gradient(135deg,#1d4ed8,#2563eb)] px-4 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)] transition hover:brightness-105";
+      : "h-10 rounded-xl border-emerald-700 bg-[linear-gradient(135deg,#15803d,#29b37e)] px-4 text-white shadow-[0_10px_24px_rgba(41,179,126,0.24)] transition hover:brightness-105";
 
   const lateFlag = useMemo(() => {
     return Number(attendanceToday?.lateByMinutes || 0) > 0;
@@ -1229,7 +1229,7 @@ const EmployeeDashboard = () => {
               Shift: {shiftNameText} • {shiftTimingsText}
             </p>
             {!hasCheckedInToday && checkInWindowStartText && shiftStartText && (
-              <p className="text-xs text-sky-700 mt-1">
+              <p className="text-xs text-teal-700 mt-1">
                 Check-in is allowed only within 2 hours before shift start, from {checkInWindowStartText} to {shiftStartText}.
               </p>
             )}
@@ -1542,12 +1542,12 @@ const EmployeeDashboard = () => {
                 let label = "";
                 const toneMap: Record<string, string> = {
                   holiday: "bg-rose-100 border-rose-300",
-                  week_off: "bg-sky-100 border-sky-300",
+                  week_off: "bg-teal-100 border-teal-300",
                   leave: "bg-emerald-100 border-emerald-300",
                   pending_checkout: "bg-orange-100 border-orange-300",
-                  present: "bg-blue-100 border-blue-300",
+                  present: "bg-emerald-100 border-emerald-300",
                   half_day: "bg-lime-100 border-lime-300",
-                  absent_leave: "bg-fuchsia-100 border-fuchsia-300",
+                  absent_leave: "bg-orange-100 border-orange-300",
                   absent: "bg-rose-100 border-rose-300",
                   future: "bg-muted/20"
                 };
@@ -1564,11 +1564,11 @@ const EmployeeDashboard = () => {
               })}
             </div>
             <div className="flex flex-wrap gap-2 mt-4 text-xs">
-              <span className="px-2 py-1 rounded bg-blue-100 border border-blue-300">Present</span>
+              <span className="px-2 py-1 rounded bg-emerald-100 border border-emerald-300">Present</span>
               <span className="px-2 py-1 rounded bg-orange-100 border border-orange-300">Pending Checkout</span>
               <span className="px-2 py-1 rounded bg-rose-100 border border-rose-300">Absent</span>
               <span className="px-2 py-1 rounded bg-emerald-100 border border-emerald-300">Leave</span>
-              <span className="px-2 py-1 rounded bg-sky-100 border border-sky-300">Week Off</span>
+              <span className="px-2 py-1 rounded bg-teal-100 border border-teal-300">Week Off</span>
               <span className="px-2 py-1 rounded bg-rose-100 border border-rose-300">Holiday</span>
             </div>
           </motion.div>
@@ -1639,7 +1639,7 @@ const EmployeeDashboard = () => {
               {myProfile?.managerId ? (
                 <div className={`flex items-center gap-3 rounded-xl border p-3 ${softInsetClassName}`}>
                   <Avatar className="w-10 h-10 shrink-0">
-                    <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-sm font-semibold">
+                    <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-amber-500 text-white text-sm font-semibold">
                       {`${myProfile.managerId.firstName?.[0] || ""}${myProfile.managerId.lastName?.[0] || ""}`.toUpperCase() || "?"}
                     </AvatarFallback>
                   </Avatar>
@@ -1649,7 +1649,7 @@ const EmployeeDashboard = () => {
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">Your direct manager</p>
                   </div>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-300 text-indigo-700 bg-indigo-50 shrink-0">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-300 text-emerald-700 bg-emerald-50 shrink-0">
                     Manager
                   </Badge>
                 </div>
@@ -1699,7 +1699,7 @@ const EmployeeDashboard = () => {
                       <div key={emp._id} className={`flex items-center gap-3 rounded-xl border p-2.5 ${softInsetClassName}`}>
                         <Avatar className="w-8 h-8 shrink-0">
                           <AvatarImage src={emp.profileImage || undefined} />
-                          <AvatarFallback className="bg-gradient-to-br from-indigo-400 to-violet-400 text-white text-xs font-semibold">
+                          <AvatarFallback className="bg-gradient-to-br from-emerald-400 to-amber-400 text-white text-xs font-semibold">
                             {initials}
                           </AvatarFallback>
                         </Avatar>

@@ -39,6 +39,12 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { getApiWithToken, postApiWithToken, putApiWithToken } from "@/services/apiWrapper";
 import { toast } from "sonner";
@@ -1132,7 +1138,7 @@ const Timesheets = () => {
                       </Badge>
                     )}
                     {r.calendarDayType === "holiday" && (
-                      <Badge className="mt-1 border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-100">
+                      <Badge className="mt-1 border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-100">
                         Holiday{r.holidayName ? `: ${r.holidayName}` : ""}
                       </Badge>
                     )}
@@ -1577,11 +1583,12 @@ const Timesheets = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={attendanceRequestOpen} onOpenChange={setAttendanceRequestOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Raise Attendance Request</DialogTitle>
-          </DialogHeader>
+      <Sheet open={attendanceRequestOpen} onOpenChange={setAttendanceRequestOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Raise Attendance Request</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Input
               type="date"
@@ -1649,7 +1656,7 @@ const Timesheets = () => {
                 : "Provide one or both times to request correction."}
           </p>
           {attendanceRequestForm.requestType === "correction" && attendanceToday?.checkOutAt && (
-            <p className="text-xs text-sky-700 mt-1">
+            <p className="text-xs text-teal-700 mt-1">
               Existing checkout found for this attendance day. New requests will be submitted as a correction.
             </p>
           )}
@@ -1664,16 +1671,17 @@ const Timesheets = () => {
             value={attendanceRequestForm.reason}
             onChange={(e) => setAttendanceRequestForm((prev) => ({ ...prev, reason: e.target.value }))}
           />
-          <DialogFooter>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setAttendanceRequestOpen(false)}>
               Cancel
             </Button>
             <Button onClick={submitAttendanceRequest} disabled={attendanceRequestLoading}>
               {attendanceRequestLoading ? <InlineLoader label="Submitting..." className="text-white" /> : "Submit Request"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={attendanceRequestDetailOpen} onOpenChange={setAttendanceRequestDetailOpen}>
         <DialogContent className="max-w-lg p-0 overflow-hidden gap-0">
@@ -1685,7 +1693,7 @@ const Timesheets = () => {
             const steps = req.approvalSteps || [];
             const isApproved = status === "approved";
             const isRejected = status === "rejected";
-            const headerBg = "from-blue-500 to-blue-700";
+            const headerBg = "from-emerald-500 to-emerald-600";
             const typeIcon = req.requestType === "work_from_home"
               ? <Home className="w-5 h-5" />
               : req.requestType === "missed_checkout"
@@ -1743,12 +1751,12 @@ const Timesheets = () => {
 
                   {/* Actioned by card */}
                   {actionedBy ? (
-                    <div className="rounded-xl border p-4 flex items-center gap-4 bg-blue-50 border-blue-100">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 bg-blue-600">
+                    <div className="rounded-xl border p-4 flex items-center gap-4 bg-emerald-50 border-emerald-100">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 bg-emerald-500">
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium uppercase tracking-wider mb-0.5 text-blue-600">
+                        <p className="text-xs font-medium uppercase tracking-wider mb-0.5 text-emerald-600">
                           {isApproved ? "Approved by" : isRejected ? "Rejected by" : "Actioned by"}
                         </p>
                         <p className="font-semibold text-sm truncate">{toPersonLabel(actionedBy)}</p>

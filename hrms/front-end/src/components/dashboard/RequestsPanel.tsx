@@ -14,13 +14,13 @@ const requests = [
     icon: <UserCircle className="w-5 h-5" />, 
     label: "Profile Update", 
     count: 5,
-    color: "bg-blue-100 text-blue-700"
+    color: "bg-emerald-100 text-emerald-700"
   },
   { 
     icon: <Briefcase className="w-5 h-5" />, 
     label: "Business Trip", 
     count: 3,
-    color: "bg-purple-100 text-purple-700"
+    color: "bg-teal-100 text-teal-700"
   },
   { 
     icon: <Palmtree className="w-5 h-5" />, 
