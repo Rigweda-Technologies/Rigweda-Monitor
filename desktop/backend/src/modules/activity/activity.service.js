@@ -6,6 +6,11 @@ const getEmployeeName = (profile) => {
   return [raw.firstName, raw.lastName].filter(Boolean).join(" ") || raw.name || raw.email || null;
 };
 
+const getActivityTimeZone = (profile) => {
+  const raw = profile?.raw || {};
+  return raw.timezone || raw.organization?.timezone || raw.orgSettings?.timezone || "Asia/Kolkata";
+};
+
 export const activityService = {
   async recordEvents({ auth, events }) {
     const profile = await getEmployeeProfileFromRigweda({ token: auth.token });
@@ -20,6 +25,7 @@ export const activityService = {
       employeeId: String(employeeId),
       employeeName: getEmployeeName(profile),
       events,
+      activityTimeZone: getActivityTimeZone(profile),
     });
   },
 
