@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, Column } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Info } from "lucide-react";
@@ -181,13 +181,13 @@ const Shifts = () => {
         </>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit Shift" : "Add Shift"}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">{isEdit ? "Edit Shift" : "Add Shift"}</SheetTitle>
+          </SheetHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-6 py-5 lg:grid-cols-2">
             <div>
               <div className="flex items-center gap-1 mb-1 text-sm">
                 <span>Shift Name</span>
@@ -288,12 +288,12 @@ const Shifts = () => {
             </Select>
           </div>
 
-          <div className="flex justify-end gap-2 mt-5">
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={submit}>{isEdit ? "Update" : "Create"}</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

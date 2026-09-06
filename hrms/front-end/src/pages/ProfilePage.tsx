@@ -4,8 +4,8 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getApiWithToken, putApiWithToken } from "@/services/apiWrapper";
 import { toast } from "sonner";
 import { hasPermission } from "@/utils/auth";
@@ -711,7 +711,7 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      <Dialog
+      <Sheet
         open={open}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) {
@@ -721,11 +721,11 @@ const ProfilePage = () => {
           setOpen(true);
         }}
       >
-        <DialogContent className="max-h-[92vh] overflow-y-auto border-slate-200 bg-white p-0 shadow-2xl sm:max-w-4xl">
-          <DialogHeader className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
-            <DialogTitle className="text-xl font-semibold text-slate-900">Edit Profile</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 px-6 py-6">
+        <SheetContent className="flex flex-col gap-0 bg-white p-0 shadow-2xl">
+          <SheetHeader className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-900">Edit Profile</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm">
               <Label className="mb-2 block">Profile Picture</Label>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
@@ -981,15 +981,15 @@ const ProfilePage = () => {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 pt-2">
-              <Button variant="outline" className="min-w-28" onClick={handleCancelEdit} disabled={loading}>
-                Cancel
-              </Button>
-              <Button className="min-w-32 shadow-sm" onClick={handleSave} disabled={loading}>Save</Button>
-            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-5">
+            <Button variant="outline" className="min-w-28" onClick={handleCancelEdit} disabled={loading}>
+              Cancel
+            </Button>
+            <Button className="min-w-32 shadow-sm" onClick={handleSave} disabled={loading}>Save</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

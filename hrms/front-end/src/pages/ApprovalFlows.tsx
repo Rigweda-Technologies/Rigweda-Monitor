@@ -5,11 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectTrigger,
@@ -445,13 +445,16 @@ const ApprovalFlows = () => {
         </>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit Approval Flow" : "Add Approval Flow"}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
+              {isEdit ? "Edit Approval Flow" : "Add Approval Flow"}
+            </SheetTitle>
+          </SheetHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               placeholder="Flow name"
               value={form.name}
@@ -518,7 +521,7 @@ const ApprovalFlows = () => {
             </div>
           </div>
 
-          <div className="mt-6 space-y-3">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Approval Steps</h4>
               <Button type="button" variant="outline" onClick={addStep}>
@@ -626,7 +629,9 @@ const ApprovalFlows = () => {
             ))}
           </div>
 
-          <div className="flex justify-end gap-2 mt-6">
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -634,8 +639,8 @@ const ApprovalFlows = () => {
               {isEdit ? "Update" : "Create"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

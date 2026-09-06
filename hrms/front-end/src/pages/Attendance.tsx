@@ -10,6 +10,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -1767,15 +1773,15 @@ const Attendance = () => {
         </>
       )}
 
-      <Dialog open={customBulkOpen} onOpenChange={setCustomBulkOpen}>
-        <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-white px-6 py-5">
-            <DialogTitle className="text-xl">Customized Attendance Update</DialogTitle>
+      <Sheet open={customBulkOpen} onOpenChange={setCustomBulkOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b bg-white px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Customized Attendance Update</SheetTitle>
             <p className="pt-1 text-sm text-muted-foreground">
               Choose up to 30 dates. Checked cells will be marked Present; blank cells will be marked Absent.
             </p>
-          </DialogHeader>
-          <div className="max-h-[70vh] space-y-4 overflow-auto bg-slate-50/60 px-6 py-5">
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-slate-50/60 px-6 py-5">
             <section className="rounded-lg border bg-white p-4">
               <p className="mb-3 text-sm font-semibold text-slate-800">1. Select dates in {month}</p>
               <div className="flex flex-wrap gap-2">
@@ -1911,28 +1917,28 @@ const Attendance = () => {
               )}
             </section>
           </div>
-          <DialogFooter className="border-t bg-white px-6 py-4">
+          <div className="flex justify-end gap-2 border-t bg-white px-6 py-5">
             <Button variant="outline" onClick={() => setCustomBulkOpen(false)} disabled={customBulkSaving}>
               Cancel
             </Button>
             <Button onClick={saveCustomBulkUpdate} disabled={customBulkSaving || customBulkDays.length === 0}>
               {customBulkSaving ? "Saving..." : "Save Customized Attendance"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-white px-6 py-5">
-            <DialogTitle className="text-xl">{canEdit ? "Update Attendance" : "Attendance Details"}</DialogTitle>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b bg-white px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">{canEdit ? "Update Attendance" : "Attendance Details"}</SheetTitle>
             <p className="pt-1 text-sm text-muted-foreground">
               {selectedEmployee
                 ? `${selectedEmployee.firstName} ${selectedEmployee.lastName} - ${month}-${String(selectedDay || 1).padStart(2, "0")}`
                 : ""}
             </p>
-          </DialogHeader>
-          <div className="max-h-[68vh] space-y-4 overflow-y-auto bg-slate-50/60 px-6 py-5">
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-6 py-5">
             {canEdit && (
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -2209,7 +2215,7 @@ const Attendance = () => {
               </section>
             </div>
           </div>
-          <DialogFooter className="border-t bg-white px-6 py-4">
+          <div className="flex justify-end gap-2 border-t bg-white px-6 py-5">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -2218,9 +2224,9 @@ const Attendance = () => {
                 {saving ? "Saving..." : "Save"}
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

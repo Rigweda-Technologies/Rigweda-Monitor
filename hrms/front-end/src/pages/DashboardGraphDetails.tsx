@@ -192,7 +192,7 @@ const DashboardGraphDetails = () => {
       }
     });
 
-    const holidaySeries: GraphSeries[] = [{ key: "holidays", label: "Holidays", color: "#0ea5e9" }];
+    const holidaySeries: GraphSeries[] = [{ key: "holidays", label: "Holidays", color: "#14b8a6" }];
     const holidayWeekly = seedPoints(weeklyKeys, holidaySeries, "weekly");
     const holidayMonthly = seedPoints(monthlyKeys, holidaySeries, "monthly");
     holidays.forEach((item) => {
@@ -203,7 +203,7 @@ const DashboardGraphDetails = () => {
       }
     });
 
-    const notificationSeries: GraphSeries[] = [{ key: "notifications", label: "Notifications", color: "#6366f1" }];
+    const notificationSeries: GraphSeries[] = [{ key: "notifications", label: "Notifications", color: "#29b37e" }];
     const notificationWeekly = seedPoints(weeklyKeys, notificationSeries, "weekly");
     const notificationMonthly = seedPoints(monthlyKeys, notificationSeries, "monthly");
     notifications.forEach((item) => {

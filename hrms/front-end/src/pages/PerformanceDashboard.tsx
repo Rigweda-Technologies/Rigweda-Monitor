@@ -15,13 +15,12 @@ import { CalendarDays, Plus } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -206,15 +205,15 @@ const PerformanceDashboard = () => {
         )}
       </div>
 
-      <Dialog open={cycleDialogOpen} onOpenChange={setCycleDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Review Cycle</DialogTitle>
-            <DialogDescription>
+      <Sheet open={cycleDialogOpen} onOpenChange={setCycleDialogOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Create Review Cycle</SheetTitle>
+            <SheetDescription>
               Add a review cycle to the current dashboard session.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div className="space-y-2">
               <Label htmlFor="cycle-title">Cycle Title</Label>
               <Input
@@ -254,12 +253,12 @@ const PerformanceDashboard = () => {
               />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setCycleDialogOpen(false)}>Cancel</Button>
             <Button className="bg-emerald-500 hover:bg-emerald-600" onClick={createReviewCycle}>Create Cycle</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

@@ -48,6 +48,13 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1370,7 +1377,7 @@ const Leave = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <Sheet
         open={revertDialogOpen}
         onOpenChange={(open) => {
           setRevertDialogOpen(open);
@@ -1380,15 +1387,15 @@ const Leave = () => {
           }
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Request Leave Revert</DialogTitle>
-            <DialogDescription>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Request Leave Revert</SheetTitle>
+            <SheetDescription>
               Select full or partial approved leave dates to request credit back to the employee balance.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               Approved leave range: {selectedLeave?.fromDate ? formatDateInOrgTimeZone(selectedLeave.fromDate) : "-"}
               {" "}to{" "}
@@ -1429,17 +1436,16 @@ const Leave = () => {
               />
             </div>
           </div>
-
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setRevertDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={submitRevertRequest} disabled={Boolean(revertDateError)}>
               Raise Revert Request
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto border-slate-200 bg-white p-0 shadow-2xl sm:max-w-3xl">
@@ -1654,14 +1660,14 @@ const Leave = () => {
       </Dialog>
 
       {/* Apply Leave Dialog */}
-      <Dialog open={applyOpen} onOpenChange={setApplyOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply Leave</DialogTitle>
-            <DialogDescription>Submit a new leave request.</DialogDescription>
-          </DialogHeader>
+      <Sheet open={applyOpen} onOpenChange={setApplyOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Apply Leave</SheetTitle>
+            <SheetDescription>Submit a new leave request.</SheetDescription>
+          </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div>
               <Label>Leave Type</Label>
               <Select
@@ -1777,18 +1783,18 @@ const Leave = () => {
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setApplyOpen(false)}>
               Cancel
             </Button>
             <Button onClick={submitApply} disabled={Boolean(applyDateError)}>
               Submit
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog
+      <Sheet
         open={adjustOpen}
         onOpenChange={(open) => {
           setAdjustOpen(open);
@@ -1802,15 +1808,15 @@ const Leave = () => {
           }
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sync Leave Type Count</DialogTitle>
-            <DialogDescription>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Sync Leave Type Count</SheetTitle>
+            <SheetDescription>
               Sync the selected leave type's configured count to one employee or to all assigned employees. This sets the leave total from the leave type configuration instead of adding extra days.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div className="space-y-2">
               <Label>Employee</Label>
               <Select
@@ -1899,16 +1905,16 @@ const Leave = () => {
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setAdjustOpen(false)}>
               Cancel
             </Button>
             <Button onClick={submitAdjustment} disabled={savingAdjustment}>
               {savingAdjustment ? "Syncing..." : "Sync Leave Count"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

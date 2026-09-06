@@ -3,9 +3,9 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import PayrollSectionNav from "@/components/payroll/PayrollSectionNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { deleteApiWithToken, getApiWithToken, postApiWithToken } from "@/services/apiWrapper";
 import { useAuth } from "@/context/useAuth";
@@ -662,12 +662,12 @@ const OrganizationDocuments = () => {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Upload Organization Document</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+      <Sheet open={dialogOpen} onOpenChange={setDialogOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Upload Organization Document</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div
               className={cn(
                 "flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-slate-50 p-6 text-center transition-colors",
@@ -711,14 +711,14 @@ const OrganizationDocuments = () => {
               <Textarea value={form.remarks} onChange={(event) => setForm((prev) => ({ ...prev, remarks: event.target.value }))} />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={submitUpload} disabled={uploading || !form.file}>
               {uploading ? "Uploading..." : "Save Document"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

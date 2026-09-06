@@ -95,7 +95,7 @@ type DashboardSummary = {
   };
 };
 
-const donutColors = ["#29b37e", "#f7c948", "#2f80ed", "#f05f57"];
+const donutColors = ["#29b37e", "#f7c948", "#14b8a6", "#f05f57"];
 
 const toMonthValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;

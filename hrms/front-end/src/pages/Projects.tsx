@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, Column } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -505,13 +505,13 @@ const Projects = () => {
         />
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="grid max-h-[90vh] w-[95vw] max-w-2xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-background px-6 py-5">
-            <DialogTitle className="text-xl font-semibold">{isEdit ? "Edit Project" : "Add Project"}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 bg-white px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">{isEdit ? "Edit Project" : "Add Project"}</SheetTitle>
+          </SheetHeader>
 
-          <div className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6 pt-4 custom-scroll">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5 custom-scroll">
             {/* Basic Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -799,12 +799,15 @@ const Projects = () => {
               </div>
             </div>
 
-            <Button onClick={handleSubmit} className="w-full mt-2">
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmit}>
               {isEdit ? "Update Project" : "Create Project"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

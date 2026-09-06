@@ -10,6 +10,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectTrigger,
   SelectContent,
@@ -271,16 +277,16 @@ const Designations = () => {
             searchKey="name"
           />
 
-          {/* ---------- Modal ---------- */}
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
+          {/* ---------- Drawer ---------- */}
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetContent className="flex flex-col gap-0 bg-white p-0">
+              <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+                <SheetTitle className="text-2xl font-semibold text-slate-950">
                   {isEdit ? "Edit Designation" : "Add Designation"}
-                </DialogTitle>
-              </DialogHeader>
+                </SheetTitle>
+              </SheetHeader>
 
-              <div className="space-y-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
                 <Input
                   placeholder="Designation Name"
                   validationType="designationName"
@@ -324,13 +330,15 @@ const Designations = () => {
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <Button onClick={handleSubmit} className="w-full">
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={handleSubmit}>
                   {isEdit ? "Update Designation" : "Create Designation"}
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
+            </SheetContent>
+          </Sheet>
         </>
       )}
     </MainLayout>
