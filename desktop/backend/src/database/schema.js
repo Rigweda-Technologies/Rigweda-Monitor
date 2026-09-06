@@ -84,6 +84,7 @@ export const initializeDatabase = async () => {
       organization_id TEXT,
       employee_id TEXT NOT NULL,
       employee_name TEXT,
+      employee_code TEXT,
       device_id TEXT NOT NULL,
       activity_date DATE,
       observed_at TIMESTAMPTZ NOT NULL,
@@ -234,6 +235,7 @@ export const initializeDatabase = async () => {
       organization_id TEXT,
       employee_id TEXT NOT NULL,
       employee_name TEXT,
+      employee_code TEXT,
       device_id TEXT NOT NULL,
       observed_at TIMESTAMPTZ NOT NULL,
       app_name TEXT NOT NULL,
@@ -305,5 +307,44 @@ export const initializeDatabase = async () => {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_monitor_browser_history_browser_time
     ON monitor_browser_history (organization_id, browser, observed_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_device_health (
+      id BIGSERIAL PRIMARY KEY,
+      organization_id TEXT,
+      employee_id TEXT NOT NULL,
+      employee_name TEXT,
+      device_id TEXT NOT NULL,
+      hostname TEXT,
+      platform TEXT,
+      platform_version TEXT,
+      agent_version TEXT,
+      cpu_model TEXT,
+      cpu_percent NUMERIC,
+      memory_total_bytes BIGINT,
+      memory_used_bytes BIGINT,
+      memory_percent NUMERIC,
+      disks JSONB NOT NULL DEFAULT '[]'::jsonb,
+      temperature_c NUMERIC,
+      battery_percent NUMERIC,
+      battery_charging BOOLEAN,
+      uptime_seconds BIGINT,
+      last_seen_at TIMESTAMPTZ NOT NULL,
+      reported_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (organization_id, device_id)
+    )
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_device_health
+    ADD COLUMN IF NOT EXISTS employee_code TEXT
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_device_health_org_seen
+    ON monitor_device_health (organization_id, last_seen_at DESC)
   `);
 };

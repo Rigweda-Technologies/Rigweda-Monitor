@@ -24,6 +24,7 @@ import {
   UsersRound,
   Keyboard,
   Globe,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -177,6 +178,7 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <Keyboard size={18} />, label: "Keyboard Activity", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
       { icon: <Globe size={18} />, label: "Browser Activity", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
       { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
+      { icon: <Cpu size={18} />, label: "Laptop Health", to: "/monitor/laptop-health", permissions: ["EMP_VIEW"] },
       { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] },
       { icon: <Settings size={18} />, label: "Updates", to: "/monitor/updates", permissions: ["ORG_SETTINGS_VIEW"] }
     ]

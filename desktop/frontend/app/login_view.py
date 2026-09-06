@@ -16,6 +16,7 @@ from PIL import Image
 
 from app.auth import ensure_service_running, launch_background_monitor_process, login_to_hrms, register_startup
 from app.monitor_settings import apply_monitor_feature_flags, get_monitor_feature_flags, start_monitor_settings_listener
+from app.device_health import start_health_reporter
 
 COLORS = {
     "window_bg": "#f7f7f5",
@@ -600,6 +601,7 @@ class LoginApp:
             register_startup()
 
         self._show_employee_details(session)
+        start_health_reporter(session)
         background_started, _background_message = launch_background_monitor_process()
         if background_started:
             flags = get_monitor_feature_flags()
@@ -711,4 +713,3 @@ class LoginApp:
 
     def run(self) -> None:
         self.root.mainloop()
-
