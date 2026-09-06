@@ -1,1 +1,0 @@
-export type AuthUser={id:string;email:string;displayName:string;status:string;organizationId:string;organizationName:string;organizationTheme:Record<string,unknown>;roleKey:string;roleName:string;permissions:string[]};

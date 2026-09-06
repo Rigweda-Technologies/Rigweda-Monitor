@@ -74,7 +74,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
         />
         <div className={cn(
           "relative flex-1 min-w-0 flex flex-col transition-all duration-300",
-          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[230px]"
+          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[280px]"
         )}>
           <div
             className={cn(

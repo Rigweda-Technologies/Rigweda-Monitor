@@ -4,6 +4,23 @@ const auth = require("../../middlewares/auth.middleware");
 const authorize = require("../../middlewares/authorize.middleware");
 const asyncHandler = require("../../middlewares/asyncHandler");
 const activityService = require("./activity.service");
+const healthService = require("../agent/agent.health.service");
+
+router.get(
+  "/laptop-health",
+  auth,
+  authorize("EMP_VIEW"),
+  asyncHandler(async (req, res) => {
+    const data = await healthService.listHealth({ organizationId: req.user.organizationId });
+    return res.status(200).json({
+      success: true,
+      code: 200,
+      message: "Laptop health fetched successfully",
+      data,
+      error: null
+    });
+  })
+);
 
 /**
  * Web-app read API for monitor activity data.

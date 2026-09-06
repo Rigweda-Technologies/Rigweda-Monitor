@@ -1,5 +1,0 @@
-import { ArrowLeft, HardHat, List, Palette } from "@phosphor-icons/react";
-
-export function ModulePlaceholder({ name, onBack, onTheme, onMenu }: { name:string; onBack:()=>void; onTheme:()=>void; onMenu:()=>void }) {
-  return <main className="main-content"><header className="topbar"><button className="mobile-menu icon-button" onClick={onMenu}><List/><span className="sr-only">Open navigation</span></button><div className="topbar-copy"><span>Rigweda module</span><strong>{name}</strong></div><div className="topbar-actions"><button className="theme-trigger" onClick={onTheme}><Palette size={17}/>Theme</button><div className="avatar">MK</div></div></header><div className="placeholder-page"><span><HardHat/></span><small>PLANNED MODULE</small><h1>{name} is queued for implementation.</h1><p>This navigation destination is reserved so the information architecture stays stable while we build module by module.</p><button className="primary-button" onClick={onBack}><ArrowLeft size={15}/>Return to overview</button></div></main>;
-}

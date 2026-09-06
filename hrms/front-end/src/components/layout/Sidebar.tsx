@@ -24,6 +24,7 @@ import {
   UsersRound,
   Keyboard,
   Globe,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -96,7 +97,7 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
         <NavLink
           to={hasChildren ? "#" : to}
           className={cn(
-            "flex w-full items-center gap-3 px-4 py-3 text-slate-600 transition-colors",
+            "flex w-full items-center gap-3 whitespace-nowrap px-4 py-3 text-slate-600 transition-colors",
             isActive && "text-white font-semibold"
           )}
           onClick={() => {
@@ -129,7 +130,7 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
                 <NavLink key={child.to} to={child.to} onClick={onNavigate} className="block">
                   <div
                     className={cn(
-                      "flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm text-slate-500 transition-all duration-300",
+                      "flex items-center gap-3 whitespace-nowrap rounded-lg border border-transparent px-3 py-2 text-sm text-slate-500 transition-all duration-300",
                       "hover:border-emerald-100 hover:bg-emerald-50 hover:text-emerald-700",
                       location.pathname === child.to && "border-emerald-100 bg-emerald-50 text-emerald-700 font-semibold"
                     )}
@@ -148,7 +149,7 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
 };
 
 const menuItems = (dashboardPath: string): MenuItem[] => [
-  { icon: <LayoutDashboard size={20} />, label: "Dashboard", to: dashboardPath },
+  { icon: <LayoutDashboard size={20} />, label: "Overview", to: dashboardPath },
   {
     icon: <Users size={20} />,
     label: "Employees",
@@ -167,16 +168,17 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
   },
   {
     icon: <Monitor size={20} />,
-    label: "Employee Monitor",
+    label: "Rigweda Monitor",
     to: "/monitor",
     permissions: ["EMP_VIEW", "ATTENDANCE_VIEW_ALL", "ORG_SETTINGS_VIEW"],
     children: [
-      { icon: <UsersRound size={18} />, label: "Employees", to: "/monitor/employees", permissions: ["EMP_VIEW"] },
-      { icon: <MousePointer2 size={18} />, label: "Mouse Movement", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
+      { icon: <UsersRound size={18} />, label: "Monitored Employees", to: "/monitor/employees", permissions: ["EMP_VIEW"] },
+      { icon: <MousePointer2 size={18} />, label: "Activity", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
       { icon: <Monitor size={18} />, label: "App Usage", to: "/monitor/apps", permissions: ["EMP_VIEW"] },
-      { icon: <Keyboard size={18} />, label: "Key Presses", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
-      { icon: <Globe size={18} />, label: "Browser History", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
+      { icon: <Keyboard size={18} />, label: "Keyboard Activity", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
+      { icon: <Globe size={18} />, label: "Browser Activity", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
       { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
+      { icon: <Cpu size={18} />, label: "Laptop Health", to: "/monitor/laptop-health", permissions: ["EMP_VIEW"] },
       { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] },
       { icon: <Settings size={18} />, label: "Updates", to: "/monitor/updates", permissions: ["ORG_SETTINGS_VIEW"] }
     ]
@@ -377,7 +379,11 @@ export const Sidebar = memo(({
     .filter(
       (item): item is MenuItem =>
         Boolean(item) && (!item.permissions || hasAnyPermission(item.permissions))
-    ), [allowedPathsForEmployee, effectiveDashboardPath, hasAnyPermission, isEmployeeRole]);
+    )
+    .sort((first, second) => {
+      const order = [effectiveDashboardPath, "/monitor", "/employees", "/organization", "/payroll", "/business-development", "/organization/settings", "/documentation"];
+      return order.indexOf(first.to) - order.indexOf(second.to);
+    }), [allowedPathsForEmployee, effectiveDashboardPath, hasAnyPermission, isEmployeeRole]);
 
   return (
     <>
@@ -399,7 +405,7 @@ export const Sidebar = memo(({
           borderRight: "1px solid rgb(241 245 249)"
         }}
         initial={false}
-        animate={{ width: effectiveCollapsed ? 72 : 230 }}
+        animate={{ width: effectiveCollapsed ? 72 : 280 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
         onMouseEnter={() => {
           if (!isMobile && collapsed) setHoverExpanded(true);
@@ -426,7 +432,7 @@ export const Sidebar = memo(({
                     exit={{ opacity: 0 }}
                     className="text-base font-bold text-slate-950"
                   >
-                    HR Dashboard
+                    Rigweda Monitor
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Download, Upload, X } from "lucide-react";
 import { createMonitorRelease, getMonitorReleases, updateMonitorRelease, type MonitorRelease } from "@/services/monitorRelease";
 
 const emptyForm = {
@@ -25,6 +27,7 @@ export default function MonitorUpdates() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedFileLabel, setSelectedFileLabel] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const latest = useMemo(() => releases[0], [releases]);
 
@@ -93,12 +96,40 @@ export default function MonitorUpdates() {
     }
   };
 
+  const handleDownload = (release: MonitorRelease) => {
+    if (!release.signedDownloadUrl) {
+      toast.error("This release does not have a downloadable file.");
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = release.signedDownloadUrl;
+    link.download = `RigwedaMonitor-${release.version}.exe`;
+    link.target = "_blank";
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   return (
-    <MainLayout title="Monitor Updates" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Updates" }]}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <Card>
+    <MainLayout title="Monitor Updates" breadcrumb={[{ label: "Home", href: "/" }, { label: "Rigweda Monitor" }, { label: "Updates" }]}> 
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Rigweda Monitor</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Releases</h1>
+            <p className="mt-1 text-sm text-slate-500">Manage desktop builds, rollout status, and monitor updates.</p>
+          </div>
+          <Button onClick={() => setUploadOpen((open) => !open)} className="shrink-0 gap-2">
+            {uploadOpen ? <X size={16} /> : <Upload size={16} />}
+            {uploadOpen ? "Close upload" : "Upload latest build"}
+          </Button>
+        </div>
+
+        {uploadOpen && <Card className="border-emerald-100 shadow-sm">
           <CardHeader>
-            <CardTitle>Release management</CardTitle>
+            <CardTitle>Upload latest build</CardTitle>
             <CardDescription>Upload a signed EXE, set rollout, and activate the release.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
@@ -145,27 +176,43 @@ export default function MonitorUpdates() {
               {saving ? "Saving..." : "Create release"}
             </Button>
           </CardContent>
-        </Card>
+        </Card>}
 
         <Card>
           <CardHeader>
             <CardTitle>Releases</CardTitle>
             <CardDescription>Latest release: {latest?.version || "none"}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {loading ? <div>Loading...</div> : releases.map((release) => (
-              <div key={release._id} className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="font-semibold">{release.version} <Badge variant="secondary">{release.status}</Badge></div>
-                  <div className="text-sm text-muted-foreground">Build {release.build} • Rollout {release.rolloutPercentage}% • {release.sha256.slice(0, 12)}...</div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => handleActivate(release._id, "testing")}>Testing</Button>
-                  <Button variant="outline" onClick={() => handleActivate(release._id, "active")}>Activate</Button>
-                  <Button variant="destructive" onClick={() => handleActivate(release._id, "disabled")}>Disable</Button>
-                </div>
-              </div>
-            ))}
+          <CardContent className="p-0">
+            {loading ? <div className="px-6 py-10 text-sm text-slate-500">Loading releases...</div> : releases.length === 0 ? <div className="px-6 py-10 text-sm text-slate-500">No releases have been uploaded yet.</div> : <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Build</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Rollout</TableHead>
+                  <TableHead>Checksum</TableHead>
+                  <TableHead>Released</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {releases.map((release) => <TableRow key={release._id}>
+                  <TableCell className="whitespace-nowrap font-semibold">{release.version}</TableCell>
+                  <TableCell className="whitespace-nowrap">Build {release.build}</TableCell>
+                  <TableCell><Badge variant={release.status === "active" ? "default" : release.status === "disabled" ? "destructive" : "secondary"}>{release.status}</Badge></TableCell>
+                  <TableCell className="whitespace-nowrap">{release.rolloutPercentage}%</TableCell>
+                  <TableCell className="font-mono text-xs text-slate-500">{release.sha256.slice(0, 12)}...</TableCell>
+                  <TableCell className="whitespace-nowrap text-slate-500">{release.releasedAt ? new Date(release.releasedAt).toLocaleDateString() : "Not released"}</TableCell>
+                  <TableCell><div className="flex justify-end gap-2 whitespace-nowrap">
+                    <Button size="sm" variant="outline" disabled={!release.signedDownloadUrl} title={release.signedDownloadUrl ? "Download build" : "No download available"} onClick={() => handleDownload(release)}><Download size={14} />Download</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleActivate(release._id, "testing")}>Testing</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleActivate(release._id, "active")}>Activate</Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleActivate(release._id, "disabled")}>Disable</Button>
+                  </div></TableCell>
+                </TableRow>)}
+              </TableBody>
+            </Table>}
           </CardContent>
         </Card>
       </div>
