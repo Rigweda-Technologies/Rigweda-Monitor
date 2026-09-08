@@ -89,29 +89,29 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
       <div
         className={cn(
           "group flex items-center justify-between rounded-xl border border-transparent transition-all duration-300",
-          "hover:border-emerald-100 hover:bg-emerald-50",
-          isActive && "border-emerald-100 bg-emerald-500 text-white shadow-sm"
+          "hover:border-teal-400/30 hover:bg-white/[0.06]",
+          isActive && "border-teal-300/30 bg-teal-500/90 text-white shadow-[0_8px_24px_rgba(20,184,166,0.18)]"
         )}
         onClick={() => hasChildren && setOpen(!open)}
       >
         <NavLink
           to={hasChildren ? "#" : to}
           className={cn(
-            "flex w-full items-center gap-3 whitespace-nowrap px-4 py-3 text-slate-600 transition-colors",
+            "flex w-full items-center gap-3 whitespace-nowrap px-4 py-3 text-slate-300 transition-colors",
             isActive && "text-white font-semibold"
           )}
           onClick={() => {
             if (!hasChildren) onNavigate?.();
           }}
         >
-          <span className={cn("h-5 w-5 transition-colors", isActive ? "text-white" : "text-slate-400 group-hover:text-emerald-600")}>{icon}</span>
+          <span className={cn("h-5 w-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-teal-300")}>{icon}</span>
           {!collapsed && <span>{label}</span>}
         </NavLink>
 
         {!collapsed && hasChildren && (
           <ChevronRight
             size={16}
-            className={cn("mr-3 text-slate-400 transition-transform duration-300", isActive && "text-white", open && "rotate-90")}
+            className={cn("mr-3 text-slate-500 transition-transform duration-300", isActive && "text-white", open && "rotate-90")}
           />
         )}
       </div>
@@ -125,14 +125,14 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
             transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="ml-4 mt-2 space-y-1 border-l border-slate-100 pl-3">
+            <div className="ml-4 mt-2 space-y-1 border-l border-white/10 pl-3">
               {children?.map((child) => (
                 <NavLink key={child.to} to={child.to} onClick={onNavigate} className="block">
                   <div
                     className={cn(
-                      "flex items-center gap-3 whitespace-nowrap rounded-lg border border-transparent px-3 py-2 text-sm text-slate-500 transition-all duration-300",
-                      "hover:border-emerald-100 hover:bg-emerald-50 hover:text-emerald-700",
-                      location.pathname === child.to && "border-emerald-100 bg-emerald-50 text-emerald-700 font-semibold"
+                      "flex items-center gap-3 whitespace-nowrap rounded-lg border border-transparent px-3 py-2 text-sm text-slate-400 transition-all duration-300",
+                      "hover:border-teal-300/20 hover:bg-white/[0.06] hover:text-teal-200",
+                      location.pathname === child.to && "border-teal-300/20 bg-teal-400/10 text-teal-200 font-semibold"
                     )}
                   >
                     {child.icon}
@@ -398,11 +398,14 @@ export const Sidebar = memo(({
 
       <motion.aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-screen flex-col bg-white transition-transform lg:translate-x-0",
+          "fixed left-0 top-0 z-50 flex h-screen flex-col bg-[#071b2d] text-slate-300 transition-transform lg:translate-x-0",
           isMobile ? (mobileOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"
         )}
         style={{
-          borderRight: "1px solid rgb(241 245 249)"
+          borderRight: "1px solid rgba(148, 163, 184, 0.14)",
+          backgroundColor: "hsl(var(--sidebar, 208 68% 13%))",
+          backgroundImage: "linear-gradient(rgba(148,163,184,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.07) 1px, transparent 1px), linear-gradient(180deg, hsl(var(--sidebar-gradient-start, 208 68% 13%)) 0%, hsl(var(--sidebar-gradient-end, 204 70% 8%)) 100%)",
+          backgroundSize: "36px 36px, 36px 36px, 100% 100%"
         }}
         initial={false}
         animate={{ width: effectiveCollapsed ? 72 : 280 }}
@@ -414,14 +417,14 @@ export const Sidebar = memo(({
           if (!isMobile) setHoverExpanded(false);
         }}
       >
-        <div className="border-b border-slate-100 p-4">
+        <div className="border-b border-white/10 p-4">
           <div className="flex items-center justify-between">
             <NavLink
               to={effectiveDashboardPath}
               onClick={() => isMobile && onMobileClose?.()}
               className="flex items-center gap-2 px-1 py-1"
             >
-              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-emerald-50">
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-teal-200/20 bg-teal-300/10">
                 <img src="/hrms-logo.png" alt="Rigweda logo" className="h-6 w-6 object-contain" />
               </div>
               <AnimatePresence>
@@ -430,7 +433,7 @@ export const Sidebar = memo(({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="text-base font-bold text-slate-950"
+                    className="text-base font-bold text-white"
                   >
                     Rigweda Monitor
                   </motion.div>
@@ -441,7 +444,7 @@ export const Sidebar = memo(({
               <button
                 onClick={() => setCollapsed(!collapsed)}
                 disabled={isMobile}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-400 transition-all hover:bg-slate-50 disabled:opacity-50"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] text-slate-400 transition-all hover:bg-white/[0.1] hover:text-white disabled:opacity-50"
               >
                 {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
               </button>

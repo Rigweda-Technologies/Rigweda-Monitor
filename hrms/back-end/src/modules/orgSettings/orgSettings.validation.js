@@ -39,6 +39,7 @@ exports.upsertOrgSettingsSchema = Joi.object({
   payrollEnabled: Joi.boolean().default(false),
   minWorkHoursPerDay: Joi.number().min(0).max(24).required(),
   minHalfDayHours: Joi.number().min(0).max(24).max(Joi.ref("minWorkHoursPerDay")).required(),
+  attendanceHoursSource: Joi.string().valid("monitor_agent", "manual", "biometric", "access_card").default("manual"),
   attendanceIpEnabled: Joi.boolean().default(false),
   attendanceAllowedIp: Joi.string().trim().allow("").default(""),
   attendanceSelfieRequired: Joi.boolean().default(false),

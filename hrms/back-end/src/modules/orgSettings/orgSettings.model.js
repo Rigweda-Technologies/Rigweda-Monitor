@@ -97,6 +97,11 @@ const orgSettingsSchema = new mongoose.Schema(
       type: Number,
       default: 4
     },
+    attendanceHoursSource: {
+      type: String,
+      enum: ["monitor_agent", "manual", "biometric", "access_card"],
+      default: "manual"
+    },
     attendanceIpEnabled: {
       type: Boolean,
       default: false

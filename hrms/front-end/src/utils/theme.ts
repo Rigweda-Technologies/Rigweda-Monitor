@@ -1,6 +1,20 @@
 export type OrgThemeMode = "preset" | "custom";
 export type OrgThemePreset = "ocean" | "forest" | "sunset" | "graphite";
 
+export const SIDEBAR_COLOR_OPTIONS = [
+  { key: "monitor", label: "Monitor Navy", start: "208 68% 13%", end: "204 70% 8%", foreground: "210 40% 96%" },
+  { key: "slate", label: "Slate Blue", start: "221 39% 22%", end: "224 43% 13%", foreground: "210 40% 98%" },
+  { key: "forest", label: "Forest Green", start: "155 72% 28%", end: "155 72% 18%", foreground: "0 0% 100%" },
+  { key: "graphite", label: "Graphite", start: "220 10% 20%", end: "220 12% 11%", foreground: "0 0% 100%" }
+] as const;
+
+export const THEME_COLOR_OPTIONS = [
+  { key: "teal", label: "Monitor Teal", primary: "173 80% 36%" },
+  { key: "emerald", label: "Emerald", primary: "156 62% 43%" },
+  { key: "blue", label: "Signal Blue", primary: "199 89% 48%" },
+  { key: "orange", label: "Alert Orange", primary: "18 90% 52%" }
+] as const;
+
 export type OrgThemeConfig = {
   primary?: string;
   secondary?: string;
