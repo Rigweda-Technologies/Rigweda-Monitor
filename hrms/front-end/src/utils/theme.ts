@@ -25,21 +25,21 @@ export type OrgThemeSettings = {
 
 export const THEME_PRESETS: Record<OrgThemePreset, { label: string; config: Required<OrgThemeConfig> }> = {
   ocean: {
-    label: "Ocean",
+    label: "Emerald",
     config: {
-      primary: "217 89% 45%",
+      primary: "156 62% 43%",
       secondary: "220 14% 96%",
       background: "220 20% 97%",
       foreground: "220 20% 14%",
-      sidebar: "217 89% 45%",
-      sidebarGradientStart: "217 89% 39%",
-      sidebarGradientEnd: "217 89% 32%",
-      sidebarForeground: "0 0% 100%",
-      accent: "217 89% 45%",
+      sidebar: "0 0% 100%",
+      sidebarGradientStart: "0 0% 100%",
+      sidebarGradientEnd: "150 33% 98%",
+      sidebarForeground: "215 25% 27%",
+      accent: "156 62% 43%",
       card: "0 0% 100%",
       muted: "220 14% 96%",
       border: "220 20% 90%",
-      ring: "217 89% 45%"
+      ring: "156 62% 43%"
     }
   },
   forest: {
@@ -117,9 +117,9 @@ export const applyThemeToDocument = (settings?: OrgThemeSettings | null) => {
     root.style.setProperty(cssVar, value);
   });
   if (!theme.sidebarGradientStart) {
-    root.style.setProperty("--sidebar-gradient-start", theme.sidebar || theme.primary || "217 89% 39%");
+    root.style.setProperty("--sidebar-gradient-start", theme.sidebar || theme.primary || "0 0% 100%");
   }
   if (!theme.sidebarGradientEnd) {
-    root.style.setProperty("--sidebar-gradient-end", theme.sidebar || theme.primary || "217 89% 32%");
+    root.style.setProperty("--sidebar-gradient-end", theme.sidebar || theme.primary || "150 33% 98%");
   }
 };

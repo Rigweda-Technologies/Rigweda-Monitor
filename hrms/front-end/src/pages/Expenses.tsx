@@ -16,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -937,7 +944,7 @@ const Expenses = () => {
                     <TableCell>{paymentModeOptions.find((p) => p.value === row.paymentMode)?.label || row.paymentMode}</TableCell>
                     <TableCell>
                       {row.receiptUrl ? (
-                        <a className="text-blue-600 underline inline-flex items-center gap-1" href={toReceiptLink(row.receiptUrl)} target="_blank" rel="noreferrer">
+                        <a className="text-emerald-600 underline inline-flex items-center gap-1" href={toReceiptLink(row.receiptUrl)} target="_blank" rel="noreferrer">
                           <LinkIcon className="w-3 h-3" /> View
                         </a>
                       ) : "-"}
@@ -975,7 +982,7 @@ const Expenses = () => {
                           {canManage && !row.isDeleted && row.status === "pending" && (
                             <>
                               <Pencil
-                                className="w-4 h-4 text-blue-600 cursor-pointer hover:scale-110"
+                                className="w-4 h-4 text-emerald-600 cursor-pointer hover:scale-110"
                                 onClick={() => openEdit(row)}
                               />
                               <Trash2
@@ -1039,12 +1046,12 @@ const Expenses = () => {
         </>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-visible flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit Expense" : "Add Expense"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto overflow-x-visible px-1 pb-3 flex-1 min-h-0">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 overflow-visible bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">{isEdit ? "Edit Expense" : "Add Expense"}</SheetTitle>
+          </SheetHeader>
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overflow-x-visible px-6 py-5 md:grid-cols-2">
             <div>
               <Label>Category</Label>
               <Select value={form.category} onValueChange={(value) => setForm((p) => ({ ...p, category: value }))}>
@@ -1172,7 +1179,7 @@ const Expenses = () => {
                 {uploading && <span className="text-sm text-muted-foreground">Uploading receipt...</span>}
               </div>
               {form.receiptUrl && (
-                <a className="text-blue-600 underline text-sm mt-2 inline-block" href={toReceiptLink(form.receiptUrl)} target="_blank" rel="noreferrer">
+                <a className="text-emerald-600 underline text-sm mt-2 inline-block" href={toReceiptLink(form.receiptUrl)} target="_blank" rel="noreferrer">
                   View uploaded receipt
                 </a>
               )}
@@ -1182,12 +1189,12 @@ const Expenses = () => {
               <Textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
             </div>
           </div>
-          <DialogFooter className="shrink-0 border-t pt-3 bg-background">
+          <SheetFooter className="shrink-0 border-t border-slate-100 bg-white px-6 py-5">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={handleSubmit}>{isEdit ? "Update" : "Create"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent className="max-w-md">
@@ -1205,12 +1212,14 @@ const Expenses = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={vendorOpen} onOpenChange={setVendorOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{vendorEditId ? "Edit Vendor" : "Add Vendor"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={vendorOpen} onOpenChange={setVendorOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
+              {vendorEditId ? "Edit Vendor" : "Add Vendor"}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <div>
               <Label>Name</Label>
               <Input value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
@@ -1226,12 +1235,12 @@ const Expenses = () => {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setVendorOpen(false)}>Cancel</Button>
             <Button onClick={saveVendor}>{vendorEditId ? "Update" : "Create"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

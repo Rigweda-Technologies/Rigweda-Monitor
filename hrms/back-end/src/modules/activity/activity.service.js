@@ -344,6 +344,7 @@ exports.listEmployees = async ({ organizationId, date }) => {
           employee_id AS "employeeId",
           employee_name AS "employeeName",
           status,
+          activity_date AS "activityDate",
           observed_at AS "observedAt",
           active_seconds AS "activeSeconds",
           idle_seconds AS "idleSeconds"
@@ -397,6 +398,8 @@ exports.listEmployees = async ({ organizationId, date }) => {
       status: "offline",
       lastSeenAt: null,
       lastActiveAt: null,
+      activityProductiveSeconds: 0,
+      activityIdleSeconds: 0,
       productiveIntervals: [],
       presenceIntervals: []
     };
@@ -414,7 +417,13 @@ exports.listEmployees = async ({ organizationId, date }) => {
         current.lastSeenAt = Math.max(current.lastSeenAt || 0, observedMs);
       }
 
-      if (observedMs && activeSeconds > 0) {
+      if (row.activityDate) {
+        current.activityProductiveSeconds += activeSeconds;
+        current.activityIdleSeconds += idleSeconds;
+        if ((activeSeconds > 0 || status === "active") && observedMs) {
+          current.lastActiveAt = Math.max(current.lastActiveAt || 0, observedMs);
+        }
+      } else if (observedMs && activeSeconds > 0) {
         const activeInterval = clampInterval(observedMs - activeSeconds * 1000, observedMs, dayStartMs, dayEndMs);
         if (activeInterval) {
           current.productiveIntervals.push(activeInterval);
@@ -423,7 +432,7 @@ exports.listEmployees = async ({ organizationId, date }) => {
         }
       }
 
-      if (observedMs && idleSeconds > 0) {
+      if (!row.activityDate && observedMs && idleSeconds > 0) {
         const idleInterval = clampInterval(observedMs - idleSeconds * 1000, observedMs, dayStartMs, dayEndMs);
         if (idleInterval) {
           current.presenceIntervals.push(idleInterval);
@@ -459,8 +468,11 @@ exports.listEmployees = async ({ organizationId, date }) => {
   }
 
   const employees = Array.from(groupedRows.values()).map((item) => {
-    const productiveSeconds = sumMergedIntervalSeconds(item.productiveIntervals);
-    const totalSeconds = sumMergedIntervalSeconds(item.presenceIntervals);
+    const intervalProductiveSeconds = sumMergedIntervalSeconds(item.productiveIntervals);
+    const intervalTotalSeconds = sumMergedIntervalSeconds(item.presenceIntervals);
+    const activityTotalSeconds = item.activityProductiveSeconds + item.activityIdleSeconds;
+    const productiveSeconds = Math.max(item.activityProductiveSeconds, intervalProductiveSeconds);
+    const totalSeconds = Math.max(activityTotalSeconds, intervalTotalSeconds, productiveSeconds);
     const idleSeconds = Math.max(totalSeconds - productiveSeconds, 0);
     const lastSeenMs = item.lastSeenAt || 0;
     const lastActiveMs = item.lastActiveAt || 0;

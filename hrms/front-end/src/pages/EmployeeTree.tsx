@@ -122,7 +122,7 @@ const TreeNodeCard = ({
         <div className="flex-1 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)] hover:border-border/90 transition-all">
           <Avatar className="w-9 h-9 shrink-0">
             <AvatarImage src={node.profileImage || undefined} />
-            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-xs font-semibold">
+            <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-amber-500 text-white text-xs font-semibold">
               {initials}
             </AvatarFallback>
           </Avatar>

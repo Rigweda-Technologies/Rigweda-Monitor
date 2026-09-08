@@ -10,6 +10,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -809,10 +815,10 @@ const Attendance = () => {
   const getCellUi = (cell: DayCell) => {
     const toneClasses: Record<string, string> = {
       holiday: "bg-amber-100 text-amber-700 border-amber-300",
-      week_off: "bg-sky-100 text-sky-700 border-sky-300",
+      week_off: "bg-teal-100 text-teal-700 border-teal-300",
       future: "bg-slate-100 text-slate-500 border-slate-200",
-      leave: "bg-violet-100 text-violet-700 border-violet-300",
-      absent_leave: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300",
+      leave: "bg-amber-100 text-amber-700 border-amber-300",
+      absent_leave: "bg-orange-100 text-orange-700 border-orange-300",
       present_leave: "bg-teal-100 text-teal-700 border-teal-300",
       pending_checkout: "bg-orange-100 text-orange-700 border-orange-300",
       present: "bg-emerald-100 text-emerald-700 border-emerald-300",
@@ -1080,7 +1086,7 @@ const Attendance = () => {
   const renderMonthSelector = (tone: "soft" | "bright" = "soft") => {
     const wrapperClassName =
       tone === "bright"
-        ? "flex w-full sm:w-auto items-center gap-2 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-white via-slate-50 to-sky-50 px-3 py-2 shadow-sm"
+        ? "flex w-full sm:w-auto items-center gap-2 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-white via-slate-50 to-teal-50 px-3 py-2 shadow-sm"
         : "flex w-full sm:w-auto items-center gap-2 rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-white to-slate-50 px-3 py-2 shadow-sm";
     const selectClassName =
       tone === "bright"
@@ -1144,7 +1150,7 @@ const Attendance = () => {
 
           {isEmployeeOnlyView ? (
             <>
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50 p-4 sm:p-5 mb-4">
+              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50 p-4 sm:p-5 mb-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div>
                     <p className="text-sm text-slate-500">My Attendance Calendar</p>
@@ -1252,7 +1258,7 @@ const Attendance = () => {
                                     </>
                                   )}
                                 {cell.isOnLeave && (
-                                  <p className="text-violet-700">
+                                  <p className="text-amber-700">
                                     Approved leave: {cell.leaveType || "Leave"}
                                   </p>
                                 )}
@@ -1329,7 +1335,7 @@ const Attendance = () => {
                                   <p className="text-xs text-amber-700">Holiday: {cell.holidayName}</p>
                                 )}
                                 {cell.isOnLeave && (
-                                  <p className="text-xs text-violet-700">
+                                  <p className="text-xs text-amber-700">
                                     Leave: {cell.leaveType || "Approved leave"}
                                   </p>
                                 )}
@@ -1372,7 +1378,7 @@ const Attendance = () => {
             </>
           ) : (
             <>
-              <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-4 sm:p-5 mb-4 shadow-sm">
+              <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-teal-50 p-4 sm:p-5 mb-4 shadow-sm">
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                     <div className="w-full lg:w-auto">
@@ -1510,20 +1516,20 @@ const Attendance = () => {
                       <span className="inline-block h-2.5 w-2.5 rounded bg-rose-500" />
                       Absent
                     </div>
-                    <div className="flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1">
-                      <span className="inline-block h-2.5 w-2.5 rounded bg-sky-500" />
+                    <div className="flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded bg-teal-500" />
                       Week Off
                     </div>
-                    <div className="flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1">
-                      <span className="inline-block h-2.5 w-2.5 rounded bg-violet-500" />
+                    <div className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded bg-amber-500" />
                       Approved Leave
                     </div>
                     <div className="flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1">
                       <span className="inline-block h-2.5 w-2.5 rounded bg-teal-500" />
                       Present + Leave
                     </div>
-                    <div className="flex items-center gap-2 rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1">
-                      <span className="inline-block h-2.5 w-2.5 rounded bg-fuchsia-500" />
+                    <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded bg-orange-500" />
                       Absent + Leave
                     </div>
                     <div className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1">
@@ -1680,12 +1686,12 @@ const Attendance = () => {
                               <td className="text-center text-sm font-medium text-rose-700">
                                 {totals.absentDays.toFixed(1)}
                               </td>
-                              <td className="text-center text-sm font-medium text-violet-700">
+                              <td className="text-center text-sm font-medium text-amber-700">
                                 <HoverCard openDelay={120} closeDelay={80}>
                                   <HoverCardTrigger asChild>
                                     <button
                                       type="button"
-                                      className="inline-flex cursor-help items-center rounded px-1 py-0.5 transition-colors hover:bg-violet-50 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                      className="inline-flex cursor-help items-center rounded px-1 py-0.5 transition-colors hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300"
                                     >
                                       {totals.onLeaveDays.toFixed(1)}
                                     </button>
@@ -1698,7 +1704,7 @@ const Attendance = () => {
                                   </HoverCardContent>
                                 </HoverCard>
                               </td>
-                              <td className="text-center text-sm font-medium text-sky-700">
+                              <td className="text-center text-sm font-medium text-teal-700">
                                 {totals.weekOffDays}
                               </td>
                               <td className="text-center text-sm font-medium text-amber-700">
@@ -1767,15 +1773,15 @@ const Attendance = () => {
         </>
       )}
 
-      <Dialog open={customBulkOpen} onOpenChange={setCustomBulkOpen}>
-        <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-white px-6 py-5">
-            <DialogTitle className="text-xl">Customized Attendance Update</DialogTitle>
+      <Sheet open={customBulkOpen} onOpenChange={setCustomBulkOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b bg-white px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Customized Attendance Update</SheetTitle>
             <p className="pt-1 text-sm text-muted-foreground">
               Choose up to 30 dates. Checked cells will be marked Present; blank cells will be marked Absent.
             </p>
-          </DialogHeader>
-          <div className="max-h-[70vh] space-y-4 overflow-auto bg-slate-50/60 px-6 py-5">
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-slate-50/60 px-6 py-5">
             <section className="rounded-lg border bg-white p-4">
               <p className="mb-3 text-sm font-semibold text-slate-800">1. Select dates in {month}</p>
               <div className="flex flex-wrap gap-2">
@@ -1797,7 +1803,7 @@ const Attendance = () => {
                         protectedForAll
                           ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
                           : selected
-                            ? "cursor-pointer border-blue-500 bg-blue-50 text-blue-700"
+                            ? "cursor-pointer border-emerald-500 bg-emerald-50 text-emerald-700"
                             : "cursor-pointer bg-white text-slate-600"
                       }`}
                     >
@@ -1874,7 +1880,7 @@ const Attendance = () => {
                                   key={day}
                                   className={`border-b border-r p-2 text-center ${
                                     protectedDay
-                                      ? "bg-sky-50"
+                                      ? "bg-teal-50"
                                       : checked
                                         ? "bg-emerald-50"
                                         : "bg-rose-50/40"
@@ -1895,7 +1901,7 @@ const Attendance = () => {
                                       aria-label={`${row.firstName} day ${day}`}
                                     />
                                     {protectedLabel && (
-                                      <span className="max-w-16 truncate text-[10px] font-medium text-sky-700" title={protectedLabel}>
+                                      <span className="max-w-16 truncate text-[10px] font-medium text-teal-700" title={protectedLabel}>
                                         {protectedLabel}
                                       </span>
                                     )}
@@ -1911,28 +1917,28 @@ const Attendance = () => {
               )}
             </section>
           </div>
-          <DialogFooter className="border-t bg-white px-6 py-4">
+          <div className="flex justify-end gap-2 border-t bg-white px-6 py-5">
             <Button variant="outline" onClick={() => setCustomBulkOpen(false)} disabled={customBulkSaving}>
               Cancel
             </Button>
             <Button onClick={saveCustomBulkUpdate} disabled={customBulkSaving || customBulkDays.length === 0}>
               {customBulkSaving ? "Saving..." : "Save Customized Attendance"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-white px-6 py-5">
-            <DialogTitle className="text-xl">{canEdit ? "Update Attendance" : "Attendance Details"}</DialogTitle>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b bg-white px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">{canEdit ? "Update Attendance" : "Attendance Details"}</SheetTitle>
             <p className="pt-1 text-sm text-muted-foreground">
               {selectedEmployee
                 ? `${selectedEmployee.firstName} ${selectedEmployee.lastName} - ${month}-${String(selectedDay || 1).padStart(2, "0")}`
                 : ""}
             </p>
-          </DialogHeader>
-          <div className="max-h-[68vh] space-y-4 overflow-y-auto bg-slate-50/60 px-6 py-5">
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-6 py-5">
             {canEdit && (
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -2209,7 +2215,7 @@ const Attendance = () => {
               </section>
             </div>
           </div>
-          <DialogFooter className="border-t bg-white px-6 py-4">
+          <div className="flex justify-end gap-2 border-t bg-white px-6 py-5">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -2218,9 +2224,9 @@ const Attendance = () => {
                 {saving ? "Saving..." : "Save"}
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

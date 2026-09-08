@@ -16,8 +16,8 @@ const INITIAL_LIMIT = 50;
 
 const getBrowserColor = (browser: string): string => {
   const lower = (browser || "").toLowerCase();
-  if (lower.includes("chrome")) return "bg-blue-100 text-blue-800";
-  if (lower.includes("edge")) return "bg-cyan-100 text-cyan-800";
+  if (lower.includes("chrome")) return "bg-emerald-100 text-emerald-800";
+  if (lower.includes("edge")) return "bg-teal-100 text-teal-800";
   if (lower.includes("firefox")) return "bg-orange-100 text-orange-800";
   if (lower.includes("brave")) return "bg-amber-100 text-amber-800";
   return "bg-gray-100 text-gray-800";
@@ -141,7 +141,7 @@ const MonitorBrowserHistory = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Globe className="h-8 w-8 text-blue-600" />
+            <Globe className="h-8 w-8 text-emerald-600" />
             <h1 className="text-3xl font-bold">{pageTitle}</h1>
           </div>
           <Button onClick={() => loadHistories(true)} disabled={refreshing} variant="outline" size="sm">
@@ -180,7 +180,7 @@ const MonitorBrowserHistory = () => {
                     setOffset(0);
                     setBrowserFilter(e.target.value);
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
                 >
                   <option value="">All Browsers</option>
                   {browserOptions.map((browser) => (
@@ -299,7 +299,7 @@ const MonitorBrowserHistory = () => {
                             href={history.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center text-blue-600 hover:text-blue-800"
+                            className="inline-flex items-center text-emerald-600 hover:text-emerald-800"
                             title="Open URL"
                           >
                             <ExternalLink className="h-4 w-4" />

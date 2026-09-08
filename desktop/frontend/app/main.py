@@ -16,12 +16,14 @@ if __package__ in {None, ""}:
     from app.env import writable_runtime_path
     from app import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
     from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
+    from app.device_health import start_health_reporter
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
     from . import screenshot_monitor as _screenshot_monitor  # ensure frozen builds include the screenshot worker
     from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
+    from .device_health import start_health_reporter
     from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -134,6 +136,8 @@ def _resume_monitor_in_background() -> int:
             return 0
 
         _log_startup("Saved auth session loaded for background monitoring.")
+        start_health_reporter(session)
+        _log_startup("Laptop health reporter started.")
 
         service_started, _service_message = ensure_service_running()
         if not service_started:

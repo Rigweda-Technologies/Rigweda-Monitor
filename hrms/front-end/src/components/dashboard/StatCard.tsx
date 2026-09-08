@@ -29,7 +29,7 @@ export const StatCard = ({
   icon,
   link,
   chartData,
-  chartColor = "#0F5BD3",
+  chartColor = "#29b37e",
   delay = 0,
 }: StatCardProps) => {
   const isPositive = change && change >= 0;

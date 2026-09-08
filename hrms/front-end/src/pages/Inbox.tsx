@@ -60,7 +60,7 @@ const Inbox: React.FC = () => {
             <h2 className="text-xl font-semibold">Inbox</h2>
             <button
               onClick={() => setShowCompose(true)}
-              className="bg-blue-600 text-white px-3 py-1 rounded"
+              className="bg-emerald-500 text-white px-3 py-1 rounded"
             >
               Compose
             </button>
@@ -78,7 +78,7 @@ const Inbox: React.FC = () => {
                 );
               }}
               className={`p-4 cursor-pointer border-b hover:bg-gray-50 ${
-                msg.unread ? "bg-blue-50" : ""
+                msg.unread ? "bg-emerald-50" : ""
               }`}
             >
               <div className="flex justify-between">
@@ -117,7 +117,7 @@ const Inbox: React.FC = () => {
                 Priority: {selectedMessage.priority}
               </p>
               <div className="mt-4 space-x-2">
-                <button className="px-3 py-1 bg-blue-500 text-white rounded">
+                <button className="px-3 py-1 bg-emerald-500 text-white rounded">
                   Reply
                 </button>
                 <button className="px-3 py-1 bg-gray-300 rounded">
@@ -159,7 +159,7 @@ const Inbox: React.FC = () => {
               >
                 Cancel
               </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded">
+              <button className="px-4 py-2 bg-emerald-500 text-white rounded">
                 Send
               </button>
             </div>

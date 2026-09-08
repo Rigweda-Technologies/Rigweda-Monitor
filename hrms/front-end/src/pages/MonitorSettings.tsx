@@ -310,7 +310,7 @@ const MonitorSettings = () => {
   return (
     <MainLayout title="Monitor Settings" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Settings" }]}>
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-6 py-8 text-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.55)] md:px-8">
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 px-6 py-8 text-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.55)] md:px-8">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.14),transparent_36%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.22),transparent_28%)]" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl space-y-4">

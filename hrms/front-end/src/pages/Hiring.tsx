@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -866,12 +865,12 @@ const Hiring = () => {
         </>
       )}
 
-      <Dialog open={jobOpen} onOpenChange={setJobOpen}>
-       <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Job Opening</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={jobOpen} onOpenChange={setJobOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Add Job Opening</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <Input placeholder="Job title" value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} />
             <Input placeholder="Department" validationType="name" value={jobForm.department} onChange={(e) => setJobForm({ ...jobForm, department: e.target.value })} />
             <Input placeholder="Location" value={jobForm.location} onChange={(e) => setJobForm({ ...jobForm, location: e.target.value })} />
@@ -886,16 +885,19 @@ const Hiring = () => {
               </SelectContent>
             </Select>
             <Textarea placeholder="Description" value={jobForm.description} onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })} />
-            <Button className="w-full" onClick={createJob}>Create Job</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setJobOpen(false)}>Cancel</Button>
+            <Button onClick={createJob}>Create Job</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={candidateOpen} onOpenChange={setCandidateOpen}>
-        <DialogContent className="grid max-h-[90vh] w-[95vw] max-w-2xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-background px-6 py-5">
-            <DialogTitle className="text-xl font-semibold">Add Candidate</DialogTitle>
-          </DialogHeader>
+      <Sheet open={candidateOpen} onOpenChange={setCandidateOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Add Candidate</SheetTitle>
+          </SheetHeader>
           <div className="min-h-0 space-y-3 overflow-y-auto px-6 pb-6 pt-4 custom-scroll">
             <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
               Capture interview-ready profile so rejected candidates can be reused from talent pool later.
@@ -962,17 +964,20 @@ const Hiring = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button className="w-full" onClick={createCandidate}>Create Candidate</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setCandidateOpen(false)}>Cancel</Button>
+            <Button onClick={createCandidate}>Create Candidate</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto custom-scroll">
-          <DialogHeader>
-            <DialogTitle>Convert Candidate to Employee</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={convertOpen} onOpenChange={setConvertOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Convert Candidate to Employee</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5 custom-scroll">
             <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
               Candidate: {activeCandidate ? `${activeCandidate.firstName || ""} ${activeCandidate.lastName || ""}`.trim() : "-"} ({activeCandidate?.email || "-"})
             </div>
@@ -1066,19 +1071,20 @@ const Hiring = () => {
               value={convertForm.password}
               onChange={(e) => setConvertForm({ ...convertForm, password: e.target.value })}
             />
-            <Button className="w-full" onClick={convertCandidateToEmployee}>
-              Convert to Employee
-            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setConvertOpen(false)}>Cancel</Button>
+            <Button onClick={convertCandidateToEmployee}>Convert to Employee</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Schedule Interview</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Schedule Interview</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <Input
               placeholder="Round name (L1/L2/HR)"
               value={scheduleForm.roundName}
@@ -1119,17 +1125,20 @@ const Hiring = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button className="w-full" onClick={scheduleInterview}>Schedule</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+            <Button onClick={scheduleInterview}>Schedule</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Interview Feedback</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">Interview Feedback</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <Textarea
               placeholder="Detailed feedback"
               value={feedbackForm.feedback}
@@ -1165,10 +1174,13 @@ const Hiring = () => {
                 <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-            <Button className="w-full" onClick={submitInterviewFeedback}>Submit Feedback</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setFeedbackOpen(false)}>Cancel</Button>
+            <Button onClick={submitInterviewFeedback}>Submit Feedback</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">

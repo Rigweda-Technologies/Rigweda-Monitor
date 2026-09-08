@@ -13,7 +13,7 @@ const quickActions = [
     description: "See your HR analytics and metrics",
     icon: <LayoutDashboard className="w-6 h-6" />,
     href: "/dashboard",
-    color: "bg-blue-100 text-blue-700",
+    color: "bg-emerald-100 text-emerald-700",
   },
   {
     title: "Manage Employees",
@@ -27,7 +27,7 @@ const quickActions = [
     description: "Track employee attendance",
     icon: <Calendar className="w-6 h-6" />,
     href: "/attendance",
-    color: "bg-purple-100 text-purple-700",
+    color: "bg-teal-100 text-teal-700",
   },
   {
     title: "Leave Management",

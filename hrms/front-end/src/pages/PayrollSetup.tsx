@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -419,11 +419,14 @@ const PayrollSetup = () => {
         }}
       />
 
-      <Dialog open={payGroupDialogOpen} onOpenChange={setPayGroupDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editingPayGroupId ? "Edit Pay Group" : "Add Pay Group"}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={payGroupDialogOpen} onOpenChange={setPayGroupDialogOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
+              {editingPayGroupId ? "Edit Pay Group" : "Add Pay Group"}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium">Code</label>
@@ -508,7 +511,8 @@ const PayrollSetup = () => {
               />
             </div>
           </div>
-          <div className="mt-4 flex justify-end gap-2">
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
             <Button variant="outline" onClick={() => setPayGroupDialogOpen(false)}>
               Cancel
             </Button>
@@ -516,8 +520,8 @@ const PayrollSetup = () => {
               {payGroupSaving ? "Saving..." : editingPayGroupId ? "Save Changes" : "Create Pay Group"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

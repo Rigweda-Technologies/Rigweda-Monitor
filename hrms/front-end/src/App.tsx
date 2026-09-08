@@ -69,6 +69,7 @@ const MonitorBrowserHistory = lazyWithRetry(() => import("./pages/MonitorBrowser
 const MonitorScreenshots = lazyWithRetry(() => import("./pages/MonitorScreenshots"), "MonitorScreenshots");
 const MonitorSettings = lazyWithRetry(() => import("./pages/MonitorSettings"), "MonitorSettings");
 const MonitorUpdates = lazyWithRetry(() => import("./pages/MonitorUpdates"), "MonitorUpdates");
+const MonitorLaptopHealth = lazyWithRetry(() => import("./pages/MonitorLaptopHealth"), "MonitorLaptopHealth");
 
 const queryClient = new QueryClient();
 
@@ -621,6 +622,16 @@ const App = () => (
                 <RequireAuth permissions={["ATTENDANCE_VIEW_ALL"]}>
                   <RequireProfile>
                     <MonitorScreenshots />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/monitor/laptop-health"
+              element={
+                <RequireAuth permissions={["EMP_VIEW"]}>
+                  <RequireProfile>
+                    <MonitorLaptopHealth />
                   </RequireProfile>
                 </RequireAuth>
               }

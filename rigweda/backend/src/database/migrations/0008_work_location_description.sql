@@ -1,3 +1,0 @@
-BEGIN;
-ALTER TABLE work_locations ADD COLUMN description VARCHAR(500);
-COMMIT;

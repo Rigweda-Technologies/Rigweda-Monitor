@@ -11,6 +11,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -1059,12 +1065,14 @@ const PayrollRuns = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={createRunDialogOpen} onOpenChange={setCreateRunDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create Payroll Run{selectedPayGroupId ? ` - ${payGroups.find((group) => group.id === selectedPayGroupId)?.name || ""}` : ""}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={createRunDialogOpen} onOpenChange={setCreateRunDialogOpen}>
+        <SheetContent className="flex flex-col gap-0 bg-white p-0">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
+              Create Payroll Run{selectedPayGroupId ? ` - ${payGroups.find((group) => group.id === selectedPayGroupId)?.name || ""}` : ""}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <p className="text-sm text-muted-foreground">
               Choose employees from the selected pay group. If none are selected, the run will include every assigned active employee in that pay group.
             </p>
@@ -1101,21 +1109,21 @@ const PayrollRuns = () => {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateRunDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => onCreateRun(selectedEmployeeIds)} disabled={!!loadingAction || loadingEmployeePicker}>
-                {loadingAction === "Create run"
-                  ? "Creating..."
-                  : selectedEmployeeIds.length
-                    ? `Create Run for ${selectedEmployeeIds.length} Employee(s)`
-                    : "Create Run for All"}
-              </Button>
-            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={() => setCreateRunDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => onCreateRun(selectedEmployeeIds)} disabled={!!loadingAction || loadingEmployeePicker}>
+              {loadingAction === "Create run"
+                ? "Creating..."
+                : selectedEmployeeIds.length
+                  ? `Create Run for ${selectedEmployeeIds.length} Employee(s)`
+                  : "Create Run for All"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };

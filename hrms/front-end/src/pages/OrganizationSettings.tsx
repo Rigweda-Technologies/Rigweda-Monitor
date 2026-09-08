@@ -205,11 +205,11 @@ const OrganizationSettings = () => {
       )}
       {canView && (
       <div className="space-y-5 max-w-6xl">
-        <div className="relative overflow-hidden rounded-2xl border border-indigo-200/70 bg-gradient-to-r from-indigo-50 via-sky-50 to-cyan-50 p-6 card-shadow">
-          <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-indigo-500/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-6 card-shadow">
+          <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl" />
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/80 px-3 py-1 text-xs font-medium text-indigo-700">
+              <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-medium text-emerald-700">
                 <Sparkles className="h-3.5 w-3.5" />
                 Organization Controls
               </p>
@@ -270,7 +270,7 @@ const OrganizationSettings = () => {
         <div className="grid gap-5 lg:grid-cols-2">
           <section className="rounded-2xl border border-slate-200 bg-card p-5 card-shadow transition-all duration-300 hover:shadow-lg">
             <div className="mb-4 flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-indigo-600" />
+              <ShieldCheck className="h-5 w-5 text-emerald-600" />
               <h3 className="text-base font-semibold text-slate-900">Leave Policy</h3>
             </div>
             <div className="space-y-4">
@@ -322,7 +322,7 @@ const OrganizationSettings = () => {
 
           <section className="rounded-2xl border border-slate-200 bg-card p-5 card-shadow transition-all duration-300 hover:shadow-lg">
             <div className="mb-4 flex items-center gap-2">
-              <Clock3 className="h-5 w-5 text-cyan-600" />
+              <Clock3 className="h-5 w-5 text-emerald-600" />
               <h3 className="text-base font-semibold text-slate-900">Employment Defaults</h3>
             </div>
             <div className="space-y-4">
@@ -372,7 +372,7 @@ const OrganizationSettings = () => {
 
           <section className="rounded-2xl border border-slate-200 bg-card p-5 card-shadow transition-all duration-300 hover:shadow-lg">
             <div className="mb-4 flex items-center gap-2">
-              <Clock3 className="h-5 w-5 text-sky-600" />
+              <Clock3 className="h-5 w-5 text-teal-600" />
               <h3 className="text-base font-semibold text-slate-900">Attendance Rules</h3>
             </div>
             <div className="space-y-4">
@@ -527,7 +527,7 @@ const OrganizationSettings = () => {
 
           <section className="rounded-2xl border border-slate-200 bg-card p-5 card-shadow transition-all duration-300 hover:shadow-lg lg:col-span-2">
             <div className="mb-4 flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-violet-600" />
+              <ShieldCheck className="h-5 w-5 text-amber-600" />
               <h3 className="text-base font-semibold text-slate-900">Organization Access and Timezone</h3>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

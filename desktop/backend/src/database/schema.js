@@ -80,17 +80,131 @@ export const initializeDatabase = async () => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS monitor_activity_events (
       id TEXT PRIMARY KEY,
+      daily_key TEXT UNIQUE,
       organization_id TEXT,
       employee_id TEXT NOT NULL,
       employee_name TEXT,
+      employee_code TEXT,
       device_id TEXT NOT NULL,
+      activity_date DATE,
       observed_at TIMESTAMPTZ NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('active', 'idle', 'offline')),
       active_seconds INTEGER NOT NULL DEFAULT 0 CHECK (active_seconds >= 0),
       idle_seconds INTEGER NOT NULL DEFAULT 0 CHECK (idle_seconds >= 0),
+      event_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (device_id, id)
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_activity_events
+    ADD COLUMN IF NOT EXISTS activity_date DATE
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_activity_events
+    ADD COLUMN IF NOT EXISTS daily_key TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_activity_events
+    ADD COLUMN IF NOT EXISTS event_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
+  `);
+
+  await pool.query(`
+    UPDATE monitor_activity_events
+    SET activity_date = (observed_at AT TIME ZONE 'Asia/Kolkata')::date
+    WHERE activity_date IS NULL
+  `);
+
+  await pool.query(`
+    UPDATE monitor_activity_events
+    SET daily_key = COALESCE(organization_id, '') || ':' || employee_id || ':' || activity_date::text
+    WHERE daily_key IS NULL
+      AND activity_date IS NOT NULL
+  `);
+
+  await pool.query(`
+    WITH missing_event_ids AS (
+      SELECT id
+      FROM monitor_activity_events
+      WHERE daily_key IS NOT NULL
+        AND NOT (event_ids @> ARRAY[id])
+    )
+    UPDATE monitor_activity_events
+    SET event_ids = array_append(event_ids, id)
+    WHERE id IN (SELECT id FROM missing_event_ids)
+  `);
+
+  await pool.query(`
+    WITH grouped AS (
+      SELECT
+        daily_key,
+        ARRAY(
+          SELECT DISTINCT event_id
+          FROM unnest(ARRAY_AGG(id)) AS event_id
+          WHERE event_id IS NOT NULL
+        ) AS merged_event_ids
+      FROM monitor_activity_events
+      WHERE daily_key IS NOT NULL
+      GROUP BY daily_key
+      HAVING COUNT(*) > 1
+    )
+    UPDATE monitor_activity_events events
+    SET event_ids = grouped.merged_event_ids
+    FROM grouped
+    WHERE events.daily_key = grouped.daily_key
+  `);
+
+  await pool.query(`
+    WITH grouped AS (
+      SELECT
+        daily_key,
+        (ARRAY_AGG(id ORDER BY observed_at DESC, created_at DESC, id DESC))[1] AS keeper_id,
+        (ARRAY_AGG(status ORDER BY observed_at DESC, created_at DESC, id DESC))[1] AS latest_status,
+        (ARRAY_AGG(device_id ORDER BY observed_at DESC, created_at DESC, id DESC))[1] AS latest_device_id,
+        (ARRAY_AGG(employee_name ORDER BY (employee_name IS NULL), observed_at DESC, created_at DESC, id DESC))[1] AS latest_employee_name,
+        MAX(observed_at) AS latest_observed_at,
+        SUM(active_seconds)::integer AS total_active_seconds,
+        SUM(idle_seconds)::integer AS total_idle_seconds
+      FROM monitor_activity_events
+      WHERE daily_key IS NOT NULL
+      GROUP BY daily_key
+      HAVING COUNT(*) > 1
+    )
+    UPDATE monitor_activity_events events
+    SET
+      device_id = grouped.latest_device_id,
+      employee_name = grouped.latest_employee_name,
+      observed_at = grouped.latest_observed_at,
+      status = grouped.latest_status,
+      active_seconds = grouped.total_active_seconds,
+      idle_seconds = grouped.total_idle_seconds
+    FROM grouped
+    WHERE events.id = grouped.keeper_id
+  `);
+
+  await pool.query(`
+    WITH grouped AS (
+      SELECT
+        daily_key,
+        (ARRAY_AGG(id ORDER BY observed_at DESC, created_at DESC, id DESC))[1] AS keeper_id
+      FROM monitor_activity_events
+      WHERE daily_key IS NOT NULL
+      GROUP BY daily_key
+      HAVING COUNT(*) > 1
+    )
+    DELETE FROM monitor_activity_events events
+    USING grouped
+    WHERE events.daily_key = grouped.daily_key
+      AND events.id <> grouped.keeper_id
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_activity_events_daily_key
+    ON monitor_activity_events (daily_key)
+    WHERE daily_key IS NOT NULL
   `);
 
   await pool.query(`
@@ -121,6 +235,7 @@ export const initializeDatabase = async () => {
       organization_id TEXT,
       employee_id TEXT NOT NULL,
       employee_name TEXT,
+      employee_code TEXT,
       device_id TEXT NOT NULL,
       observed_at TIMESTAMPTZ NOT NULL,
       app_name TEXT NOT NULL,
@@ -193,5 +308,43 @@ export const initializeDatabase = async () => {
     CREATE INDEX IF NOT EXISTS idx_monitor_browser_history_browser_time
     ON monitor_browser_history (organization_id, browser, observed_at DESC)
   `);
-};
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS monitor_device_health (
+      id BIGSERIAL PRIMARY KEY,
+      organization_id TEXT,
+      employee_id TEXT NOT NULL,
+      employee_name TEXT,
+      device_id TEXT NOT NULL,
+      hostname TEXT,
+      platform TEXT,
+      platform_version TEXT,
+      agent_version TEXT,
+      cpu_model TEXT,
+      cpu_percent NUMERIC,
+      memory_total_bytes BIGINT,
+      memory_used_bytes BIGINT,
+      memory_percent NUMERIC,
+      disks JSONB NOT NULL DEFAULT '[]'::jsonb,
+      temperature_c NUMERIC,
+      battery_percent NUMERIC,
+      battery_charging BOOLEAN,
+      uptime_seconds BIGINT,
+      last_seen_at TIMESTAMPTZ NOT NULL,
+      reported_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (organization_id, device_id)
+    )
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_device_health
+    ADD COLUMN IF NOT EXISTS employee_code TEXT
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_monitor_device_health_org_seen
+    ON monitor_device_health (organization_id, last_seen_at DESC)
+  `);
+};

@@ -40,6 +40,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getApiWithToken, postApiWithToken, putApiWithToken } from "@/services/apiWrapper";
 import { toast } from "sonner";
@@ -970,8 +978,7 @@ const Employees = () => {
       title="Employees"
       breadcrumb={[{ label: "Home", href: "/" }, { label: "Employees" }]}
     >
-      {!formMode && (
-        <>
+      <>
           {/* Action Bar */}
           <div className="flex flex-col items-start gap-4 mb-6">
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1270,88 +1277,128 @@ const Employees = () => {
           </AnimatePresence>
         </div>
           )}
-        </>
-      )}
+      </>
 
       {/* Employee Table */}
-      {formMode && (
-        <div className="bg-card rounded-xl card-shadow p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">
-              {formMode === "edit" ? "Edit Employee" : "Add Employee"}
-            </h3>
-            <Button variant="outline" onClick={cancelForm}>Back to List</Button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input placeholder="Email" validationType="email" value={employeeForm.email} onChange={(e) => setEmployeeForm({ ...employeeForm, email: e.target.value })} />
-            <Input placeholder="Employee Code (optional)" validationType="code" value={employeeForm.employeeCode} onChange={(e) => setEmployeeForm({ ...employeeForm, employeeCode: e.target.value.toUpperCase() })} />
-            <Input placeholder="First Name" validationType="name" value={employeeForm.firstName} onChange={(e) => setEmployeeForm({ ...employeeForm, firstName: e.target.value })} />
-            <Input placeholder="Last Name" validationType="name" value={employeeForm.lastName} onChange={(e) => setEmployeeForm({ ...employeeForm, lastName: e.target.value })} />
-            <Select value={employeeForm.departmentId} onValueChange={(value) => setEmployeeForm({ ...employeeForm, departmentId: value })}>
-              <SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger>
-              <SelectContent>{departments.map((d: any) => <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={employeeForm.designationId} onValueChange={(value) => setEmployeeForm({ ...employeeForm, designationId: value })}>
-              <SelectTrigger><SelectValue placeholder="Designation" /></SelectTrigger>
-              <SelectContent>{designations.map((d: any) => <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={employeeForm.managerId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, managerId: value === "none" ? "" : value })}>
-              <SelectTrigger><SelectValue placeholder="Manager" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">No Manager</SelectItem>{managers.map((m: any) => <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={employeeForm.leaveApprovalFlowId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, leaveApprovalFlowId: value === "none" ? "" : value })}>
-              <SelectTrigger><SelectValue placeholder="Leave Approval Flow" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">Use Organization Default</SelectItem>{leaveApprovalFlows.map((flow: any) => <SelectItem key={flow._id} value={flow._id}>{flow.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={employeeForm.attendanceApprovalFlowId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, attendanceApprovalFlowId: value === "none" ? "" : value })}>
-              <SelectTrigger><SelectValue placeholder="Attendance Request Flow" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">Use Organization Default</SelectItem>{attendanceApprovalFlows.map((flow: any) => <SelectItem key={flow._id} value={flow._id}>{flow.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={employeeForm.shiftId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, shiftId: value === "none" ? "" : value })}>
-              <SelectTrigger><SelectValue placeholder="Shift" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">No Shift</SelectItem>{shifts.map((s: any) => <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={employeeForm.employmentType} onValueChange={(value) => setEmployeeForm({ ...employeeForm, employmentType: value })}>
-              <SelectTrigger><SelectValue placeholder="Employment Type" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="full_time">Full Time</SelectItem>
-                <SelectItem value="part_time">Part Time</SelectItem>
-                <SelectItem value="contract">Contract</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input type="date" value={employeeForm.dateOfJoining} onChange={(e) => setEmployeeForm({ ...employeeForm, dateOfJoining: e.target.value })} />
-            <div className="md:col-span-2">
-              <p className="mb-2 text-sm text-muted-foreground">Roles</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {roles.map((role: any) => (
-                  <label key={role._id} className="flex items-center gap-2 text-sm border rounded-md p-2">
-                    <Checkbox
-                      checked={employeeForm.roleIds.includes(role._id)}
-                      onCheckedChange={(checked) =>
-                        setEmployeeForm((prev) => ({
-                          ...prev,
-                          roleIds: checked
-                            ? Array.from(new Set([...prev.roleIds, role._id]))
-                            : prev.roleIds.filter((id) => id !== role._id)
-                        }))
-                      }
-                    />
-                    <span>{role.name}</span>
-                  </label>
-                ))}
+      <Sheet open={Boolean(formMode)} onOpenChange={(open) => {
+        if (!open) cancelForm();
+      }}>
+        <SheetContent className="flex w-full flex-col gap-0 border-l border-slate-100 bg-white p-0 shadow-2xl sm:max-w-none md:w-[50vw]">
+          <SheetHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <SheetTitle className="text-2xl font-semibold text-slate-950">
+              {formMode === "edit" ? "Edit Profile" : "Add New Profile"}
+            </SheetTitle>
+            <SheetDescription>
+              Enter the employee details used by the HRMS employee module.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">First Name *</label>
+                <Input placeholder="First Name" validationType="name" value={employeeForm.firstName} onChange={(e) => setEmployeeForm({ ...employeeForm, firstName: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Last Name *</label>
+                <Input placeholder="Last Name" validationType="name" value={employeeForm.lastName} onChange={(e) => setEmployeeForm({ ...employeeForm, lastName: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Email Address *</label>
+                <Input placeholder="Email" validationType="email" value={employeeForm.email} onChange={(e) => setEmployeeForm({ ...employeeForm, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Employee Code</label>
+                <Input placeholder="Employee Code (optional)" validationType="code" value={employeeForm.employeeCode} onChange={(e) => setEmployeeForm({ ...employeeForm, employeeCode: e.target.value.toUpperCase() })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Department *</label>
+                <Select value={employeeForm.departmentId} onValueChange={(value) => setEmployeeForm({ ...employeeForm, departmentId: value })}>
+                  <SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger>
+                  <SelectContent>{departments.map((d: any) => <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Designation *</label>
+                <Select value={employeeForm.designationId} onValueChange={(value) => setEmployeeForm({ ...employeeForm, designationId: value })}>
+                  <SelectTrigger><SelectValue placeholder="Designation" /></SelectTrigger>
+                  <SelectContent>{designations.map((d: any) => <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Manager</label>
+                <Select value={employeeForm.managerId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, managerId: value === "none" ? "" : value })}>
+                  <SelectTrigger><SelectValue placeholder="Manager" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">No Manager</SelectItem>{managers.map((m: any) => <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Shift</label>
+                <Select value={employeeForm.shiftId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, shiftId: value === "none" ? "" : value })}>
+                  <SelectTrigger><SelectValue placeholder="Shift" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">No Shift</SelectItem>{shifts.map((s: any) => <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Employment Type *</label>
+                <Select value={employeeForm.employmentType} onValueChange={(value) => setEmployeeForm({ ...employeeForm, employmentType: value })}>
+                  <SelectTrigger><SelectValue placeholder="Employment Type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Full Time</SelectItem>
+                    <SelectItem value="part_time">Part Time</SelectItem>
+                    <SelectItem value="contract">Contract</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Join Date *</label>
+                <Input type="date" value={employeeForm.dateOfJoining} onChange={(e) => setEmployeeForm({ ...employeeForm, dateOfJoining: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Leave Approval Flow</label>
+                <Select value={employeeForm.leaveApprovalFlowId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, leaveApprovalFlowId: value === "none" ? "" : value })}>
+                  <SelectTrigger><SelectValue placeholder="Leave Approval Flow" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">Use Organization Default</SelectItem>{leaveApprovalFlows.map((flow: any) => <SelectItem key={flow._id} value={flow._id}>{flow.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Attendance Request Flow</label>
+                <Select value={employeeForm.attendanceApprovalFlowId || "none"} onValueChange={(value) => setEmployeeForm({ ...employeeForm, attendanceApprovalFlowId: value === "none" ? "" : value })}>
+                  <SelectTrigger><SelectValue placeholder="Attendance Request Flow" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">Use Organization Default</SelectItem>{attendanceApprovalFlows.map((flow: any) => <SelectItem key={flow._id} value={flow._id}>{flow.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="lg:col-span-2">
+                <p className="mb-2 text-sm font-medium text-slate-700">Roles *</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {roles.map((role: any) => (
+                    <label key={role._id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm">
+                      <Checkbox
+                        checked={employeeForm.roleIds.includes(role._id)}
+                        onCheckedChange={(checked) =>
+                          setEmployeeForm((prev) => ({
+                            ...prev,
+                            roleIds: checked
+                              ? Array.from(new Set([...prev.roleIds, role._id]))
+                              : prev.roleIds.filter((id) => id !== role._id)
+                          }))
+                        }
+                      />
+                      <span>{role.name}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-5">
+          <SheetFooter className="border-t border-slate-100 px-6 py-5">
+            <Button variant="outline" onClick={cancelForm}>Cancel</Button>
             <Button onClick={submitEmployeeForm} disabled={formSaving}>
               {formSaving ? "Saving..." : formMode === "edit" ? "Update Employee" : "Create Employee"}
             </Button>
-            <Button variant="outline" onClick={cancelForm}>Cancel</Button>
-          </div>
-        </div>
-      )}
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-      {!formMode && (
       <motion.div
         className="bg-card rounded-xl card-shadow overflow-hidden flex flex-col max-h-[72vh] lg:h-[calc(100vh-240px)]"
         initial={{ opacity: 0, y: 20 }}
@@ -1564,7 +1611,6 @@ const Employees = () => {
           </div>
         </div>
       </motion.div>
-      )}
 
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <DialogContent>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 from pathlib import Path
 import sys
 import threading
@@ -15,6 +16,7 @@ from PIL import Image
 
 from app.auth import ensure_service_running, launch_background_monitor_process, login_to_hrms, register_startup
 from app.monitor_settings import apply_monitor_feature_flags, get_monitor_feature_flags, start_monitor_settings_listener
+from app.device_health import start_health_reporter
 
 COLORS = {
     "window_bg": "#f7f7f5",
@@ -396,15 +398,27 @@ class LoginApp:
         return Path(__file__).resolve().parents[1]
 
     def _read_app_version(self) -> str:
+        install_root = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else None
         version_candidates = (
+            install_root / "version.json" if install_root else None,
+            install_root / "VERSION" if install_root else None,
             self._app_root() / "VERSION",
             Path(__file__).resolve().parents[1] / "VERSION",
         )
         for path in version_candidates:
+            if path is None:
+                continue
             try:
-                text = path.read_text(encoding="utf-8").strip()
+                raw = path.read_text(encoding="utf-8").strip()
             except OSError:
                 continue
+            if path.name == "version.json":
+                try:
+                    text = str(json.loads(raw).get("version") or "").strip()
+                except (TypeError, ValueError):
+                    continue
+            else:
+                text = raw
             if text:
                 return text
         return ""
@@ -587,6 +601,7 @@ class LoginApp:
             register_startup()
 
         self._show_employee_details(session)
+        start_health_reporter(session)
         background_started, _background_message = launch_background_monitor_process()
         if background_started:
             flags = get_monitor_feature_flags()
@@ -698,4 +713,3 @@ class LoginApp:
 
     def run(self) -> None:
         self.root.mainloop()
-
