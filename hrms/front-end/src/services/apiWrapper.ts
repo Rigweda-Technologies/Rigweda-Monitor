@@ -33,7 +33,7 @@ const MASTER_DATA_GET_TTL_MS = 5 * 60 * 1000;
 const EMPLOYEE_LOOKUP_GET_TTL_MS = 60 * 1000;
 
 const getDefaultGetCacheTtl = (apiUrl: string) => {
-  const parsedUrl = new URL(apiUrl, "http://upanaya.local");
+  const parsedUrl = new URL(apiUrl, "http://rigweda.local");
   const masterDataPaths = new Set([
     "/departments",
     "/designations",
@@ -83,7 +83,7 @@ const getRequestCacheKey = (apiUrl: string, headers: RawAxiosRequestHeaders = {}
   });
 
 const getInvalidationPrefixes = (apiUrl: string) => {
-  const pathname = new URL(apiUrl, "http://upanaya.local").pathname;
+  const pathname = new URL(apiUrl, "http://rigweda.local").pathname;
   const segments = pathname.split("/").filter(Boolean);
   const resourcePrefix =
     segments[0] === "payroll" && segments[1]
@@ -113,7 +113,7 @@ const getInvalidationPrefixes = (apiUrl: string) => {
 const cacheKeyMatchesPrefixes = (cacheKey: string, prefixes: string[]) => {
   try {
     const parsed = JSON.parse(cacheKey) as { apiUrl?: string };
-    const pathname = new URL(parsed.apiUrl || "", "http://upanaya.local").pathname;
+    const pathname = new URL(parsed.apiUrl || "", "http://rigweda.local").pathname;
     return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   } catch {
     return true;

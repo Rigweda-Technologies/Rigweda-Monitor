@@ -11,7 +11,7 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 
 class MainApplication : Application(), ReactApplication {
-  private val notificationChannelId = "upanaya-notifications"
+  private val notificationChannelId = "rigweda-notifications"
 
   override val reactHost: ReactHost by lazy {
     getDefaultReactHost(

@@ -1,7 +1,9 @@
 const { getMonitorPgPool } = require("../../config/monitorDb");
+const { v2: cloudinary } = require("cloudinary");
 const Employee = require("../employees/employee.model");
 const OrgSettings = require("../orgSettings/orgSettings.model");
 const Organization = require("../organizations/organization.model");
+const monitorSettingsService = require("./agent.monitorSettings.service");
 const {
   isValidTimeZone,
   toDateKeyInTimeZone,
@@ -105,6 +107,28 @@ const resolveEmployeeAliases = async ({ organizationId, employeeId }) => {
   }
 };
 
+const resolveCloudinaryPublicId = (row) => {
+  const folder = String(row.cloudinary_folder || "").replace(/^\/+|\/+$/g, "");
+  const stored = String(row.cloudinary_public_id || "").trim();
+  if (!stored) return null;
+  return folder && !stored.startsWith(`${folder}/`) ? `${folder}/${stored}` : stored;
+};
+
+const buildSignedScreenshotUrl = ({ settings, row }) => {
+  const publicId = resolveCloudinaryPublicId(row);
+  if (!settings?.apiSecret || !publicId) return null;
+  return cloudinary.url(publicId, {
+    cloud_name: settings.cloudName,
+    api_key: settings.apiKey,
+    api_secret: settings.apiSecret,
+    resource_type: "image",
+    type: "authenticated",
+    secure: true,
+    sign_url: true,
+    expires_at: Math.floor(Date.now() / 1000) + 600
+  });
+};
+
 exports.getScreenshots = async (req) => {
   const organizationId = String(req.user.organizationId || "");
   const employeeId = String(req.query.employeeId || "").trim();
@@ -191,10 +215,16 @@ exports.getScreenshots = async (req) => {
   );
 
   const employeeIds = Array.from(new Set(rowsResult.rows.map((row) => String(row.employee_id)).filter(Boolean)));
-  const employeeMap = await getEmployeeMap({ organizationId, employeeIds });
+  const [employeeMap, cloudinarySettings] = await Promise.all([
+    getEmployeeMap({ organizationId, employeeIds }),
+    monitorSettingsService.getRawSettings(organizationId).catch(() => null)
+  ]);
 
   const items = rowsResult.rows.map((row) => {
     const employee = employeeMap.get(String(row.employee_id)) || {};
+    const signedImageUrl = row.upload_status === "uploaded"
+      ? buildSignedScreenshotUrl({ settings: cloudinarySettings, row })
+      : null;
     return {
       screenshotId: row.id,
       attendanceId: null,
@@ -206,15 +236,15 @@ exports.getScreenshots = async (req) => {
       dateKey: row.captured_at ? toDateKeyInTimeZone(row.captured_at, timeZone) : null,
       action: "screenshot",
       capturedAt: row.captured_at,
-      imageUrl: row.cloudinary_url || null,
-      selfieProvided: Boolean(row.cloudinary_url),
+      imageUrl: signedImageUrl,
+      selfieProvided: Boolean(signedImageUrl),
       deviceId: row.device_id || null,
       ip: null,
       status: row.upload_status || null,
       shiftName: null,
       shiftCode: null,
       source: "monitor_db",
-      publicId: row.cloudinary_public_id || null,
+      publicId: resolveCloudinaryPublicId(row),
       processingStatus: row.processing_status || null
     };
   });
@@ -228,4 +258,9 @@ exports.getScreenshots = async (req) => {
     timezone: timeZone,
     source: "monitor_db"
   };
+};
+
+exports._private = {
+  buildSignedScreenshotUrl,
+  resolveCloudinaryPublicId
 };

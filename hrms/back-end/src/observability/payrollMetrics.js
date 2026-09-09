@@ -43,7 +43,7 @@ exports.observePayrollIdempotencyReplay = (actionKey) => {
 
 exports.renderPayrollMetrics = () => {
   const lines = [];
-  const prefix = "upanaya_payroll";
+  const prefix = "rigweda_payroll";
 
   lines.push(`# HELP ${prefix}_compute_total Total payroll compute runs`);
   lines.push(`# TYPE ${prefix}_compute_total counter`);

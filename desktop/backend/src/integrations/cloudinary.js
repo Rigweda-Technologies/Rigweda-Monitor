@@ -1,10 +1,7 @@
 import crypto from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
-import { getEnv } from "../config/env.js";
 import { getPool } from "../database/pool.js";
-import { getMonitorCloudinarySettingsFromRigweda } from "./rigweda-api.js";
 
-let configuredKey = null;
 
 const TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS monitor_cloudinary_settings (
@@ -47,18 +44,6 @@ const getPoolOrThrow = async () => {
   return pool;
 };
 
-const encryptSecret = (value) => {
-  const iv = crypto.randomBytes(12);
-  const key = crypto.createHash("sha256").update(String(process.env.MONITOR_SETTINGS_SECRET || process.env.JWT_SECRET || "monitor-settings-dev-key")).digest();
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-  const ciphertext = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
-  return {
-    ciphertext: ciphertext.toString("base64"),
-    iv: iv.toString("base64"),
-    authTag: cipher.getAuthTag().toString("base64")
-  };
-};
-
 const decryptSecret = (row) => {
   const key = crypto.createHash("sha256").update(String(process.env.MONITOR_SETTINGS_SECRET || process.env.JWT_SECRET || "monitor-settings-dev-key")).digest();
   const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(row.api_secret_iv, "base64"));
@@ -69,13 +54,7 @@ const decryptSecret = (row) => {
   ]).toString("utf8");
 };
 
-const normalizeFolderRoot = (value) =>
-  String(value || "rigweda-monitor")
-    .trim()
-    .replace(/^\/+|\/+$/g, "")
-    .replace(/\/+/g, "/") || "rigweda-monitor";
-
-const toPublicSettings = (row, apiSecret) => row ? ({
+const toServerSettings = (row, apiSecret) => row ? ({
   cloudName: row.cloud_name,
   apiKey: row.api_key,
   apiSecret,
@@ -95,119 +74,42 @@ const getLocalSettings = async (organizationId) => {
   );
   const row = result.rows[0] || null;
   if (!row) return null;
-  return toPublicSettings(row, decryptSecret(row));
+  return toServerSettings(row, decryptSecret(row));
 };
 
-const saveLocalSettings = async (organizationId, settings) => {
-  if (!organizationId || !settings?.apiSecret) return settings;
-  const pool = await getPoolOrThrow();
-  const encrypted = encryptSecret(settings.apiSecret);
-  await pool.query(
-    `
-      INSERT INTO monitor_cloudinary_settings (
-        organization_id, cloud_name, api_key, api_secret_ciphertext,
-        api_secret_iv, api_secret_auth_tag, upload_folder_root,
-        screenshots_enabled, mouse_enabled, keyboard_enabled
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (organization_id)
-      DO UPDATE SET
-        cloud_name = EXCLUDED.cloud_name,
-        api_key = EXCLUDED.api_key,
-        api_secret_ciphertext = EXCLUDED.api_secret_ciphertext,
-        api_secret_iv = EXCLUDED.api_secret_iv,
-        api_secret_auth_tag = EXCLUDED.api_secret_auth_tag,
-        upload_folder_root = EXCLUDED.upload_folder_root,
-        screenshots_enabled = EXCLUDED.screenshots_enabled,
-        mouse_enabled = EXCLUDED.mouse_enabled,
-        keyboard_enabled = EXCLUDED.keyboard_enabled,
-        updated_at = NOW()
-    `,
-    [
-      String(organizationId),
-      String(settings.cloudName || "").trim(),
-      String(settings.apiKey || "").trim(),
-      encrypted.ciphertext,
-      encrypted.iv,
-      encrypted.authTag,
-      normalizeFolderRoot(settings.uploadFolderRoot),
-      settings.screenshotsEnabled ?? true,
-      settings.mouseEnabled ?? true,
-      settings.keyboardEnabled ?? true
-    ]
-  );
-  return settings;
-};
-
-const envCredentials = () => {
-  const env = getEnv();
-  if (!env.cloudinaryCloudName || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) {
-    return null;
+// Credentials stay on the servers. HRMS and Desktop use the same monitoring
+// database and MONITOR_SETTINGS_SECRET; employee HTTP APIs never transport secrets.
+export const resolveCloudinarySettings = async ({ organizationId, allowMissing = false } = {}) => {
+  if (!organizationId) {
+    const error = new Error("Organization is required for Cloudinary settings.");
+    error.statusCode = 403;
+    throw error;
   }
-  return {
-    cloudName: env.cloudinaryCloudName,
-    apiKey: env.cloudinaryApiKey,
-    apiSecret: env.cloudinaryApiSecret,
-    uploadFolderRoot: "rigweda-monitor",
-  };
-};
-
-const configure = (settings) => {
-  const key = `${settings.cloudName}:${settings.apiKey}`;
-  if (configuredKey === key) {
-    return;
-  }
-
-  cloudinary.config({
-    cloud_name: settings.cloudName,
-    api_key: settings.apiKey,
-    api_secret: settings.apiSecret,
-    secure: true,
-  });
-  configuredKey = key;
-};
-
-export const resolveCloudinarySettings = async ({ token, organizationId, refresh = true, allowMissing = false } = {}) => {
-  const localSettings = await getLocalSettings(organizationId);
-
-  if (token && refresh) {
-    try {
-      const settings = await getMonitorCloudinarySettingsFromRigweda({ token });
-      await saveLocalSettings(organizationId, settings);
-      configure(settings);
-      return settings;
-    } catch (error) {
-      if (localSettings) {
-        configure(localSettings);
-        return localSettings;
-      }
-    }
-  }
-
-  if (localSettings) {
-    configure(localSettings);
-    return localSettings;
-  }
-
-  const settings = envCredentials();
-  if (settings) {
-    configure(settings);
-    return settings;
-  }
-
-  if (allowMissing) {
-    return null;
-  }
-
+  const settings = await getLocalSettings(organizationId);
+  if (settings) return settings;
+  if (allowMissing) return null;
   throw new Error("Cloudinary settings are missing. Configure Employee Monitor > Settings in HRMS.");
 };
 
+export const publicUploadConfig = (settings) => ({
+  cloudName: settings.cloudName,
+  apiKey: settings.apiKey,
+  uploadFolderRoot: settings.uploadFolderRoot,
+  screenshotsEnabled: settings.screenshotsEnabled,
+  mouseEnabled: settings.mouseEnabled,
+  keyboardEnabled: settings.keyboardEnabled,
+  updatedAt: settings.updatedAt,
+});
+
 export const uploadBufferToCloudinary = async ({ token, organizationId, buffer, folder, publicId, resourceType }) => {
-  await resolveCloudinarySettings({ token, organizationId });
+  const settings = await resolveCloudinarySettings({ organizationId });
 
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
+        cloud_name: settings.cloudName,
+        api_key: settings.apiKey,
+        api_secret: settings.apiSecret,
         folder,
         public_id: publicId,
         resource_type: resourceType,
@@ -233,6 +135,7 @@ export const createSignedUploadPayload = async ({ token, organizationId, folder,
     folder,
     public_id: publicId,
     timestamp,
+    type: "authenticated",
   };
 
   if (Object.keys(context).length > 0) {

@@ -54,3 +54,10 @@ exports.upsertOrgSettingsSchema = Joi.object({
   employeeIdPrefix: Joi.string().trim().max(10).allow("").default(""),
   maxActiveLoginsPerUser: Joi.number().integer().min(1).max(20).default(getDefaultMaxActiveLoginsPerUser())
 });
+
+// Reuse the same theme contract without requiring unrelated HR settings.
+exports.updateThemeSchema = Joi.object({
+  themeMode: exports.upsertOrgSettingsSchema.extract("themeMode"),
+  themePreset: exports.upsertOrgSettingsSchema.extract("themePreset"),
+  themeConfig: exports.upsertOrgSettingsSchema.extract("themeConfig")
+});

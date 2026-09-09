@@ -30,7 +30,7 @@ const getPoolConfig = () => {
     connectionTimeoutMillis: Number(
       process.env.PAYROLL_PG_CONNECTION_TIMEOUT_MS || 10000
     ),
-    application_name: process.env.PAYROLL_PG_APP_NAME || "upanaya-payroll"
+    application_name: process.env.PAYROLL_PG_APP_NAME || "rigweda-payroll"
   };
 
   const ssl = getSslConfig();

@@ -142,7 +142,7 @@ function LoginScreen() {
         <View style={[styles.layout, isWide && styles.layoutWide]}>
           {isWide && (
             <View style={styles.leftPanel}>
-              <Text style={styles.leftEyebrow}>UPANAYA HRMS PLATFORM</Text>
+              <Text style={styles.leftEyebrow}>rigweda HRMS PLATFORM</Text>
 
               <Text style={styles.leftTitle}>
                 Human resources,{'\n'}reimagined for real operations

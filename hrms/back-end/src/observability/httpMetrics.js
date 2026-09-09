@@ -1,4 +1,4 @@
-const METRIC_PREFIX = "upanaya_api";
+const METRIC_PREFIX = "rigweda_api";
 const { renderPayrollMetrics } = require("./payrollMetrics");
 
 const state = {

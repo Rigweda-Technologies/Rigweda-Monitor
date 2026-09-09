@@ -11,7 +11,7 @@ cd back-end
 npm install
 
 echo "♻️ Restarting backend..."
-pm2 restart upanaya-api
+pm2 restart rigweda-api
 
 echo "🎨 Building frontend..."
 cd ../front-end
@@ -19,11 +19,11 @@ npm install
 npm run build
 
 echo "📂 Copying frontend build to nginx folder..."
-sudo rm -rf /var/www/upanayahr/*
-sudo cp -r dist/* /var/www/upanayahr/
+sudo rm -rf /var/www/rigwedahr/*
+sudo cp -r dist/* /var/www/rigwedahr/
 
 echo "🔑 Fixing permissions..."
-sudo chown -R www-data:www-data /var/www/upanayahr
+sudo chown -R www-data:www-data /var/www/rigwedahr
 
 echo "🔄 Reloading nginx..."
 sudo systemctl reload nginx

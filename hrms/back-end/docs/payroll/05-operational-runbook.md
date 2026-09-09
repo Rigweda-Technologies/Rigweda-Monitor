@@ -58,14 +58,14 @@ PAYROLL_COMPUTE_JOB_BACKOFF_MS=5000
 ### Metrics (`/metrics`)
 
 API metrics prefix:
-- `upanaya_api_*`
+- `rigweda_api_*`
 
 Payroll metrics prefix:
-- `upanaya_payroll_compute_total`
-- `upanaya_payroll_compute_failed_total`
-- `upanaya_payroll_compute_by_mode_total{mode,outcome}`
-- `upanaya_payroll_compute_duration_bucket{mode,outcome,le}`
-- `upanaya_payroll_idempotency_replay_total{action}`
+- `rigweda_payroll_compute_total`
+- `rigweda_payroll_compute_failed_total`
+- `rigweda_payroll_compute_by_mode_total{mode,outcome}`
+- `rigweda_payroll_compute_duration_bucket{mode,outcome,le}`
+- `rigweda_payroll_idempotency_replay_total{action}`
 
 ## Incident Handling
 

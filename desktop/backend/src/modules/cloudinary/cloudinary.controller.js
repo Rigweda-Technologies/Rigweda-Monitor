@@ -1,4 +1,4 @@
-import { resolveCloudinarySettings } from "../../integrations/cloudinary.js";
+import { resolveCloudinarySettings, publicUploadConfig } from "../../integrations/cloudinary.js";
 
 export const getCloudinaryUploadConfig = async (request, reply) => {
   const data = await resolveCloudinarySettings({
@@ -17,6 +17,6 @@ export const getCloudinaryUploadConfig = async (request, reply) => {
 
   return reply.send({
     success: true,
-    data,
+    data: publicUploadConfig(data),
   });
 };

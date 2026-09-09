@@ -5,7 +5,7 @@ type SessionStorageNativeModule = {
   setItem(key: string, value: string): Promise<void>;
 };
 
-const DEVICE_ID_KEY = 'upanaya-device-id';
+const DEVICE_ID_KEY = 'rigweda-device-id';
 
 const sessionStorageModule = NativeModules.SessionStorage as
   | SessionStorageNativeModule

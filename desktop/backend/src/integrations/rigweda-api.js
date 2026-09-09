@@ -64,19 +64,3 @@ export const getEmployeeProfileFromRigweda = async ({ token }) => {
     raw: data,
   };
 };
-
-export const getMonitorCloudinarySettingsFromRigweda = async ({ token }) => {
-  const response = await fetch(buildHrmsApiUrl("/api/agents/cloudinary/upload-config"), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.success || !payload?.data) {
-    throw new Error(payload?.message || `Failed to fetch Cloudinary monitor settings: ${response.status}`);
-  }
-
-  return payload.data;
-};

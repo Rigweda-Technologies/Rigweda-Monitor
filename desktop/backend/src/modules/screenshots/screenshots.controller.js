@@ -75,7 +75,6 @@ export const createScreenshotHandler = async (request, reply) => {
     ...value,
     auth: request.auth,
   };
-  console.log("Validated payload for screenshot creation:", payload);
   const result = await screenshotService.createScreenshot(payload);
 
   return reply.code(201).send({
@@ -126,6 +125,7 @@ export const completeUploadSessionHandler = async (request, reply) => {
   }
 
   const result = await screenshotService.completeUploadSession({
+    auth: request.auth,
     batchId: request.params.batchId,
     ...value,
   });

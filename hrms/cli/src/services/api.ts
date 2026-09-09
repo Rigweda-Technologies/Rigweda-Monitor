@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://www.upanayahr.com/api';
+const API_BASE_URL = 'https://www.rigwedahr.com/api';
 
 type ApiResponse<T> = {
   success?: boolean;
