@@ -184,6 +184,22 @@ def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
     }
 
 
+def _extract_usb_enabled(payload: Any) -> bool | None:
+    settings = payload.get("settings") if isinstance(payload, dict) else None
+    settings = settings if isinstance(settings, dict) else payload
+    if not isinstance(settings, dict) or "usbEnabled" not in settings:
+        return None
+    value = settings.get("usbEnabled")
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on", "allow"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "block", "block_all"}:
+        return False
+    return None
+
+
 def _notify_callbacks(flags: dict[str, bool | int]) -> None:
     callbacks = list(_callbacks)
     for callback in callbacks:
@@ -401,6 +417,15 @@ def _listener_worker(token: str) -> None:
         changed = _set_current_flags(flags)
         if changed:
             apply_monitor_feature_flags(flags)
+
+        usb_enabled = _extract_usb_enabled(payload)
+        if usb_enabled is not None:
+            try:
+                from app.usb_control import apply_usb_control_policy
+
+                apply_usb_control_policy({"usbEnabled": usb_enabled})
+            except Exception:
+                pass
 
     @client.event
     def connect() -> None:  # noqa: D401

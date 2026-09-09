@@ -11,9 +11,12 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
+  Ban,
+  Unlock,
   Sparkles,
   SlidersHorizontal,
   CheckCircle2,
+  Usb,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -28,7 +31,13 @@ import {
 } from "@/services/monitorActivity";
 import { toast } from "sonner";
 
-type MonitorControlKey = "screenshotsEnabled" | "mouseEnabled" | "keyboardEnabled" | "appUsageEnabled" | "browserHistoryEnabled";
+type MonitorControlKey =
+  | "screenshotsEnabled"
+  | "mouseEnabled"
+  | "keyboardEnabled"
+  | "appUsageEnabled"
+  | "browserHistoryEnabled"
+  | "usbEnabled";
 type MonitorNumericKey =
   | "screenshotIntervalMinutes"
   | "mouseHeartbeatMinutes"
@@ -48,6 +57,7 @@ type MonitorSettingsForm = {
   keyboardEnabled: boolean;
   appUsageEnabled: boolean;
   browserHistoryEnabled: boolean;
+  usbEnabled: boolean;
   screenshotIntervalMinutes: number;
   mouseHeartbeatMinutes: number;
   mouseIdleThresholdMinutes: number;
@@ -85,6 +95,11 @@ const MONITOR_CONTROLS: Array<{
     key: "browserHistoryEnabled",
     label: "Browser history",
     description: "Record approved browser navigation activity.",
+  },
+  {
+    key: "usbEnabled",
+    label: "USB access",
+    description: "Allow or block USB storage on employee laptops.",
   },
 ];
 
@@ -170,6 +185,13 @@ const MONITOR_SECTIONS: Array<{
       },
     ],
   },
+  {
+    key: "usbEnabled",
+    label: "USB access",
+    description: "Allow or block USB storage on employee laptops.",
+    icon: Usb,
+    fields: [],
+  },
 ];
 
 const MonitorSettings = () => {
@@ -184,6 +206,7 @@ const MonitorSettings = () => {
     keyboardEnabled: true,
     appUsageEnabled: true,
     browserHistoryEnabled: false,
+    usbEnabled: true,
     screenshotIntervalMinutes: 1,
     mouseHeartbeatMinutes: 1,
     mouseIdleThresholdMinutes: 1,
@@ -195,7 +218,14 @@ const MonitorSettings = () => {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const hasSecret = Boolean(form.apiSecret.trim() || form.apiSecretMasked);
-  const enabledCount = [form.screenshotsEnabled, form.mouseEnabled, form.keyboardEnabled, form.appUsageEnabled, form.browserHistoryEnabled].filter(Boolean).length;
+  const enabledCount = [
+    form.screenshotsEnabled,
+    form.mouseEnabled,
+    form.keyboardEnabled,
+    form.appUsageEnabled,
+    form.browserHistoryEnabled,
+    form.usbEnabled,
+  ].filter(Boolean).length;
   const totalControls = MONITOR_CONTROLS.length;
 
   useEffect(() => {
@@ -214,6 +244,7 @@ const MonitorSettings = () => {
             keyboardEnabled: settings.keyboardEnabled ?? true,
             appUsageEnabled: settings.appUsageEnabled ?? true,
             browserHistoryEnabled: settings.browserHistoryEnabled ?? false,
+            usbEnabled: settings.usbEnabled ?? true,
             screenshotIntervalMinutes: Math.max(Number(settings.screenshotIntervalMinutes || 1), 1),
             mouseHeartbeatMinutes: Math.max(Number(settings.mouseHeartbeatMinutes || 1), 1),
             mouseIdleThresholdMinutes: Math.max(Number(settings.mouseIdleThresholdMinutes || 1), 1),
@@ -240,6 +271,7 @@ const MonitorSettings = () => {
     keyboardEnabled: form.keyboardEnabled,
     appUsageEnabled: form.appUsageEnabled,
     browserHistoryEnabled: form.browserHistoryEnabled,
+    usbEnabled: form.usbEnabled,
     screenshotIntervalMinutes: form.screenshotIntervalMinutes,
     mouseHeartbeatMinutes: form.mouseHeartbeatMinutes,
     mouseIdleThresholdMinutes: form.mouseIdleThresholdMinutes,
@@ -302,7 +334,7 @@ const MonitorSettings = () => {
               </div>
               <div className="mt-2 text-lg font-semibold">{enabledCount} of {totalControls} signals enabled</div>
               <p className="mt-1 text-sm text-white/70">
-                Screenshot, mouse, keyboard, and browser-history permissions are controlled from this page.
+                Screenshot, mouse, keyboard, browser-history, and USB permissions are controlled from this page.
               </p>
             </div>
           </div>
@@ -435,6 +467,29 @@ const MonitorSettings = () => {
                             </div>
                           ))}
                         </div>
+
+                        {item.key === "usbEnabled" && (
+                          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200/70 pt-4">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={form.usbEnabled ? "default" : "outline"}
+                              onClick={() => setForm((prev) => ({ ...prev, usbEnabled: true }))}
+                            >
+                              <Unlock className="mr-2 h-4 w-4" />
+                              Allow USB
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={!form.usbEnabled ? "destructive" : "outline"}
+                              onClick={() => setForm((prev) => ({ ...prev, usbEnabled: false }))}
+                            >
+                              <Ban className="mr-2 h-4 w-4" />
+                              Block USB
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -450,7 +505,7 @@ const MonitorSettings = () => {
                     Ready to apply changes
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Save updates to keep the desktop client and upload pipeline aligned.
+                    Save updates to keep the desktop client, upload pipeline, and USB enforcement aligned.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -507,6 +562,11 @@ const MonitorSettings = () => {
                       label: "Browser history",
                       enabled: form.browserHistoryEnabled,
                       helper: `Sync every ${form.browserHistorySyncMinutes} minute(s).`,
+                    },
+                    {
+                      label: "USB access",
+                      enabled: form.usbEnabled,
+                      helper: "Allow or block USB storage on employee laptops.",
                     },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">

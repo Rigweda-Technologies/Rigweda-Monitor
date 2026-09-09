@@ -67,4 +67,18 @@ router.get(
   asyncHandler(controller.getCloudinaryUploadConfig)
 );
 
+router.get(
+  "/monitor-settings/usb/control-config",
+  auth,
+  authorize(["EMP_SELF_VIEW", "EMP_VIEW", "ATTENDANCE_VIEW_ALL"]),
+  asyncHandler(controller.getUsbControlConfig)
+);
+
+router.get(
+  "/usb/control-config",
+  auth,
+  authorize(["EMP_SELF_VIEW", "EMP_VIEW", "ATTENDANCE_VIEW_ALL"]),
+  asyncHandler(controller.getUsbControlConfig)
+);
+
 module.exports = router;
