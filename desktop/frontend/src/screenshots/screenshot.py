@@ -356,6 +356,7 @@ def _get_process_signature(pid: int) -> dict[str, str] | None:
         capture_output=True,
         text=True,
         check=False,
+        creationflags=0x08000000 if os.name == "nt" else 0,
     )
 
     payload = result.stdout.strip()

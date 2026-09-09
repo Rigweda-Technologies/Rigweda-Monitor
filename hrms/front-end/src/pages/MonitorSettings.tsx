@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
+  Ban,
+  Unlock,
   Sparkles,
   SlidersHorizontal,
   CheckCircle2,
@@ -465,6 +467,29 @@ const MonitorSettings = () => {
                             </div>
                           ))}
                         </div>
+
+                        {item.key === "usbEnabled" && (
+                          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200/70 pt-4">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={form.usbEnabled ? "default" : "outline"}
+                              onClick={() => setForm((prev) => ({ ...prev, usbEnabled: true }))}
+                            >
+                              <Unlock className="mr-2 h-4 w-4" />
+                              Allow USB
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={!form.usbEnabled ? "destructive" : "outline"}
+                              onClick={() => setForm((prev) => ({ ...prev, usbEnabled: false }))}
+                            >
+                              <Ban className="mr-2 h-4 w-4" />
+                              Block USB
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
