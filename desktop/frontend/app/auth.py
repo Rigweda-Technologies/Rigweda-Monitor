@@ -40,6 +40,7 @@ def _run_sc_command(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+        creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
 
 

@@ -17,6 +17,8 @@ from PIL import Image
 from app.auth import ensure_service_running, launch_background_monitor_process, login_to_hrms, register_startup
 from app.monitor_settings import apply_monitor_feature_flags, get_monitor_feature_flags, start_monitor_settings_listener
 from app.device_health import start_health_reporter
+from app.usb_control import _log_message as log_usb_message
+from app.usb_control import apply_usb_control_policy, refresh_usb_control_policy, start_usb_control_listener
 
 COLORS = {
     "window_bg": "#f7f7f5",
@@ -27,6 +29,7 @@ COLORS = {
     "text": "#111111",
     "text_muted": "#666666",
     "error": "#c74f4f",
+    "warning": "#9a6b16",
     "success": "#2f8f5b",
     "entry_bg": "#fbfbfa",
     "entry_border": "#d7d7d0",
@@ -625,6 +628,18 @@ class LoginApp:
         else:
             flags = start_monitor_settings_listener(session, on_change=apply_monitor_feature_flags)
             apply_monitor_feature_flags(flags)
+            try:
+                usb_policy = refresh_usb_control_policy(session)
+                if usb_policy:
+                    result = apply_usb_control_policy(usb_policy)
+                    if result.get("applied") is False:
+                        log_usb_message(f"ERROR: USB policy enforcement failed: {result.get('error', 'unknown error')}")
+                start_usb_control_listener(session)
+            except Exception as error:
+                self._set_status(
+                    f"USB control could not be initialized: {error}",
+                    COLORS["warning"],
+                )
             enabled_labels = []
             if flags.get("screenshotsEnabled", True):
                 enabled_labels.append("screenshots")

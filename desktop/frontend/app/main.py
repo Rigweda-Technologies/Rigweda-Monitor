@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import ctypes
 import sys
 import threading
 import time
 import os
+import subprocess
 import traceback
 from pathlib import Path
 
@@ -18,6 +20,7 @@ if __package__ in {None, ""}:
     from app.monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from app.device_health import start_health_reporter
     from app.browser_history_monitor import start_browser_monitor, stop_browser_monitor
+    from app.usb_control import apply_usb_control_policy, refresh_usb_control_policy, start_usb_control_listener
 else:  # pragma: no cover - import path depends on launch style
     from .auth import ensure_service_running, load_auth_session, load_saved_auth_email, register_startup
     from .env import writable_runtime_path
@@ -25,12 +28,14 @@ else:  # pragma: no cover - import path depends on launch style
     from .monitor_settings import apply_monitor_feature_flags, refresh_monitor_feature_flags, start_monitor_settings_listener
     from .device_health import start_health_reporter
     from .browser_history_monitor import start_browser_monitor, stop_browser_monitor  # ADDED EXPLICIT PACKAGE RESOLUTION
+    from .usb_control import apply_usb_control_policy, refresh_usb_control_policy, start_usb_control_listener
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
 LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
 STARTUP_LOG_FILE = LOG_DIR / "startup.log"
 CRASH_LOG_FILE = LOG_DIR / "crash.log"
 BACKGROUND_HOST_LOCK_FILE = DATA_ROOT / "background_host.lock"
+ELEVATION_ATTEMPTED_ENV = "RIGWEDA_ELEVATION_ATTEMPTED"
 
 
 def _log_startup(message: str) -> None:
@@ -47,6 +52,77 @@ def _log_crash(error: BaseException) -> None:
         log_file.write(f"{timestamp} Unhandled exception: {error}\n")
         traceback.print_exc(file=log_file)
         log_file.write("\n")
+
+
+def _is_windows_admin() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
+def _relaunch_elevated_once() -> bool:
+    """Relaunch the complete application once, before any USB work starts."""
+    if os.name != "nt" or _is_windows_admin():
+        return True
+
+    if os.getenv(ELEVATION_ATTEMPTED_ENV) == "1":
+        _log_startup("Elevation was already attempted, but this process is still not elevated.")
+        return False
+
+    os.environ[ELEVATION_ATTEMPTED_ENV] = "1"
+    if getattr(sys, "frozen", False):
+        parameters = subprocess.list2cmdline(sys.argv[1:])
+    else:
+        parameters = subprocess.list2cmdline([str(Path(sys.argv[0]).resolve()), *sys.argv[1:]])
+
+    try:
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            sys.executable,
+            parameters,
+            str(Path(__file__).resolve().parents[1]),
+            1,
+        )
+    except (AttributeError, OSError) as error:
+        _log_startup(f"Administrator relaunch failed: {type(error).__name__}: {error}")
+        return False
+
+    if result <= 32:
+        _log_startup(f"Administrator relaunch was cancelled or failed: Windows error={result}.")
+        return False
+
+    _log_startup("Elevated application instance started; closing unprivileged instance.")
+    return False
+
+
+def _initialize_usb_control(session: dict) -> None:
+    try:
+        usb_policy = refresh_usb_control_policy(session)
+        if usb_policy:
+            result = apply_usb_control_policy(usb_policy)
+            if result.get("applied") is False:
+                _log_startup(f"ERROR: USB policy enforcement failed: {result.get('error', 'unknown error')}")
+            _log_startup(
+                "USB policy applied: "
+                f"usbEnabled={result.get('usbEnabled', True)} "
+                f"enforcement={result.get('enforcement', 'allow')} "
+                f"applied={result.get('applied', False)}"
+                + (f" error={result['error']}" if result.get("error") else "")
+            )
+        start_usb_control_listener(session)
+        _log_startup("USB control listener started from authenticated session.")
+    except Exception as error:
+        _log_startup(f"Failed to initialize USB control: {error}")
+        try:
+            from app.usb_control import _log_message as _log_usb_message
+
+            _log_usb_message(f"Startup USB control exception: {type(error).__name__}: {error}")
+        except Exception:
+            pass
 
 
 def _background_process_exists(pid: int) -> bool:
@@ -69,6 +145,7 @@ def _background_process_exists(pid: int) -> bool:
             capture_output=True,
             text=True,
             check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
     except Exception:
         return False
@@ -144,6 +221,8 @@ def _resume_monitor_in_background() -> int:
             _log_startup(f"Service/backend start failed: {_service_message}")
             return 1
 
+        _initialize_usb_control(session)
+
         startup_registered, startup_message = register_startup()
         _log_startup(startup_message if startup_registered else startup_message)
 
@@ -204,6 +283,9 @@ def _resume_monitor_in_background() -> int:
 
 def main() -> None:
     """Launch the login window."""
+    if not _relaunch_elevated_once():
+        return
+
     if "--screenshot-monitor" in sys.argv:
         sys.argv = [arg for arg in sys.argv if arg != "--screenshot-monitor"]
         if __package__ in {None, ""}:
@@ -249,6 +331,8 @@ def main() -> None:
             )
         except Exception as error:
             _log_startup(f"Failed to initialize monitor settings listener: {str(error)}")
+
+        _initialize_usb_control(startup_session)
 
     if __package__ in {None, ""}:
         from app.login_view import LoginApp
