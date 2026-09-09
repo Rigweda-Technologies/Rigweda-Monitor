@@ -1,6 +1,6 @@
 const { getRedisClient } = require("../config/redis");
 
-const CACHE_PREFIX = "upanaya:cache";
+const CACHE_PREFIX = "rigweda:cache";
 
 const stableSerialize = (value) => {
   if (Array.isArray(value)) {

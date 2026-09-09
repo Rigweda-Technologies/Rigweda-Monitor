@@ -658,7 +658,7 @@ exports.uploadReceipt = async (req) => {
   const { fileName, fileData } = req.body || {};
   const { extension, dataUri } = parseReceiptInput({ fileName, fileData });
   const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-  const folder = `upanaya/${req.user.organizationId}/expenses/receipts`;
+  const folder = `rigweda/${req.user.organizationId}/expenses/receipts`;
   const uploadResult = await uploadDataUri(dataUri, {
     folder,
     public_id: `receipt-${uniqueName}`,

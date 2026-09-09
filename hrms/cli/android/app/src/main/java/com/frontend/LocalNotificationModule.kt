@@ -46,7 +46,7 @@ class LocalNotificationModule(
         body?.trim().takeUnless { it.isNullOrEmpty() } ?: "You have a new notification."
 
       val notification =
-        NotificationCompat.Builder(context, "upanaya-notifications")
+        NotificationCompat.Builder(context, "rigweda-notifications")
           .setSmallIcon(context.applicationInfo.icon)
           .setContentTitle(title?.trim().takeUnless { it.isNullOrEmpty() } ?: "Rigweda")
           .setContentText(resolvedBody)

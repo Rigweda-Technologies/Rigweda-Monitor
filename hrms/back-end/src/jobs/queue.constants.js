@@ -1,4 +1,4 @@
-const JOB_QUEUE_NAME = process.env.JOB_QUEUE_NAME || "upanaya-system-jobs";
+const JOB_QUEUE_NAME = process.env.JOB_QUEUE_NAME || "rigweda-system-jobs";
 
 const JOBS = {
   LEAVE_CREDIT_DAILY: "leave-credit-daily",

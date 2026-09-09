@@ -86,7 +86,7 @@ const sendPushNotification = async ({
     android: {
       priority: "high",
       notification: {
-        channelId: process.env.FCM_ANDROID_CHANNEL_ID || "upanaya-notifications",
+        channelId: process.env.FCM_ANDROID_CHANNEL_ID || "rigweda-notifications",
         sound: "default"
       }
     },

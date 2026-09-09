@@ -31,7 +31,7 @@ node src/script/payroll.migrate.js down --steps=2
 
 ```env
 PAYROLL_DB_ENABLED=true
-PAYROLL_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/upanaya_payroll
+PAYROLL_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rigweda_payroll
 PAYROLL_MIGRATIONS_TABLE=payroll_schema_migrations
 PAYROLL_MIGRATION_LOCK_KEY=9011001
 ```

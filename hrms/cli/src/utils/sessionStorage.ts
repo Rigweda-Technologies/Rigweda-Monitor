@@ -7,7 +7,7 @@ type SessionStorageNativeModule = {
   removeItem(key: string): Promise<void>;
 };
 
-const SESSION_STORAGE_KEY = 'upanaya-session';
+const SESSION_STORAGE_KEY = 'rigweda-session';
 
 const sessionStorageModule = NativeModules.SessionStorage as
   | SessionStorageNativeModule

@@ -45,6 +45,6 @@ class SessionStorageModule(reactContext: ReactApplicationContext) :
   }
 
   companion object {
-    private const val PREFS_NAME = "upanaya_session_storage"
+    private const val PREFS_NAME = "rigweda_session_storage"
   }
 }

@@ -1,4 +1,4 @@
-const DEVICE_ID_KEY = "upanaya:device-id";
+const DEVICE_ID_KEY = "rigweda:device-id";
 
 const generateDeviceId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {

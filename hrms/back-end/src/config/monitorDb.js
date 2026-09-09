@@ -12,7 +12,7 @@ const getMonitorDbConfig = () => {
     max: Number(process.env.MONITOR_PG_POOL_MAX || 20),
     idleTimeoutMillis: Number(process.env.MONITOR_PG_IDLE_TIMEOUT_MS || 30000),
     connectionTimeoutMillis: Number(process.env.MONITOR_PG_CONNECTION_TIMEOUT_MS || 10000),
-    application_name: process.env.MONITOR_PG_APP_NAME || "upanaya-hrms-monitor-read"
+    application_name: process.env.MONITOR_PG_APP_NAME || "rigweda-hrms-monitor-read"
   };
 
   if (connectionString) {
