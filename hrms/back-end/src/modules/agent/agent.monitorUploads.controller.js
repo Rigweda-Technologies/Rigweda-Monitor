@@ -72,6 +72,7 @@ exports.createUploadSession = async (req, res) => {
 exports.completeUploadSession = async (req, res) => {
   const payload = validate(completeSessionSchema, req.body);
   const data = await service.completeUploadSession({
+    req,
     batchId: req.params.batchId,
     payload
   });

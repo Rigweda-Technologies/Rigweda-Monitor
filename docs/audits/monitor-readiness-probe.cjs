@@ -18,7 +18,8 @@ function load(relative, dependencies) {
   let response;
   const controller = load("hrms/back-end/src/modules/agent/agent.monitorSettings.controller.js", {
     "./agent.monitorSettings.service": {
-      getRawSettings: async () => ({ apiSecret: "SYNTHETIC_TEST_SECRET" })
+      getRawSettings: async () => { throw new Error("Raw settings must not be exposed"); },
+      getPublicSettings: async () => ({ cloudName: "test", apiSecretMasked: "masked" })
     },
     "../../utils/responseBuilder": { buildSuccessResponse: value => value },
     "../../realtime/socket": {}
@@ -26,34 +27,13 @@ function load(relative, dependencies) {
   await controller.getCloudinaryUploadConfig({ user: { organizationId: "org-a" } }, {
     status() { return this; }, json(value) { response = value; return this; }
   });
-  assert.equal(response.data.apiSecret, "SYNTHETIC_TEST_SECRET");
-  console.log("CONFIRMED: upload-config controller returns raw secret.");
+  assert.equal(response.data.apiSecret, undefined);
+  assert.equal(response.data.apiSecretMasked, undefined);
+  console.log("FIXED: upload-config controller returns no secret.");
 
-  const queries = [];
-  const service = load("hrms/back-end/src/modules/agent/agent.monitorUploads.service.js", {
-    crypto: require("node:crypto"),
-    cloudinary: { v2: {} },
-    "../employees/employee.model": {},
-    "../../config/monitorDb": {
-      getMonitorPgPool: async () => ({
-        query: async (sql, values) => { queries.push({ sql, values }); return { rows: [] }; }
-      })
-    },
-    "./agent.monitorSettings.service": {}
-  });
-  const result = await service.completeUploadSession({
-    batchId: "nonexistent-batch",
-    payload: { deviceId: "another-device", uploaded: [{
-      clientScreenshotId: "another-screenshot",
-      cloudinaryUrl: "https://example.invalid/not-uploaded.png"
-    }] }
-  });
-  const update = queries.find(q => q.sql.includes("UPDATE monitor_screenshots"));
-  assert.ok(update);
-  assert.ok(!update.sql.split("WHERE")[1].includes("organization_id"));
-  assert.ok(!update.sql.split("WHERE")[1].includes("batch_id"));
-  assert.equal(update.values[5], "https://example.invalid/not-uploaded.png");
-  assert.equal(result, null);
-  console.log("CONFIRMED: completion writes unverified URL without tenant or batch predicate.");
-  console.log("CONFIRMED: zero matching rows returns null without rejecting completion.");
+  const complete = require(path.join(root, "hrms/back-end/src/modules/agent/screenshotCompletion.cjs"));
+  await assert.rejects(complete({ connect() { throw new Error("Must reject before database access"); } }, {
+    batchId: "unknown", deviceId: "unknown"
+  }), { statusCode: 404 });
+  console.log("FIXED: completion rejects missing ownership context. Run screenshotOwnership.test.js for PostgreSQL isolation coverage.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

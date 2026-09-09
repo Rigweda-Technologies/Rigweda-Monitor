@@ -98,10 +98,11 @@ exports.testCloudinarySettings = async (req, res) => {
 };
 
 exports.getCloudinaryUploadConfig = async (req, res) => {
-  const data = await service.getRawSettings(req.user.organizationId);
-  if (!data) {
+  const settings = await service.getPublicSettings(req.user.organizationId);
+  if (!settings) {
     throw { code: 404, message: "Cloudinary monitor settings are not configured for this organization." };
   }
+  const { apiSecretMasked, ...data } = settings;
   return res.status(200).json(buildSuccessResponse({
     code: 200,
     message: "Cloudinary upload config fetched successfully",

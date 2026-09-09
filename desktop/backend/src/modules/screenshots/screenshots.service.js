@@ -1,3 +1,4 @@
+import verifyScreenshotAsset from "./verifyScreenshotAsset.cjs";
 import crypto from "node:crypto";
 import { createSignedUploadPayload, resolveCloudinarySettings, uploadBufferToCloudinary } from "../../integrations/cloudinary.js";
 import { getEmployeeProfileFromRigweda } from "../../integrations/rigweda-api.js";
@@ -49,7 +50,7 @@ export const screenshotService = {
   },
 
   async createScreenshot(payload) {
-    const cloudinarySettings = await resolveCloudinarySettings({ token: payload.auth?.token });
+    const cloudinarySettings = await resolveCloudinarySettings({ organizationId: payload.auth?.organizationId });
     const dateFolder = payload.dateFolder || resolveDateFolder(payload.capturedAt);
     const originalFileName = payload.screenshot.filename;
     const publicId = buildCloudinaryPublicId({
@@ -63,6 +64,7 @@ export const screenshotService = {
     const cloudinaryResult = await uploadBufferToCloudinary({
       buffer: payload.screenshot.buffer,
       token: payload.auth?.token,
+      organizationId: payload.auth?.organizationId,
       folder,
       publicId,
       resourceType: "image",
@@ -70,7 +72,7 @@ export const screenshotService = {
 
     const record = {
       id: crypto.randomUUID(),
-      organizationId: payload.organizationId || null,
+      organizationId: payload.auth?.organizationId || null,
       employeeId: payload.employeeId,
       deviceId: payload.deviceId || "legacy",
       clientScreenshotId: payload.clientScreenshotId || crypto.randomUUID(),
@@ -91,10 +93,11 @@ export const screenshotService = {
   },
 
   async createUploadSession({ auth, batchId, deviceId, screenshots }) {
+    if (!auth?.organizationId) throw Object.assign(new Error("Organization is required"), { statusCode: 403 });
     const employeeProfile = await this.resolveEmployeeProfile(auth.token);
     const employeeId = employeeProfile?.employeeDbId || employeeProfile?.employeeId || employeeProfile?.userId;
 
-    if (!employeeId) {
+    if (!employeeId || (employeeProfile?.organizationId && String(employeeProfile.organizationId) !== String(auth.organizationId))) {
       const error = new Error("Employee profile not found for the authenticated user.");
       error.statusCode = 404;
       throw error;
@@ -206,23 +209,18 @@ export const screenshotService = {
     };
   },
 
-  async completeUploadSession({ batchId, deviceId, uploaded, duplicates }) {
-    for (const upload of uploaded) {
-      await screenshotModel.markUploaded({
-        deviceId,
-        clientScreenshotId: upload.clientScreenshotId,
-        upload,
-      });
+  async completeUploadSession({ auth, batchId, deviceId, uploaded, duplicates }) {
+    if (!auth?.organizationId) throw Object.assign(new Error("Organization is required"), { statusCode: 403 });
+    const profile = await this.resolveEmployeeProfile(auth.token);
+    const employeeId = profile?.employeeDbId || profile?.employeeId || profile?.userId;
+    if (!employeeId || (profile.organizationId && String(profile.organizationId) !== String(auth.organizationId))) {
+      throw Object.assign(new Error("Employee profile not found for this organization"), { statusCode: 403 });
     }
-
-    for (const duplicate of duplicates) {
-      await screenshotModel.markDuplicate({
-        deviceId,
-        clientScreenshotId: duplicate.clientScreenshotId,
-        duplicateOf: duplicate.duplicateOf,
-      });
-    }
-
-    return screenshotModel.completeBatch({ batchId, deviceId });
+    const settings = await resolveCloudinarySettings({ organizationId: auth.organizationId });
+    return screenshotModel.completeUploadSession({
+      verifyAsset: row => verifyScreenshotAsset(settings, row),
+      organizationId: String(auth.organizationId), employeeId: String(employeeId),
+      batchId, deviceId, uploaded, duplicates
+    });
   },
 };

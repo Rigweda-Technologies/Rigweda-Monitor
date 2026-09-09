@@ -19,6 +19,7 @@ const verifyRemoteToken = async (token) => {
     : `${hrmsBackendUrl}/api/users/me/profile`;
 
   const response = await fetch(profileUrl, {
+    signal: AbortSignal.timeout(10000),
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -29,7 +30,7 @@ const verifyRemoteToken = async (token) => {
   }
 
   const payload = await response.json();
-  return payload?.data ?? null;
+  return payload?.success === true ? payload.data ?? null : null;
 };
 
 export const authenticateRequest = async (request, reply) => {
@@ -42,56 +43,26 @@ export const authenticateRequest = async (request, reply) => {
     });
   }
 
-  const secret = getEnv().jwtAccessSecret;
-
-  if (!secret) {
-    return reply.code(500).send({
-      success: false,
-      message: "JWT_ACCESS_SECRET is not configured.",
-    });
-  }
-
   try {
-    const payload = jwt.verify(token, secret);
-
-    request.auth = {
-      token,
-      userId: payload.userId || payload._id || payload.sub,
-      organizationId: payload.organizationId || payload.org,
-      roleKey: payload.role,
-      roleIds: payload.roleIds,
-      activeRoleId: payload.activeRoleId,
-      sessionId: payload.sid,
-    };
-    return;
-  } catch {
+    // HRMS owns active-session and disabled-account checks. A valid JWT signature
+    // alone must never bypass revocation, including on completion endpoints.
+    const profile = await verifyRemoteToken(token);
     const decoded = jwt.decode(token);
-    if (decoded && typeof decoded === "object") {
-      const remoteProfile = await verifyRemoteToken(token);
-
-      if (!remoteProfile) {
-        return reply.code(401).send({
-          success: false,
-          message: "Your access token is invalid or expired.",
-        });
-      }
-
-      request.auth = {
-        token,
-        userId: decoded.userId || decoded._id || decoded.sub,
-        organizationId: decoded.organizationId || decoded.org || remoteProfile.organizationId,
-        roleKey: decoded.role,
-        roleIds: decoded.roleIds,
-        activeRoleId: decoded.activeRoleId,
-        sessionId: decoded.sid,
-        remoteToken: true,
-      };
-      return;
+    if (!profile || !decoded || typeof decoded !== "object" || profile.mustChangePassword) {
+      return reply.code(401).send({ success: false, message: "Your session is invalid or expired." });
     }
-
-    return reply.code(401).send({
-      success: false,
-      message: "Your access token is invalid or expired.",
-    });
+    const organizationId = decoded.organizationId || decoded.org;
+    const userId = decoded.userId || decoded._id || decoded.sub;
+    if (!organizationId || !userId) {
+      return reply.code(403).send({ success: false, message: "An organization user session is required." });
+    }
+    request.auth = {
+      token, userId, organizationId,
+      roleKey: decoded.roleKey || decoded.role,
+      roleIds: decoded.roleIds, activeRoleId: decoded.activeRoleId,
+      sessionId: decoded.sid,
+    };
+  } catch {
+    return reply.code(503).send({ success: false, message: "Session verification unavailable. Please retry." });
   }
 };

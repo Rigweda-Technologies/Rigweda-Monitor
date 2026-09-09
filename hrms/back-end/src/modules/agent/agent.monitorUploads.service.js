@@ -118,7 +118,7 @@ const createSignedUploadPayload = ({ settings, folder, publicId, context = {} })
   });
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const params = { folder, public_id: publicId, timestamp };
+  const params = { folder, public_id: publicId, timestamp, type: "authenticated" };
 
   if (Object.keys(context).length > 0) {
     params.context = Object.entries(context)
@@ -138,6 +138,7 @@ const createSignedUploadPayload = ({ settings, folder, publicId, context = {} })
 };
 
 exports.createUploadSession = async ({ req, payload }) => {
+  if (!req.user?.organizationId) throw { code: 403, statusCode: 403, message: "Organization is required" };
   const employee = await resolveEmployee(req);
   const employeeId = String(employee._id);
   const organizationId = String(req.user.organizationId);
@@ -152,7 +153,7 @@ exports.createUploadSession = async ({ req, payload }) => {
   const firstCapturedAt = screenshots[0]?.capturedAt;
   const lastCapturedAt = screenshots[screenshots.length - 1]?.capturedAt;
 
-  await pool.query(
+  const batchWrite = await pool.query(
     `INSERT INTO monitor_screenshot_batches (
       id, organization_id, employee_id, device_id, status, expected_count,
       expected_bytes, first_captured_at, last_captured_at
@@ -161,7 +162,9 @@ exports.createUploadSession = async ({ req, payload }) => {
       expected_count = EXCLUDED.expected_count,
       expected_bytes = EXCLUDED.expected_bytes,
       first_captured_at = EXCLUDED.first_captured_at,
-      last_captured_at = EXCLUDED.last_captured_at`,
+      last_captured_at = EXCLUDED.last_captured_at
+    WHERE monitor_screenshot_batches.organization_id = EXCLUDED.organization_id
+      AND monitor_screenshot_batches.employee_id = EXCLUDED.employee_id`,
     [
       payload.batchId,
       organizationId,
@@ -174,6 +177,7 @@ exports.createUploadSession = async ({ req, payload }) => {
     ]
   );
 
+  if (batchWrite.rowCount !== 1) throw { code: 409, statusCode: 409, message: "Batch identifier is not available for this account" };
   const uploads = [];
 
   for (const item of screenshots) {
@@ -196,7 +200,7 @@ exports.createUploadSession = async ({ req, payload }) => {
     });
     const publicId = buildBatchPublicId(item);
 
-    await pool.query(
+    const itemWrite = await pool.query(
       `INSERT INTO monitor_screenshots (
         id, batch_id, organization_id, employee_id, device_id, client_screenshot_id,
         captured_at, original_file_name, mime_type, width, height, sha256,
@@ -209,7 +213,9 @@ exports.createUploadSession = async ({ req, payload }) => {
         batch_id = EXCLUDED.batch_id,
         size_bytes = EXCLUDED.size_bytes,
         cloudinary_folder = EXCLUDED.cloudinary_folder,
-        cloudinary_public_id = EXCLUDED.cloudinary_public_id`,
+        cloudinary_public_id = EXCLUDED.cloudinary_public_id
+      WHERE monitor_screenshots.organization_id = EXCLUDED.organization_id
+        AND monitor_screenshots.employee_id = EXCLUDED.employee_id`,
       [
         crypto.randomUUID(),
         payload.batchId,
@@ -229,6 +235,7 @@ exports.createUploadSession = async ({ req, payload }) => {
       ]
     );
 
+    if (itemWrite.rowCount !== 1) throw { code: 409, statusCode: 409, message: "Screenshot identifier is not available for this account" };
     if (existing.rows[0]) {
       uploads.push({
         clientScreenshotId: item.clientScreenshotId,
@@ -267,71 +274,16 @@ exports.createUploadSession = async ({ req, payload }) => {
   };
 };
 
-exports.completeUploadSession = async ({ batchId, payload }) => {
+exports.completeUploadSession = async ({ req, batchId, payload }) => {
+  if (!req.user?.organizationId) throw { code: 403, statusCode: 403, message: "Organization is required" };
+  const employee = await resolveEmployee(req);
   const pool = await ensureMonitorTables();
-
-  for (const upload of payload.uploaded || []) {
-    await pool.query(
-      `UPDATE monitor_screenshots SET
-        cloudinary_asset_id = $3,
-        cloudinary_version = $4,
-        cloudinary_format = $5,
-        cloudinary_url = $6,
-        size_bytes = COALESCE($7, size_bytes),
-        upload_status = 'uploaded',
-        error_message = NULL,
-        uploaded_at = NOW()
-      WHERE device_id = $1 AND client_screenshot_id = $2`,
-      [
-        payload.deviceId,
-        upload.clientScreenshotId,
-        upload.cloudinaryAssetId || null,
-        upload.cloudinaryVersion || null,
-        upload.cloudinaryFormat || null,
-        upload.cloudinaryUrl,
-        upload.sizeBytes || null
-      ]
-    );
-  }
-
-  for (const duplicate of payload.duplicates || []) {
-    await pool.query(
-      `UPDATE monitor_screenshots SET
-        duplicate_of = $3,
-        upload_status = 'duplicate',
-        processing_status = 'complete',
-        uploaded_at = NOW()
-      WHERE device_id = $1 AND client_screenshot_id = $2`,
-      [payload.deviceId, duplicate.clientScreenshotId, duplicate.duplicateOf]
-    );
-  }
-
-  const result = await pool.query(
-    `WITH counts AS (
-      SELECT
-        COUNT(*) FILTER (WHERE upload_status = 'uploaded') AS uploaded_count,
-        COUNT(*) FILTER (WHERE upload_status = 'duplicate') AS duplicate_count,
-        COALESCE(SUM(size_bytes) FILTER (WHERE upload_status = 'uploaded'), 0) AS uploaded_bytes
-      FROM monitor_screenshots
-      WHERE batch_id = $1 AND device_id = $2
-    )
-    UPDATE monitor_screenshot_batches b SET
-      uploaded_count = counts.uploaded_count,
-      duplicate_count = counts.duplicate_count,
-      uploaded_bytes = counts.uploaded_bytes,
-      status = CASE
-        WHEN counts.uploaded_count + counts.duplicate_count >= b.expected_count THEN 'complete'
-        ELSE 'partial'
-      END,
-      completed_at = CASE
-        WHEN counts.uploaded_count + counts.duplicate_count >= b.expected_count THEN NOW()
-        ELSE b.completed_at
-      END
-    FROM counts
-    WHERE b.id = $1 AND b.device_id = $2
-    RETURNING b.*`,
-    [batchId, payload.deviceId]
-  );
-
-  return result.rows[0] || null;
+  const settings = await settingsService.getRawSettings(String(req.user.organizationId));
+  return require("./screenshotCompletion.cjs")(pool, {
+    verifyAsset: row => require("./verifyScreenshotAsset.cjs")(settings, row),
+    ...payload,
+    batchId,
+    organizationId: String(req.user.organizationId),
+    employeeId: String(employee._id)
+  });
 };

@@ -70,6 +70,14 @@ shutdown_reason = "running"
 shutdown_reason_logged = False
 
 
+class ClosingConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 def _can_write_to_console(stream: object) -> bool:
     try:
         return bool(stream) and hasattr(stream, "isatty") and stream.isatty()
@@ -329,6 +337,20 @@ def get_access_token() -> str | None:
     return token
 
 
+def queue_identity(token: str | None) -> tuple[str, str, str] | None:
+    """Bind local capture to a login; the server still verifies the token."""
+    if not token:
+        return None
+    try:
+        encoded = token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        organization = str(claims.get("organizationId") or claims.get("org") or "")
+        user = str(claims.get("userId") or claims.get("_id") or claims.get("sub") or "")
+        return (organization, user, get_device_id()) if organization and user else None
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
 def _normalize_process_path(path: str | None) -> str:
     if not path:
         return ""
@@ -515,7 +537,7 @@ def get_device_id() -> str:
 
 def get_connection() -> sqlite3.Connection:
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(QUEUE_DB)
+    connection = sqlite3.connect(QUEUE_DB, factory=ClosingConnection)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute(
@@ -554,6 +576,9 @@ def get_connection() -> sqlite3.Connection:
         "CREATE INDEX IF NOT EXISTS idx_screenshots_local_path ON screenshots (local_path)"
     )
     for column_sql in (
+        "ALTER TABLE screenshots ADD COLUMN organization_id TEXT",
+        "ALTER TABLE screenshots ADD COLUMN user_id TEXT",
+        "ALTER TABLE screenshots ADD COLUMN device_id TEXT",
         "ALTER TABLE screenshots ADD COLUMN local_deleted_at TEXT",
         "ALTER TABLE screenshots ADD COLUMN local_delete_error TEXT",
     ):
@@ -562,6 +587,8 @@ def get_connection() -> sqlite3.Connection:
         except sqlite3.OperationalError as error:
             if "duplicate column name" not in str(error).lower():
                 raise
+    connection.execute("UPDATE screenshots SET status = 'quarantined' WHERE organization_id IS NULL OR user_id IS NULL OR device_id IS NULL")
+    connection.commit()
     return connection
 
 
@@ -601,8 +628,8 @@ def queue_existing_screenshots() -> int:
                 """
                 INSERT INTO screenshots (
                   id, captured_at, local_path, original_file_name, mime_type,
-                  width, height, sha256, size_bytes
-                ) VALUES (?, ?, ?, ?, 'image/png', ?, ?, ?, ?)
+                  width, height, sha256, size_bytes, status
+                ) VALUES (?, ?, ?, ?, 'image/png', ?, ?, ?, ?, 'quarantined')
                 """,
                 (
                     f"shot_{uuid.uuid4().hex}",
@@ -647,14 +674,15 @@ def insert_queue_record(
     height: int,
     sha256: str,
     size_bytes: int,
+    identity: tuple[str, str, str],
 ) -> None:
     with get_connection() as connection:
         connection.execute(
             """
             INSERT INTO screenshots (
               id, captured_at, local_path, original_file_name, mime_type,
-              width, height, sha256, size_bytes
-            ) VALUES (?, ?, ?, ?, 'image/png', ?, ?, ?, ?)
+              width, height, sha256, size_bytes, organization_id, user_id, device_id
+            ) VALUES (?, ?, ?, ?, 'image/png', ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 screenshot_id,
@@ -665,6 +693,7 @@ def insert_queue_record(
                 height,
                 sha256,
                 size_bytes,
+                *identity,
             ),
         )
 
@@ -674,9 +703,13 @@ def capture_screenshot() -> Path | None:
         return None
 
     try:
+        identity = queue_identity(get_access_token())
+        if not identity:
+            return None
         now = datetime.now(UTC)
         date_folder, file_timestamp = format_date_parts(now)
-        folder_path = SCREENSHOT_ROOT / date_folder
+        owner_folder = hashlib.sha256("|".join(identity).encode()).hexdigest()
+        folder_path = SCREENSHOT_ROOT / owner_folder / date_folder
         screenshot_id = f"shot_{uuid.uuid4().hex}"
         file_path = folder_path / f"screenshot_{file_timestamp}_{screenshot_id}.png"
 
@@ -704,6 +737,7 @@ def capture_screenshot() -> Path | None:
             height=height,
             sha256=sha256,
             size_bytes=file_path.stat().st_size,
+            identity=identity,
         )
 
         log_message(f"Screenshot queued: {file_path}")
@@ -716,16 +750,17 @@ def capture_screenshot() -> Path | None:
         capture_lock.release()
 
 
-def fetch_upload_candidates(limit: int) -> list[sqlite3.Row]:
+def fetch_upload_candidates(limit: int, identity: tuple[str, str, str]) -> list[sqlite3.Row]:
     with get_connection() as connection:
         rows = connection.execute(
             """
             SELECT * FROM screenshots
             WHERE status IN ('pending', 'failed', 'uploading')
+              AND organization_id = ? AND user_id = ? AND device_id = ?
             ORDER BY captured_at ASC
             LIMIT ?
             """,
-            (limit,),
+            (*identity, limit),
         ).fetchall()
     return rows
 
@@ -738,11 +773,11 @@ def mark_rows_failed(rows: list[sqlite3.Row], error: Exception) -> None:
         connection.executemany(
             """
             UPDATE screenshots
-            SET status = 'failed',
+            SET status = CASE WHEN status = 'cloudinary_uploaded' THEN status ELSE 'failed' END,
                 retry_count = retry_count + 1,
                 last_error = ?,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = ? AND status <> 'invalid'
             """,
             [(str(error)[:1000], row["id"]) for row in rows],
         )
@@ -785,7 +820,7 @@ def mark_rows_invalid(items: list[tuple[str, Exception]]) -> None:
             SET status = 'invalid',
                 last_error = ?,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = ? AND status <> 'invalid'
             """,
             [(str(error)[:1000], screenshot_id) for screenshot_id, error in items],
         )
@@ -934,12 +969,19 @@ def commit_batch(
 
     for backend_url in get_backend_base_url_candidates():
         try:
-            post_json(
+            response = post_json(
                 f"{backend_url}/screenshot-batches/{batch_id}/complete",
                 payload,
                 token=token,
                 timeout=60,
             )
+            data = response.get("data") or {}
+            expected_ids = {item["clientScreenshotId"] for item in uploaded + duplicates}
+            acknowledged = data.get("acknowledgedScreenshotIds")
+            if (response.get("success") is not True or data.get("id") != batch_id
+                    or data.get("device_id") != device_id or not isinstance(acknowledged, list)
+                    or set(acknowledged) != expected_ids):
+                raise RuntimeError("Backend did not acknowledge the requested screenshot IDs; keeping local files.")
             if backend_url != get_backend_base_url():
                 log_message(f"Screenshot batch {batch_id} committed via fallback backend {backend_url}.")
             break
@@ -990,6 +1032,33 @@ def commit_batch(
                 )
 
 
+def resume_uploaded_screenshots(token: str, identity: tuple[str, str, str]) -> None:
+    """Recover the durable gap between cloud upload and server acknowledgement."""
+    with get_connection() as connection:
+        rows = connection.execute(
+            "SELECT * FROM screenshots WHERE status = 'cloudinary_uploaded' AND organization_id = ? AND user_id = ? AND device_id = ? ORDER BY captured_at LIMIT 100", identity
+        ).fetchall()
+    batches: dict[str, list] = {}
+    for row in rows:
+        if row["batch_id"]:
+            batches.setdefault(row["batch_id"], []).append(row)
+    for batch_id, batch_rows in batches.items():
+        uploaded = [{
+            "clientScreenshotId": row["id"],
+            "cloudinaryPublicId": row["cloudinary_public_id"],
+            "cloudinaryAssetId": row["cloudinary_asset_id"],
+            "cloudinaryVersion": row["cloudinary_version"],
+            "cloudinaryFormat": row["cloudinary_format"],
+            "cloudinaryUrl": row["cloudinary_url"],
+            "sizeBytes": row["size_bytes"],
+        } for row in batch_rows]
+        try:
+            commit_batch(batch_id=batch_id, device_id=identity[2], uploaded=uploaded, duplicates=[], token=token)
+        except Exception as error:
+            mark_rows_failed(batch_rows, error)
+            log_exception("Uploaded screenshots remain queued for completion retry.", error)
+
+
 def upload_pending_screenshots() -> None:
     if not upload_lock.acquire(blocking=False):
         return
@@ -1018,13 +1087,17 @@ def upload_pending_screenshots() -> None:
             )
             return
 
+        identity = queue_identity(token)
+        if not identity:
+            return
+        resume_uploaded_screenshots(token, identity)
         queue_existing_screenshots()
-        rows = fetch_upload_candidates(get_batch_size())
+        rows = fetch_upload_candidates(get_batch_size(), identity)
         if not rows:
             return
 
         batch_id = f"batch_{uuid.uuid4().hex}"
-        device_id = get_device_id()
+        device_id = identity[2]
         mark_batch_id(rows, batch_id)
 
         request_payload = {

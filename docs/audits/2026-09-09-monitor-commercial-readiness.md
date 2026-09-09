@@ -6,8 +6,9 @@ Scope: Python screenshot agent; Desktop authentication, screenshot ingestion and
 
 ## Release blockers
 
-### 1. Critical: employee-accessible storage API secret
+### 1. Critical: employee-accessible storage API secret — code fix completed
 
+- Fix status: HRMS now returns public settings only; Desktop reads encrypted tenant settings directly from the shared database and returns an explicit public projection. Five focused regression tests pass. Deployment of both backends, rotation of previously exposed credentials, and real-cloud upload verification remain operational follow-ups. The evidence below describes the original defect.
 - HRMS agent.monitorUploads.routes.js allows EMP_SELF_VIEW on GET /api/agents/cloudinary/upload-config.
 - agent.monitorSettings.controller.js:100 returns getRawSettings unchanged; agent.monitorSettings.service.js:165 explicitly includes decrypted apiSecret.
 - An ordinary authorized employee can obtain credentials for the configured Cloudinary account. Shared accounts increase the potential blast radius.
@@ -15,8 +16,9 @@ Scope: Python screenshot agent; Desktop authentication, screenshot ingestion and
 - Evidence: isolated controller probe returned a synthetic secret unchanged; route permissions verified in source. No live employee login was used.
 - Cloudinary explicitly prohibits exposing API secrets to clients: https://cloudinary.com/documentation/client_side_uploading
 
-### 2. Critical: screenshot completion lacks ownership checks
+### 2. Critical: screenshot completion lacks ownership checks — code fix completed
 
+- Fix status: both APIs derive tenant/employee identity from authentication, validate device and batch ownership, scope every screenshot write, validate duplicate ownership/hash, and commit atomically. Create-session upsert conflicts cannot overwrite another owner. PostgreSQL tests cover both deployments. Provider-upload verification remains the next separate fix. Original evidence follows.
 - HRMS agent.monitorUploads.controller.js omits authenticated identity from completion calls.
 - agent.monitorUploads.service.js:270 updates by device_id and client_screenshot_id without organization, employee or batch predicates.
 - Desktop screenshots.controller.js and screenshots.model.js:128 repeat the defect.
@@ -25,38 +27,31 @@ Scope: Python screenshot agent; Desktop authentication, screenshot ingestion and
 - Evidence: actual HRMS service executed with a mocked database and emitted an unscoped update. No live cross-tenant exploit was attempted.
 - OWASP guidance: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
 
-### 3. High: completion trusts client claims and can acknowledge nothing
+### 3. High: completion trusts client claims and can acknowledge nothing - code fix completed
 
-- Both completion services accept cloudinaryUrl without verifying a provider signature or expected asset.
-- HRMS completion returns null if the batch does not exist; the controller still sends success.
-- Python screenshot.py:923 ignores completion response data and deletes submitted local files after HTTP success.
-- Result: fabricated evidence, or local deletion after false success if a fallback backend lacks matching metadata.
-- Fix: verify provider evidence against expected tenant/public ID; transactional commit; return exact acknowledged screenshot IDs; delete only acknowledged files.
+- Fix status: HRMS and Desktop completion now verify the expected Cloudinary asset with the organization's server credentials before writing uploaded metadata. Completion stores the provider-returned asset ID, version, format, URL and size, and rolls back if verification fails.
+- The Python agent now requires a successful response for the same batch, same device and exact `acknowledgedScreenshotIds` before deleting local files.
+- Tests: `screenshotAssetVerification.test.js`, `screenshotOwnership.test.js` and `test_screenshot_commit.py`.
 - Evidence: real service with a fake database accepted an arbitrary URL and returned null without error; agent deletion behavior traced in source.
 
-### 4. High: process crashes strand uploaded screenshots
+### 4. High: process crashes strand uploaded screenshots - code fix completed
 
-- screenshot.py:903 persists cloudinary_uploaded before commit.
-- screenshot.py:719 retries only pending, failed and uploading states. File discovery skips existing rows.
-- Power loss or force termination in this window leaves screenshots outside recovery and potentially pending in the dashboard indefinitely.
-- Fix: durable uploaded-but-uncommitted state, stable batch identity and commit-only recovery.
-- Evidence: actual retry selector executed against SQLite excluded an uploaded-before-crash row. Ordinary caught exceptions differ: the existing exception handler marks rows failed.
+- Fix status: `cloudinary_uploaded` rows are no longer treated as ordinary upload candidates. The agent resumes them through `resume_uploaded_screenshots`, preserving their original batch ID and retrying backend completion without reuploading the file.
+- Completion retry keeps rows in `cloudinary_uploaded` on temporary backend failure and increments retry metadata.
+- Tests: `test_screenshot_recovery.py` and `monitor-queue-probe.py`.
 
-### 5. High: backlog is not bound to its original account
+### 5. High: backlog is not bound to its original account - code fix completed
 
-- screenshot.py:55 uses one queue per runtime data root; schema at line 522 has no organization or employee identity.
-- Upload uses the current access token, and the server assigns that token's employee.
-- Signing into another account in the same runtime profile with a pending backlog can upload old screenshots under the new organization/account.
-- Fix: persist immutable organization/employee/device ownership at capture; partition queue and files by identity; quarantine legacy unowned files.
-- Evidence: source trace; real two-account desktop switching remains untested.
+- Fix status: captured screenshots now store organization, user and device identity in SQLite, and upload selection is scoped to the current token-derived identity.
+- New screenshot files are written under an identity-derived owner folder. Legacy/unowned rows are quarantined instead of being silently assigned to the next logged-in account.
+- Tests: `test_screenshot_identity.py`.
 
-### 6. High: application does not enforce private screenshot delivery
+### 6. High: application does not enforce private screenshot delivery - code fix completed
 
-- HRMS agent.monitorUploads.service.js:121 and Desktop integrations/cloudinary.js sign uploads without authenticated delivery type.
-- HRMS agent.screenshots.service.js returns stored URLs directly.
-- Under normal Cloudinary public-upload behavior, anyone with the URL can retrieve media outside HRMS permission checks.
-- Fix: authenticated originals and derivatives, temporary authorized delivery, and copied-URL/revocation tests.
-- Evidence: source configuration; live Cloudinary account restrictions were not inspected and could reduce exposure.
+- Fix status: new monitor screenshot uploads are signed with Cloudinary `type: authenticated`, completion verifies authenticated assets, and HRMS screenshot listing returns short-lived signed authenticated delivery URLs instead of the stored provider URL.
+- Existing screenshots uploaded before this fix may still exist as public `upload` assets in Cloudinary and should be migrated or deleted according to retention policy.
+- Tests: `screenshotSignedDelivery.test.js`, `screenshotAssetVerification.test.js`, and `cloudinarySecrets.test.js`.
+- Provider reference: https://cloudinary.com/documentation/control_access_to_media
 - Provider reference: https://cloudinary.com/documentation/control_access_to_media
 
 ### 7. High: Desktop JWT verification skips session revocation
