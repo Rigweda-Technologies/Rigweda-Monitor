@@ -214,3 +214,32 @@ exports.upsert = async (req) => {
 
   return settings;
 };
+
+const themeProjection = "themeMode themePreset themeConfig -_id";
+
+const requireOrganization = (req) => {
+  if (!req.user?.organizationId) {
+    throw { statusCode: 403, code: 403, message: "Organization is required" };
+  }
+  return req.user.organizationId;
+};
+
+exports.getTheme = async (req) => {
+  const settings = await OrgSettings.findOne({
+    organizationId: requireOrganization(req)
+  }).select(themeProjection).lean();
+  return settings || {
+    themeMode: DEFAULTS.themeMode,
+    themePreset: DEFAULTS.themePreset,
+    themeConfig: {}
+  };
+};
+
+exports.updateTheme = async (req) => {
+  const { themeMode, themePreset, themeConfig } = req.body;
+  return OrgSettings.findOneAndUpdate(
+    { organizationId: requireOrganization(req) },
+    { $set: { themeMode, themePreset, themeConfig } },
+    { upsert: true, new: true, runValidators: true }
+  ).select(themeProjection).lean();
+};

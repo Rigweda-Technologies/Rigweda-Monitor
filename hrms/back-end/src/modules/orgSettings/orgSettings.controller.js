@@ -15,3 +15,15 @@ exports.upsert = async (req, res) => {
     })
   );
 };
+
+exports.getTheme = async (req, res) => {
+  const data = await service.getTheme(req);
+  res.status(200).json(buildSuccessResponse({ data }));
+};
+
+exports.updateTheme = async (req, res) => {
+  const data = await service.updateTheme(req);
+  res.status(200).json(buildSuccessResponse({
+    message: "Organization theme saved", data
+  }));
+};

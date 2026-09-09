@@ -128,35 +128,38 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
     loadNotifications(true);
   }, []);
 
-  const loadThemeSettings = async () => {
-    if (!canManageSettings) return;
-    const res: any = await getApiWithToken("/org-settings", null, {
-      requiredPermissions: ["ORG_SETTINGS_VIEW"]
-    });
-    if (res?.success) {
-      setOrgSettings(res.data || null);
-      setCustomTheme({
-        primary: res.data?.themeConfig?.primary || "",
-        secondary: res.data?.themeConfig?.secondary || "",
-        background: res.data?.themeConfig?.background || "",
-        foreground: res.data?.themeConfig?.foreground || "",
-        sidebar: res.data?.themeConfig?.sidebar || "",
-        sidebarGradientStart: res.data?.themeConfig?.sidebarGradientStart || "",
-        sidebarGradientEnd: res.data?.themeConfig?.sidebarGradientEnd || "",
-        sidebarForeground: res.data?.themeConfig?.sidebarForeground || "",
-        accent: res.data?.themeConfig?.accent || "",
-        card: res.data?.themeConfig?.card || "",
-        muted: res.data?.themeConfig?.muted || "",
-        border: res.data?.themeConfig?.border || "",
-        ring: res.data?.themeConfig?.ring || ""
-      });
-      applyThemeToDocument(res.data);
-    }
-  };
-
   useEffect(() => {
-    loadThemeSettings();
-  }, [canManageSettings]);
+    let cancelled = false;
+    let inFlight = false;
+    const loadThemeSettings = async () => {
+      if (inFlight || savingTheme || themeEditorOpen) return;
+      inFlight = true;
+      try {
+        const res = await getApiWithToken("/org-settings/theme", null, {
+          forceRefresh: true
+        });
+        if (!cancelled && res?.success) {
+          setOrgSettings(res.data || null);
+          setCustomTheme(res.data?.themeConfig || {});
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+    void loadThemeSettings();
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadThemeSettings();
+    };
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [profile?.organizationId, savingTheme, themeEditorOpen]);
 
   useEffect(() => {
     applyThemeToDocument(orgSettings);
@@ -226,40 +229,12 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   };
 
   const saveTheme = async (payload: OrgThemeSettings) => {
-    if (!orgSettings) return;
+    if (!canManageSettings || savingTheme) return;
     setSavingTheme(true);
     try {
       const res: any = await postApiWithToken(
-        "/org-settings",
+        "/org-settings/theme",
         {
-          leaveCreditFrequency: orgSettings.leaveCreditFrequency || "monthly",
-          leaveTypeCreditMode: orgSettings.leaveTypeCreditMode || "current_month_onwards",
-          sandwichRuleEnabled: Boolean(orgSettings.sandwichRuleEnabled),
-          attendanceLockEnabled: orgSettings.attendanceLockEnabled ?? true,
-          attendanceLockAfterDays: Number(orgSettings.attendanceLockAfterDays ?? 7),
-          attendanceLockMode: orgSettings.attendanceLockMode || "payroll_cutoff",
-          attendanceLockDay: Number(orgSettings.attendanceLockDay ?? 25),
-          timezone: orgSettings.timezone || "Asia/Kolkata",
-          payrollCutoffDay: Number(orgSettings.payrollCutoffDay ?? 25),
-          payrollSalaryPayDay: Number(orgSettings.payrollSalaryPayDay ?? 30),
-          payrollEnabled: Boolean(orgSettings.payrollEnabled),
-          minWorkHoursPerDay: Number(orgSettings.minWorkHoursPerDay ?? 8),
-          minHalfDayHours: Number(orgSettings.minHalfDayHours ?? 4),
-          attendanceHoursSource: orgSettings.attendanceHoursSource || "manual",
-          attendanceIpEnabled: Boolean(orgSettings.attendanceIpEnabled),
-          attendanceAllowedIp: orgSettings.attendanceAllowedIp || "",
-          attendanceSelfieRequired: Boolean(orgSettings.attendanceSelfieRequired),
-          attendanceMultiPunchEnabled: Boolean(orgSettings.attendanceMultiPunchEnabled),
-          attendanceGeoFenceEnabled: Boolean(orgSettings.attendanceGeoFenceEnabled),
-          attendanceGeoLatitude: orgSettings.attendanceGeoLatitude ?? null,
-          attendanceGeoLongitude: orgSettings.attendanceGeoLongitude ?? null,
-          attendanceGeoRadiusMeters: Number(orgSettings.attendanceGeoRadiusMeters ?? 200),
-          attendanceDevBypassEnabled: Boolean(orgSettings.attendanceDevBypassEnabled),
-          probationPeriodDays: Number(orgSettings.probationPeriodDays ?? 90),
-          noticePeriodDays: Number(orgSettings.noticePeriodDays ?? 30),
-          employeeIdPrefix: orgSettings.employeeIdPrefix || "",
-          maxActiveLoginsPerUser: Number(orgSettings.maxActiveLoginsPerUser ?? 1),
-          logoUpload: undefined,
           themeMode: payload.themeMode || "preset",
           themePreset: payload.themePreset || "ocean",
           themeConfig: payload.themeConfig || {}
@@ -270,7 +245,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
       if (res?.success) {
         setOrgSettings(res.data || null);
         applyThemeToDocument(res.data);
-        toast.success("Theme updated");
+        toast.success("Theme updated for everyone in your organization");
         setThemeEditorOpen(false);
       } else {
         toast.error(res?.message || "Failed to update theme");
@@ -311,8 +286,6 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
       themePreset: preset,
       themeConfig: presetConfig
     };
-    setOrgSettings((prev) => (prev ? { ...prev, ...nextTheme } : prev));
-    applyThemeToDocument(nextTheme);
     void saveTheme(nextTheme);
   };
 
@@ -324,8 +297,6 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
       themeConfig: { ...current, ...config }
     };
     setCustomTheme(nextTheme.themeConfig);
-    setOrgSettings((prev) => (prev ? { ...prev, ...nextTheme } : prev));
-    applyThemeToDocument(nextTheme);
     void saveTheme(nextTheme);
   };
 
