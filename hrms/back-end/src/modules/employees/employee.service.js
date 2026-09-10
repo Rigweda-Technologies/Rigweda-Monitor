@@ -1063,7 +1063,7 @@ exports.listByOrganization = async (req) => {
   let employeeQuery = Employee.find(query).setOptions({ includeDeleted });
   if (isCompactMode) {
     employeeQuery = employeeQuery
-      .select("_id firstName lastName employeeCode dateOfJoining status employmentLifecycleStatus departmentId designationId shiftId")
+      .select("_id firstName lastName employeeCode userId dateOfJoining status employmentLifecycleStatus departmentId designationId shiftId")
       .populate("departmentId", "name")
       .populate("designationId", "name")
       .populate("shiftId", "startTime");
