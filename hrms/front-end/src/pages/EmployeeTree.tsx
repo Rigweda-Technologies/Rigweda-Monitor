@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, type PointerEvent } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { getApiWithToken } from "@/services/apiWrapper";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronDown, ChevronRight, Search, Users, Network, Maximize2, Minimize2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Users,
+  Network,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  ArrowLeft,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type RawEmployee = {
@@ -71,16 +83,28 @@ function countDescendants(node: TreeNode): number {
   return node.children.reduce((sum, c) => sum + 1 + countDescendants(c), 0);
 }
 
+function findTreeNode(nodes: TreeNode[], employeeId: string | null): TreeNode | null {
+  if (!employeeId) return null;
+  for (const node of nodes) {
+    if (node._id === employeeId) return node;
+    const match = findTreeNode(node.children, employeeId);
+    if (match) return match;
+  }
+  return null;
+}
+
 const TreeNodeCard = ({
   node,
   depth,
   expandSignal,
   searchActive,
+  onSelect,
 }: {
   node: TreeNode;
   depth: number;
   expandSignal: { expand: boolean; version: number } | null;
   searchActive: boolean;
+  onSelect: (node: TreeNode) => void;
 }) => {
   const [expanded, setExpanded] = useState(true);
   const signalVersionRef = useRef<number | null>(null);
@@ -104,22 +128,29 @@ const TreeNodeCard = ({
     `${node.firstName || ""} ${node.lastName || ""}`.trim() || "Unnamed";
 
   return (
-    <div>
-      <div className="flex items-start gap-2 py-1">
-        <div className="flex items-center justify-center w-6 pt-3 shrink-0">
+    <div className="org-tree-node">
+      <div className="relative flex items-start">
+        <div className="absolute -left-9 top-6 flex h-6 w-6 items-center justify-center">
           {hasChildren ? (
             <button
-              onClick={() => setExpanded((prev) => !prev)}
-              className="w-5 h-5 rounded-md border border-border bg-background hover:bg-accent flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded((prev) => !prev);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
             >
-              {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </button>
           ) : (
-            <div className="w-1.5 h-1.5 rounded-full bg-border/70 ml-1.5 mt-0.5" />
+            <div className="h-2 w-2 rounded-full border border-border bg-background" />
           )}
         </div>
 
-        <div className="flex-1 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)] hover:border-border/90 transition-all">
+        <button
+          type="button"
+          onClick={() => onSelect(node)}
+          className="flex w-[20rem] cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-all hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(15,23,42,0.12)] focus:outline-none focus:ring-2 focus:ring-primary/35 sm:w-[24rem]"
+        >
           <Avatar className="w-9 h-9 shrink-0">
             <AvatarImage src={node.profileImage || undefined} />
             <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-amber-500 text-white text-xs font-semibold">
@@ -129,7 +160,7 @@ const TreeNodeCard = ({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-semibold text-foreground">{fullName}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{fullName}</p>
               {node.employeeCode && (
                 <span className="text-[10px] text-muted-foreground font-mono">
                   #{node.employeeCode}
@@ -175,7 +206,7 @@ const TreeNodeCard = ({
               {node.status || "active"}
             </Badge>
           </div>
-        </div>
+        </button>
       </div>
 
       <AnimatePresence initial={false}>
@@ -185,17 +216,23 @@ const TreeNodeCard = ({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
+            className="overflow-visible"
           >
-            <div className="ml-3 pl-4 border-l border-border/50">
+            <div
+              className={`org-children ${
+                node.children.length === 1 ? "org-children-single" : ""
+              }`}
+            >
               {node.children.map((child) => (
-                <TreeNodeCard
-                  key={child._id}
-                  node={child}
-                  depth={depth + 1}
-                  expandSignal={expandSignal}
-                  searchActive={searchActive}
-                />
+                <div key={child._id} className="org-child">
+                  <TreeNodeCard
+                    node={child}
+                    depth={depth + 1}
+                    expandSignal={expandSignal}
+                    searchActive={searchActive}
+                    onSelect={onSelect}
+                  />
+                </div>
               ))}
             </div>
           </motion.div>
@@ -209,6 +246,15 @@ const EmployeeTree = () => {
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(0.85);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
   const [expandSignal, setExpandSignal] = useState<{
     expand: boolean;
     version: number;
@@ -230,15 +276,72 @@ const EmployeeTree = () => {
   }, [fetchEmployees]);
 
   const tree = useMemo(() => buildTree(employees), [employees]);
+  const selectedRoot = useMemo(
+    () => findTreeNode(tree, selectedRootId),
+    [tree, selectedRootId]
+  );
+  const visibleTree = useMemo(
+    () => (selectedRoot ? [selectedRoot] : tree),
+    [selectedRoot, tree]
+  );
   const filteredTree = useMemo(
-    () => filterTree(tree, searchQuery),
-    [tree, searchQuery]
+    () => filterTree(visibleTree, searchQuery),
+    [visibleTree, searchQuery]
   );
 
   const handleExpandAll = () =>
     setExpandSignal((prev) => ({ expand: true, version: (prev?.version ?? 0) + 1 }));
   const handleCollapseAll = () =>
     setExpandSignal((prev) => ({ expand: false, version: (prev?.version ?? 0) + 1 }));
+  const clampZoom = (value: number) => Math.min(1.4, Math.max(0.45, Number(value.toFixed(2))));
+  const handleZoomIn = () => setZoom((prev) => clampZoom(prev + 0.1));
+  const handleZoomOut = () => setZoom((prev) => clampZoom(prev - 0.1));
+  const handleResetView = () => {
+    setZoom(0.85);
+    const viewport = document.getElementById("employee-tree-canvas");
+    if (viewport) {
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    }
+  };
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button,input,a")) return;
+    setIsPanning(true);
+    panStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: event.currentTarget.scrollLeft,
+      scrollTop: event.currentTarget.scrollTop,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isPanning || !panStartRef.current) return;
+    event.currentTarget.scrollLeft =
+      panStartRef.current.scrollLeft - (event.clientX - panStartRef.current.x);
+    event.currentTarget.scrollTop =
+      panStartRef.current.scrollTop - (event.clientY - panStartRef.current.y);
+  };
+  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setIsPanning(false);
+    panStartRef.current = null;
+  };
+  const handleSelectRoot = (node: TreeNode) => {
+    setSelectedRootId(node._id);
+    setSearchQuery("");
+    setExpandSignal((prev) => ({ expand: true, version: (prev?.version ?? 0) + 1 }));
+    requestAnimationFrame(handleResetView);
+  };
+  const handleBackToFullTree = () => {
+    setSelectedRootId(null);
+    setSearchQuery("");
+    setExpandSignal((prev) => ({ expand: true, version: (prev?.version ?? 0) + 1 }));
+    requestAnimationFrame(handleResetView);
+  };
 
   return (
     <MainLayout
@@ -252,14 +355,57 @@ const EmployeeTree = () => {
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Network className="w-5 h-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Organization Tree</h2>
+          <h2 className="text-lg font-semibold">
+            {selectedRoot ? `${selectedRoot.firstName || ""} ${selectedRoot.lastName || ""}`.trim() || "Employee Tree" : "Organization Tree"}
+          </h2>
           {!loading && (
             <Badge variant="outline" className="text-xs">
-              {employees.length} employees
+              {selectedRoot ? `${countDescendants(selectedRoot) + 1} employees` : `${employees.length} employees`}
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {selectedRoot && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBackToFullTree}
+              disabled={loading}
+            >
+              <ArrowLeft className="w-3.5 h-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Back</span>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleZoomOut}
+            disabled={loading || zoom <= 0.45}
+          >
+            <ZoomOut className="w-3.5 h-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Zoom Out</span>
+          </Button>
+          <Badge variant="outline" className="flex h-9 min-w-16 items-center justify-center px-3 text-xs">
+            {Math.round(zoom * 100)}%
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleZoomIn}
+            disabled={loading || zoom >= 1.4}
+          >
+            <ZoomIn className="w-3.5 h-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Zoom In</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetView}
+            disabled={loading}
+          >
+            <RotateCcw className="w-3.5 h-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Reset</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -326,16 +472,36 @@ const EmployeeTree = () => {
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-card/40 p-4">
-          {filteredTree.map((root) => (
-            <TreeNodeCard
-              key={root._id}
-              node={root}
-              depth={0}
-              expandSignal={expandSignal}
-              searchActive={Boolean(searchQuery.trim())}
-            />
-          ))}
+        <div
+          id="employee-tree-canvas"
+          className={`relative h-[calc(100vh-260px)] min-h-[520px] overflow-auto rounded-xl border border-border bg-card/40 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${
+            isPanning ? "cursor-grabbing" : "cursor-grab"
+          }`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          <div
+            className="inline-block min-w-max origin-top-left p-8 pr-20 pb-20"
+            style={{
+              transform: `scale(${zoom})`,
+              transition: isPanning ? "none" : "transform 160ms ease",
+            }}
+          >
+            <div className="flex items-start justify-start gap-12">
+              {filteredTree.map((root) => (
+                <TreeNodeCard
+                  key={root._id}
+                  node={root}
+                  depth={0}
+                  expandSignal={expandSignal}
+                  searchActive={Boolean(searchQuery.trim())}
+                  onSelect={handleSelectRoot}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </MainLayout>

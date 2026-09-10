@@ -6,12 +6,27 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getApiWithToken } from "@/services/apiWrapper";
 import { getMonitorAppKeyUsage, MonitorAppKeyUsage } from "@/services/monitorActivity";
 import { getOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
 const today = () => toDateKeyInOrgTimeZone(new Date());
+const smoothCardShadow = "shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition-shadow hover:shadow-[0_14px_36px_rgba(15,23,42,0.12)]";
+
+type EmployeeOption = {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  employeeCode?: string;
+};
+
+const getEmployeeName = (employee: EmployeeOption) =>
+  [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() ||
+  employee.employeeCode ||
+  "Employee";
 
 const formatDuration = (seconds: number) => {
   const total = Math.max(Number(seconds || 0), 0);
@@ -29,17 +44,29 @@ const MonitorAppKeyUsage = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timeZone, setTimeZone] = useState(() => getOrgTimeZone());
+  const [employeeId, setEmployeeId] = useState(employeeIdParam || "all");
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
 
   useEffect(() => {
     if (dateParam) {
       setDate(dateParam);
     }
-  }, [dateParam]);
+    setEmployeeId(employeeIdParam || "all");
+  }, [dateParam, employeeIdParam]);
+
+  const loadEmployees = useCallback(async () => {
+    const response = await getApiWithToken("/employees?employeeState=active&limit=500", null, {
+      requiredPermissions: ["EMP_VIEW"]
+    });
+    if (response?.success) {
+      setEmployees(response.data?.items || []);
+    }
+  }, []);
 
   const load = useCallback(async (manual = false) => {
     manual ? setRefreshing(true) : setLoading(true);
     try {
-      const data = await getMonitorAppKeyUsage(date, { employeeId: employeeIdParam || undefined });
+      const data = await getMonitorAppKeyUsage(date, { employeeId: employeeId === "all" ? undefined : employeeId });
       setRows(data.appKeys || []);
     } catch (error) {
       if (manual) toast.error("Could not refresh key press usage.");
@@ -48,7 +75,11 @@ const MonitorAppKeyUsage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [date, employeeIdParam]);
+  }, [date, employeeId]);
+
+  useEffect(() => {
+    void loadEmployees();
+  }, [loadEmployees]);
 
   useEffect(() => {
     void load();
@@ -76,34 +107,44 @@ const MonitorAppKeyUsage = () => {
   return (
     <MainLayout title="Key Presses" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "Key Presses" }]}>      
       <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-2xl font-semibold">Application key presses</h2>
             <p className="text-sm text-muted-foreground">
               Shows app-wise key press counts for monitored employee sessions.
             </p>
-            {employeeIdParam && (
-              <p className="text-xs text-muted-foreground">Filtered for employee: {employeeIdParam}</p>
-            )}
             <p className="text-xs text-muted-foreground">Displayed in {timeZone} time.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-[155px]" />
-            <Button variant="outline" onClick={() => void load(true)} disabled={refreshing}>
+          <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_minmax(160px,200px)_minmax(150px,200px)] xl:max-w-[660px] xl:self-end">
+            <Select value={employeeId} onValueChange={setEmployeeId}>
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue placeholder="Employee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All employees</SelectItem>
+                {employees.map((employee) => (
+                  <SelectItem key={employee._id} value={employee._id}>
+                    {getEmployeeName(employee)}{employee.employeeCode ? ` (${employee.employeeCode})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full min-w-0" />
+            <Button variant="outline" className="w-full" onClick={() => void load(true)} disabled={refreshing}>
               <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
             </Button>
           </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-5">
-          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">App rows</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalRows}</CardContent></Card>
-          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total sessions</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalSessions}</CardContent></Card>
-          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Focused time</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatDuration(totalSeconds)}</CardContent></Card>
-          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Key presses</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalKeyPresses}</CardContent></Card>
-          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Top app</CardTitle></CardHeader><CardContent className="truncate text-lg font-bold">{topItem ? `${topItem.appName} (${topItem.keyPressCount})` : "None"}</CardContent></Card>
+          <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">App rows</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalRows}</CardContent></Card>
+          <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total sessions</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalSessions}</CardContent></Card>
+          <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Focused time</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatDuration(totalSeconds)}</CardContent></Card>
+          <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Key presses</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalKeyPresses}</CardContent></Card>
+          <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Top app</CardTitle></CardHeader><CardContent className="truncate text-lg font-bold">{topItem ? `${topItem.appName} (${topItem.keyPressCount})` : "None"}</CardContent></Card>
         </div>
 
-        <Card>
+        <Card className={smoothCardShadow}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Keyboard className="h-5 w-5" /> App-wise key presses</CardTitle>
           </CardHeader>

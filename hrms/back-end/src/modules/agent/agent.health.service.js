@@ -20,6 +20,7 @@ const ensureHealthTable = async () => {
           platform_version TEXT,
           agent_version TEXT,
           cpu_model TEXT,
+          cpu_core_count INTEGER,
           cpu_percent NUMERIC,
           memory_total_bytes BIGINT,
           memory_used_bytes BIGINT,
@@ -39,6 +40,10 @@ const ensureHealthTable = async () => {
       await pool.query(`
         ALTER TABLE monitor_device_health
         ADD COLUMN IF NOT EXISTS employee_code TEXT
+      `);
+      await pool.query(`
+        ALTER TABLE monitor_device_health
+        ADD COLUMN IF NOT EXISTS cpu_core_count INTEGER
       `);
       await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_monitor_device_health_org_seen
@@ -94,11 +99,11 @@ exports.saveHealth = async ({ req, payload }) => {
   const { rows } = await pool.query(
     `INSERT INTO monitor_device_health (
       organization_id, employee_id, employee_name, employee_code, device_id, hostname, platform,
-      platform_version, agent_version, cpu_model, cpu_percent, memory_total_bytes,
+      platform_version, agent_version, cpu_model, cpu_core_count, cpu_percent, memory_total_bytes,
       memory_used_bytes, memory_percent, disks, temperature_c, battery_percent,
       battery_charging, uptime_seconds, last_seen_at, reported_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb,
-      $16, $17, $18, $19, $20, $21)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb,
+      $17, $18, $19, $20, $21, $22)
     ON CONFLICT (organization_id, device_id) DO UPDATE SET
       employee_id = EXCLUDED.employee_id,
       employee_name = EXCLUDED.employee_name,
@@ -108,6 +113,7 @@ exports.saveHealth = async ({ req, payload }) => {
       platform_version = EXCLUDED.platform_version,
       agent_version = EXCLUDED.agent_version,
       cpu_model = EXCLUDED.cpu_model,
+      cpu_core_count = EXCLUDED.cpu_core_count,
       cpu_percent = EXCLUDED.cpu_percent,
       memory_total_bytes = EXCLUDED.memory_total_bytes,
       memory_used_bytes = EXCLUDED.memory_used_bytes,
@@ -132,6 +138,7 @@ exports.saveHealth = async ({ req, payload }) => {
       payload.platformVersion || null,
       payload.agentVersion || null,
       payload.cpuModel || null,
+      positiveNumber(payload.cpuCoreCount),
       clamp(payload.cpuPercent, 0, 100),
       positiveNumber(payload.memoryTotalBytes),
       positiveNumber(payload.memoryUsedBytes),
@@ -176,6 +183,7 @@ const mapHealthRow = (row) => ({
   platformVersion: row.platform_version,
   agentVersion: row.agent_version,
   cpuModel: row.cpu_model,
+  cpuCoreCount: row.cpu_core_count === null ? null : Number(row.cpu_core_count),
   cpuPercent: row.cpu_percent === null ? null : Number(row.cpu_percent),
   memoryTotalBytes: row.memory_total_bytes === null ? null : Number(row.memory_total_bytes),
   memoryUsedBytes: row.memory_used_bytes === null ? null : Number(row.memory_used_bytes),

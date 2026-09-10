@@ -9,6 +9,7 @@ const healthSchema = Joi.object({
   platformVersion: Joi.string().trim().max(255).allow("", null),
   agentVersion: Joi.string().trim().max(100).allow("", null),
   cpuModel: Joi.string().trim().max(255).allow("", null),
+  cpuCoreCount: Joi.number().integer().min(1).max(512).allow(null),
   cpuPercent: Joi.number().min(0).max(100).allow(null),
   memoryTotalBytes: Joi.number().integer().min(0).allow(null),
   memoryUsedBytes: Joi.number().integer().min(0).allow(null),

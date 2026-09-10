@@ -5,14 +5,29 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { getApiWithToken } from "@/services/apiWrapper";
 import { getMonitorBrowserHistory, MonitorBrowserHistory } from "@/services/monitorActivity";
 import { formatDateTimeInOrgTimeZone, getOrgTimeZone, setOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
 
 const today = () => toDateKeyInOrgTimeZone(new Date());
 const INITIAL_LIMIT = 50;
+const smoothCardShadow = "shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition-shadow hover:shadow-[0_14px_36px_rgba(15,23,42,0.12)]";
+
+type EmployeeOption = {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  employeeCode?: string;
+};
+
+const getEmployeeName = (employee: EmployeeOption) =>
+  [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() ||
+  employee.employeeCode ||
+  "Employee";
 
 const getBrowserColor = (browser: string): string => {
   const lower = (browser || "").toLowerCase();
@@ -74,6 +89,8 @@ const MonitorBrowserHistory = () => {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const [browserFilter, setBrowserFilter] = useState("");
+  const [employeeId, setEmployeeId] = useState(employeeIdParam || "all");
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [searchUrl, setSearchUrl] = useState("");
 
   useEffect(() => {
@@ -83,7 +100,17 @@ const MonitorBrowserHistory = () => {
     if (browserParam) {
       setBrowserFilter(browserParam);
     }
-  }, [dateParam, browserParam]);
+    setEmployeeId(employeeIdParam || "all");
+  }, [dateParam, browserParam, employeeIdParam]);
+
+  const loadEmployees = useCallback(async () => {
+    const response = await getApiWithToken("/employees?employeeState=active&limit=500", null, {
+      requiredPermissions: ["EMP_VIEW"]
+    });
+    if (response?.success) {
+      setEmployees(response.data?.items || []);
+    }
+  }, []);
 
   const loadHistories = useCallback(async (manual = false) => {
     if (manual) {
@@ -96,7 +123,7 @@ const MonitorBrowserHistory = () => {
       const data = await getMonitorBrowserHistory(date, {
         limit: INITIAL_LIMIT,
         offset,
-        employeeId: employeeIdParam || undefined,
+        employeeId: employeeId === "all" ? undefined : employeeId,
         browser: browserFilter || undefined,
       });
       if (data.timezone) {
@@ -115,7 +142,11 @@ const MonitorBrowserHistory = () => {
         setLoading(false);
       }
     }
-  }, [date, browserFilter, offset, employeeIdParam]);
+  }, [date, browserFilter, offset, employeeId]);
+
+  useEffect(() => {
+    void loadEmployees();
+  }, [loadEmployees]);
 
   useEffect(() => {
     loadHistories();
@@ -133,30 +164,53 @@ const MonitorBrowserHistory = () => {
     : histories;
 
   const browserOptions = Array.from(new Set(histories.map((h) => h.browser))).sort();
-  const pageTitle = employeeIdParam ? "Browser History for Employee" : "Browser History Monitoring";
+  const pageTitle = employeeId !== "all" ? "Browser History for Employee" : "Browser History Monitoring";
 
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <Globe className="h-8 w-8 text-emerald-600" />
             <h1 className="text-3xl font-bold">{pageTitle}</h1>
           </div>
-          <Button onClick={() => loadHistories(true)} disabled={refreshing} variant="outline" size="sm">
+          <Button onClick={() => loadHistories(true)} disabled={refreshing} variant="outline" size="sm" className="w-full sm:w-auto">
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
             {refreshing ? "Refreshing..." : "Refresh"}
           </Button>
         </div>
 
         {/* Filters */}
-        <Card>
+        <Card className={smoothCardShadow}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Filters</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(160px,200px)_minmax(160px,220px)_minmax(220px,1fr)]">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+                <Select
+                  value={employeeId}
+                  onValueChange={(value) => {
+                    setOffset(0);
+                    setEmployeeId(value);
+                  }}
+                >
+                  <SelectTrigger className="w-full min-w-0">
+                    <SelectValue placeholder="Employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All employees</SelectItem>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee._id} value={employee._id}>
+                        {getEmployeeName(employee)}{employee.employeeCode ? ` (${employee.employeeCode})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Date Selector */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
@@ -167,7 +221,7 @@ const MonitorBrowserHistory = () => {
                     setOffset(0);
                     setDate(e.target.value);
                   }}
-                    className="w-full"
+                    className="w-full min-w-0"
                   />
                 </div>
 
@@ -180,7 +234,7 @@ const MonitorBrowserHistory = () => {
                     setOffset(0);
                     setBrowserFilter(e.target.value);
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
                 >
                   <option value="">All Browsers</option>
                   {browserOptions.map((browser) => (
@@ -198,7 +252,7 @@ const MonitorBrowserHistory = () => {
                   placeholder="Search URLs or page titles..."
                   value={searchUrl}
                   onChange={(e) => setSearchUrl(e.target.value)}
-                  className="w-full"
+                  className="w-full min-w-0"
                 />
               </div>
             </div>
@@ -207,7 +261,7 @@ const MonitorBrowserHistory = () => {
 
         {/* Summary */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className={smoothCardShadow}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-500">Total Visits</CardTitle>
             </CardHeader>
@@ -218,7 +272,7 @@ const MonitorBrowserHistory = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={smoothCardShadow}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-500">Displayed</CardTitle>
             </CardHeader>
@@ -228,7 +282,7 @@ const MonitorBrowserHistory = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={smoothCardShadow}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-500">Unique Domains</CardTitle>
             </CardHeader>
@@ -238,7 +292,7 @@ const MonitorBrowserHistory = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={smoothCardShadow}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-500">Browsers</CardTitle>
             </CardHeader>
@@ -250,7 +304,7 @@ const MonitorBrowserHistory = () => {
         </div>
 
         {/* History Table */}
-        <Card>
+        <Card className={smoothCardShadow}>
           <CardHeader>
             <CardTitle className="text-lg">Browser History</CardTitle>
           </CardHeader>

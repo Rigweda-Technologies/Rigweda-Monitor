@@ -41,6 +41,7 @@ interface NavItemProps {
     label: string;
     to: string;
     permissions?: string[];
+    group?: string;
   }[];
 }
 
@@ -54,6 +55,7 @@ interface MenuItem {
     label: string;
     to: string;
     permissions?: string[];
+    group?: string;
   }[];
 }
 
@@ -126,20 +128,31 @@ const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemPr
             className="overflow-hidden"
           >
             <div className="ml-4 mt-2 space-y-1 border-l border-white/10 pl-3">
-              {children?.map((child) => (
-                <NavLink key={child.to} to={child.to} onClick={onNavigate} className="block">
-                  <div
-                    className={cn(
-                      "flex items-center gap-3 whitespace-nowrap rounded-lg border border-transparent px-3 py-2 text-sm text-slate-400 transition-all duration-300",
-                      "hover:border-teal-300/20 hover:bg-white/[0.06] hover:text-teal-200",
-                      location.pathname === child.to && "border-teal-300/20 bg-teal-400/10 text-teal-200 font-semibold"
+              {children?.map((child, index) => {
+                const showGroup = child.group && child.group !== children[index - 1]?.group;
+
+                return (
+                  <div key={child.to} className={cn(showGroup && index > 0 && "pt-3")}>
+                    {showGroup && (
+                      <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        {child.group}
+                      </div>
                     )}
-                  >
-                    {child.icon}
-                    <span>{child.label}</span>
+                    <NavLink to={child.to} onClick={onNavigate} className="block">
+                      <div
+                        className={cn(
+                          "flex items-center gap-3 whitespace-nowrap rounded-lg border border-transparent px-3 py-2 text-sm text-slate-400 transition-all duration-300",
+                          "hover:border-teal-300/20 hover:bg-white/[0.06] hover:text-teal-200",
+                          location.pathname === child.to && "border-teal-300/20 bg-teal-400/10 text-teal-200 font-semibold"
+                        )}
+                      >
+                        {child.icon}
+                        <span>{child.label}</span>
+                      </div>
+                    </NavLink>
                   </div>
-                </NavLink>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
         )}
@@ -172,15 +185,15 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
     to: "/monitor",
     permissions: ["EMP_VIEW", "ATTENDANCE_VIEW_ALL", "ORG_SETTINGS_VIEW"],
     children: [
-      { icon: <UsersRound size={18} />, label: "Monitored Employees", to: "/monitor/employees", permissions: ["EMP_VIEW"] },
-      { icon: <MousePointer2 size={18} />, label: "Activity", to: "/monitor/activity", permissions: ["EMP_VIEW"] },
-      { icon: <Monitor size={18} />, label: "App Usage", to: "/monitor/apps", permissions: ["EMP_VIEW"] },
-      { icon: <Keyboard size={18} />, label: "Keyboard Activity", to: "/monitor/app-keys", permissions: ["EMP_VIEW"] },
-      { icon: <Globe size={18} />, label: "Browser Activity", to: "/monitor/browser-history", permissions: ["EMP_VIEW"] },
-      { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"] },
-      { icon: <Cpu size={18} />, label: "Laptop Health", to: "/monitor/laptop-health", permissions: ["EMP_VIEW"] },
-      { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"] },
-      { icon: <Settings size={18} />, label: "Updates", to: "/monitor/updates", permissions: ["ORG_SETTINGS_VIEW"] }
+      { icon: <UsersRound size={18} />, label: "Monitored Employees", to: "/monitor/employees", permissions: ["EMP_VIEW"], group: "Workforce" },
+      { icon: <MousePointer2 size={18} />, label: "Activity", to: "/monitor/activity", permissions: ["EMP_VIEW"], group: "Productivity" },
+      { icon: <Monitor size={18} />, label: "App Usage", to: "/monitor/apps", permissions: ["EMP_VIEW"], group: "Productivity" },
+      { icon: <Keyboard size={18} />, label: "Keyboard Activity", to: "/monitor/app-keys", permissions: ["EMP_VIEW"], group: "Productivity" },
+      { icon: <Globe size={18} />, label: "Browser Activity", to: "/monitor/browser-history", permissions: ["EMP_VIEW"], group: "Productivity" },
+      { icon: <Camera size={18} />, label: "Screenshots", to: "/monitor/screenshots", permissions: ["ATTENDANCE_VIEW_ALL"], group: "Evidence" },
+      { icon: <Cpu size={18} />, label: "Laptop Health", to: "/monitor/laptop-health", permissions: ["EMP_VIEW"], group: "Fleet" },
+      { icon: <Settings size={18} />, label: "Settings", to: "/monitor/settings", permissions: ["ORG_SETTINGS_VIEW"], group: "Administration" },
+      { icon: <Settings size={18} />, label: "Updates", to: "/monitor/updates", permissions: ["ORG_SETTINGS_VIEW"], group: "Administration" }
     ]
   },
   {
@@ -381,7 +394,7 @@ export const Sidebar = memo(({
         Boolean(item) && (!item.permissions || hasAnyPermission(item.permissions))
     )
     .sort((first, second) => {
-      const order = [effectiveDashboardPath, "/monitor", "/employees", "/organization", "/payroll", "/business-development", "/organization/settings", "/documentation"];
+      const order = [effectiveDashboardPath, "/employees", "/monitor", "/organization", "/payroll", "/business-development", "/organization/settings", "/documentation"];
       return order.indexOf(first.to) - order.indexOf(second.to);
     }), [allowedPathsForEmployee, effectiveDashboardPath, hasAnyPermission, isEmployeeRole]);
 

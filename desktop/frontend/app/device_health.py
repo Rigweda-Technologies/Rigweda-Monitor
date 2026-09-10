@@ -102,6 +102,7 @@ def _health_payload() -> dict:
         "platformVersion": platform.platform(),
         "agentVersion": _agent_version(),
         "cpuModel": platform.processor() or None,
+        "cpuCoreCount": psutil.cpu_count(logical=True),
         "cpuPercent": psutil.cpu_percent(interval=0.5),
         "memoryTotalBytes": memory.total,
         "memoryUsedBytes": memory.used,

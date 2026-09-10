@@ -125,7 +125,7 @@ const buildSignedScreenshotUrl = ({ settings, row }) => {
     type: "authenticated",
     secure: true,
     sign_url: true,
-    expires_at: Math.floor(Date.now() / 1000) + 600
+    expires_at: Math.floor(Date.now() / 1000) + 3600
   });
 };
 
