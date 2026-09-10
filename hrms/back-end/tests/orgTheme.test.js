@@ -4,17 +4,17 @@ const OrgSettings = require("../src/modules/orgSettings/orgSettings.model");
 const service = require("../src/modules/orgSettings/orgSettings.service");
 const { updateThemeSchema } = require("../src/modules/orgSettings/orgSettings.validation");
 
-test("theme reads use authenticated organization and expose only appearance", async (t) => {
+test("theme reads use authenticated organization and expose only appearance branding", async (t) => {
   t.mock.method(OrgSettings, "findOne", (filter) => {
     assert.deepEqual(filter, { organizationId: "org-a" });
     return { select(projection) {
-      assert.equal(projection, "themeMode themePreset themeConfig -_id");
-      return { lean: async () => ({ themePreset: "forest" }) };
+      assert.equal(projection, "logoUrl themeMode themePreset themeConfig -_id");
+      return { lean: async () => ({ logoUrl: "https://cdn.example.com/logo.png", themePreset: "forest" }) };
     } };
   });
   assert.deepEqual(await service.getTheme({
     user: { organizationId: "org-a" }, query: { organizationId: "org-b" }
-  }), { themePreset: "forest" });
+  }), { logoUrl: "https://cdn.example.com/logo.png", themePreset: "forest" });
 });
 
 test("theme requires an organization", async () => {

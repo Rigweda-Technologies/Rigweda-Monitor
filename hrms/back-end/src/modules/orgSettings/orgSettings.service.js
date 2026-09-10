@@ -215,7 +215,7 @@ exports.upsert = async (req) => {
   return settings;
 };
 
-const themeProjection = "themeMode themePreset themeConfig -_id";
+const themeProjection = "logoUrl themeMode themePreset themeConfig -_id";
 
 const requireOrganization = (req) => {
   if (!req.user?.organizationId) {
@@ -229,6 +229,7 @@ exports.getTheme = async (req) => {
     organizationId: requireOrganization(req)
   }).select(themeProjection).lean();
   return settings || {
+    logoUrl: DEFAULTS.logoUrl,
     themeMode: DEFAULTS.themeMode,
     themePreset: DEFAULTS.themePreset,
     themeConfig: {}

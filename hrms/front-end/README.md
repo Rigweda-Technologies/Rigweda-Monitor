@@ -1,73 +1,101 @@
-# Welcome to your Lovable project
+# HRMS Frontend
 
-## Project info
+React/Vite web app for the multi-tenant HRMS and workforce monitoring product.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Main Responsibilities
 
-## How can I edit this code?
+- Login, role switching, permissions, and protected routes
+- Organization, employee, department, designation, shift, week-off, holiday, leave, attendance, and approval screens
+- Organization settings for tenant branding, attendance rules, payroll defaults, and check-in controls
+- Monitor pages for employees, activity, app usage, keyboard activity, browser history, screenshots, laptop health, settings, and updates
+- Optional payroll setup and payroll run screens
 
-There are several ways of editing your application.
+## SaaS Branding
 
-**Use Lovable**
+The app should not show a fixed vendor name in tenant-facing navigation.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Current behavior:
 
-Changes made via Lovable will be committed automatically to this repo.
+- The sidebar loads `/org-settings/theme`.
+- If `logoUrl` is configured, the uploaded organization logo appears in the sidebar.
+- The sidebar title uses `profile.organization.name`.
+- Fallback title is `Monitor Suite`.
+- Monitor menu labels use neutral wording such as `Monitor` and `Monitor agent`.
 
-**Use your preferred IDE**
+Users upload the organization logo from:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```text
+Organization > Settings > Organization Logo
 ```
 
-**Edit a file directly in GitHub**
+## Environment
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Local `.env` defaults:
 
-**Use GitHub Codespaces**
+```env
+VITE_API_BASE_URL=http://localhost:8000/api
+VITE_HRMS_API_BASE_URL=http://localhost:8000/api
+VITE_DESKTOP_API_BASE_URL=http://localhost:3001/api
+VITE_EMPLOYEE_CODE_PREFIX=RG
+VITE_SOCKET_PATH=/api/socket.io
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Use `VITE_HRMS_API_BASE_URL` for HRMS reads/writes and `VITE_DESKTOP_API_BASE_URL` only for desktop-backend-owned APIs.
 
-## What technologies are used for this project?
+Important ownership rule:
 
-This project is built with:
+- Browser history write API belongs to `desktop/backend`.
+- Browser history read API belongs to `hrms/back-end`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Run
 
-## How can I deploy this project?
+```sh
+npm install
+npm run local
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Default dev URL:
 
-## Can I connect a custom domain to my Lovable project?
+```text
+http://localhost:3000
+```
 
-Yes, you can!
+If port `3000` is busy, Vite may choose another port.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Build And Test
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```sh
+npm run lint
+npm run test
+npm run build
+```
+
+The production build may show dependency/chunk warnings. Treat failures as blockers, but the existing Browserslist, `"use client"`, and chunk-size warnings are informational.
+
+## Settings Screens
+
+`src/pages/OrganizationSettings.tsx` controls organization-wide HRMS settings:
+
+- Logo upload
+- Leave credit mode
+- Attendance lock policy
+- Timezone
+- Payroll defaults
+- Work-hour thresholds
+- Attendance source
+- IP/selfie/geofence/multi-punch controls
+- Probation and notice periods
+- Employee ID prefix
+- Active login limit
+
+`src/pages/MonitorSettings.tsx` controls monitor integration settings such as provider credentials and monitor-specific configuration.
+
+## Layout
+
+Key layout files:
+
+- `src/components/layout/Sidebar.tsx`
+- `src/components/layout/TopNavbar.tsx`
+- `src/components/layout/MainLayout.tsx`
+
+When adding tenant-facing text, prefer organization-driven or neutral wording.

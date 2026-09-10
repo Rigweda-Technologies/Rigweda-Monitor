@@ -120,6 +120,12 @@ const timesheetAttendanceSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    attendanceSource: {
+      type: String,
+      enum: ["manual", "monitor_agent", "biometric", "access_card"],
+      default: "manual",
+      index: true
+    },
     workFromHomePortion: {
       type: String,
       enum: ["full_day", "first_half", "second_half"],

@@ -135,7 +135,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
       if (inFlight || savingTheme || themeEditorOpen) return;
       inFlight = true;
       try {
-        const res = await getApiWithToken("/org-settings/theme", null, {
+        const res = await getApiWithToken("/org-settings", null, {
           forceRefresh: true
         });
         if (!cancelled && res?.success) {

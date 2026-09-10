@@ -365,7 +365,7 @@ export const Sidebar = memo(({
     let cancelled = false;
     const loadOrgBranding = async () => {
       try {
-        const res = await getApiWithToken("/org-settings/theme", null, {
+        const res = await getApiWithToken("/org-settings", null, {
           forceRefresh: true
         });
         if (!cancelled && res?.success) {
