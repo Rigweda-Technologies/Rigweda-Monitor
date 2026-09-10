@@ -1,5 +1,6 @@
 const OrgSettings = require("./orgSettings.model");
 const Organization = require("../organizations/organization.model");
+const mongoose = require("mongoose");
 const { isValidTimeZone } = require("../../utils/timezone");
 const { getDefaultMaxActiveLoginsPerUser } = require("../../utils/orgSettingsDefaults");
 const { ensurePayrollTenantAndDefaults } = require("../payroll/payrollProvisioning.service");
@@ -39,6 +40,14 @@ const DEFAULTS = {
   themeMode: "preset",
   themePreset: "ocean",
   themeConfig: {}
+};
+
+const appendOrganizationBranding = async (organizationId, settings) => {
+  const settingsObject = settings?.toObject ? settings.toObject() : { ...(settings || {}) };
+  if (!mongoose.isValidObjectId(organizationId)) return settingsObject;
+  const organization = await Organization.findById(organizationId).select("name").lean();
+  if (!organization?.name) return settingsObject;
+  return { ...settingsObject, organizationName: organization.name };
 };
 
 exports.get = async (req) => {
@@ -84,7 +93,7 @@ exports.get = async (req) => {
     await settings.save();
   }
 
-  return settings;
+  return appendOrganizationBranding(req.user.organizationId, settings);
 };
 
 exports.upsert = async (req) => {
@@ -225,7 +234,7 @@ exports.upsert = async (req) => {
     });
   }
 
-  return settings;
+  return appendOrganizationBranding(req.user.organizationId, settings);
 };
 
 const themeProjection = "logoUrl themeMode themePreset themeConfig -_id";
@@ -238,22 +247,25 @@ const requireOrganization = (req) => {
 };
 
 exports.getTheme = async (req) => {
+  const organizationId = requireOrganization(req);
   const settings = await OrgSettings.findOne({
-    organizationId: requireOrganization(req)
+    organizationId
   }).select(themeProjection).lean();
-  return settings || {
+  return appendOrganizationBranding(organizationId, settings || {
     logoUrl: DEFAULTS.logoUrl,
     themeMode: DEFAULTS.themeMode,
     themePreset: DEFAULTS.themePreset,
     themeConfig: {}
-  };
+  });
 };
 
 exports.updateTheme = async (req) => {
   const { themeMode, themePreset, themeConfig } = req.body;
-  return OrgSettings.findOneAndUpdate(
-    { organizationId: requireOrganization(req) },
+  const organizationId = requireOrganization(req);
+  const settings = await OrgSettings.findOneAndUpdate(
+    { organizationId },
     { $set: { themeMode, themePreset, themeConfig } },
     { upsert: true, new: true, runValidators: true }
   ).select(themeProjection).lean();
+  return appendOrganizationBranding(organizationId, settings);
 };

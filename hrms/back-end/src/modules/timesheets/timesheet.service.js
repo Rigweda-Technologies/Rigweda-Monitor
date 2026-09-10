@@ -5419,6 +5419,7 @@ exports.__private__ = {
   buildAttendanceMatrixEmployeeQuery,
   resolveAttendanceMatrixStatus,
   resolveOvertimeMinutes,
+  materializeMonitorAttendance,
   resolveAttendanceDisplayStatus,
   buildOnlineAttendanceQuery,
   isOnlineAttendanceRowVisible

@@ -1,10 +1,11 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 import { cn } from "@/lib/utils";
 import { getApiWithToken } from "@/services/apiWrapper";
 import { getOrgTimeZone, subscribeToOrgTimeZone } from "@/utils/timezone";
+import { applyThemeToDocument, OrgThemeConfig, OrgThemePreset } from "@/utils/theme";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -21,6 +22,35 @@ type MainLayoutContextValue = {
   setHeader: (header: HeaderState) => void;
 };
 
+type OrgSettingsSnapshot = {
+  organizationName?: string;
+  logoUrl?: string;
+  themeMode?: "preset" | "custom";
+  themePreset?: OrgThemePreset;
+  themeConfig?: OrgThemeConfig;
+};
+
+const ORG_SETTINGS_CACHE_KEY = "rigweda_hrms_org_settings_snapshot";
+
+const readCachedOrgSettings = (): OrgSettingsSnapshot | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ORG_SETTINGS_CACHE_KEY);
+    return raw ? JSON.parse(raw) as OrgSettingsSnapshot : null;
+  } catch {
+    return null;
+  }
+};
+
+const cacheOrgSettings = (settings: OrgSettingsSnapshot | null) => {
+  if (typeof window === "undefined" || !settings) return;
+  try {
+    window.localStorage.setItem(ORG_SETTINGS_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    // Ignore storage quota/private-mode failures; API data remains authoritative.
+  }
+};
+
 const MainLayoutContext = createContext<MainLayoutContextValue | null>(null);
 
 export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => {
@@ -31,6 +61,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [timeZoneVersion, setTimeZoneVersion] = useState(() => getOrgTimeZone());
+  const [orgSettings, setOrgSettings] = useState<OrgSettingsSnapshot | null>(() => readCachedOrgSettings());
   const handleMobileClose = useCallback(() => setMobileSidebarOpen(false), []);
   const handleCollapsedChange = useCallback((collapsed: boolean) => setSidebarCollapsed(collapsed), []);
 
@@ -52,11 +83,28 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
 
   useEffect(() => subscribeToOrgTimeZone(setTimeZoneVersion), []);
 
+  useLayoutEffect(() => {
+    if (!orgSettings) return;
+    applyThemeToDocument(orgSettings);
+  }, [orgSettings]);
+
   useEffect(() => {
-    void getApiWithToken("/org-settings", null, {
-      suppressPermissionError: true,
-      cacheTtlMs: 5 * 60 * 1000
-    });
+    let cancelled = false;
+    const loadOrgSettings = async () => {
+      const res = await getApiWithToken("/org-settings", null, {
+        suppressPermissionError: true,
+        forceRefresh: true
+      });
+      if (!cancelled && res?.success) {
+        setOrgSettings(res.data || null);
+        cacheOrgSettings(res.data || null);
+        applyThemeToDocument(res.data || null);
+      }
+    };
+    void loadOrgSettings();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (parentLayout) {
@@ -71,6 +119,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
           onMobileClose={handleMobileClose}
           collapsed={sidebarCollapsed}
           onCollapsedChange={handleCollapsedChange}
+          orgSettings={orgSettings}
         />
         <div className={cn(
           "relative flex-1 min-w-0 flex flex-col transition-all duration-300",
@@ -88,6 +137,7 @@ export const MainLayout = ({ children, title, breadcrumb }: MainLayoutProps) => 
             title={header.title}
             breadcrumb={header.breadcrumb}
             onOpenSidebar={() => setMobileSidebarOpen(true)}
+            initialOrgSettings={orgSettings}
           />
           <main
             className={cn(
