@@ -29,7 +29,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/useAuth";
-import { getApiWithToken } from "@/services/apiWrapper";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -65,6 +64,7 @@ interface SidebarProps {
   onMobileClose?: () => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  orgSettings?: SidebarOrgSettings | null;
 }
 
 type OrganizationSummary = {
@@ -73,6 +73,7 @@ type OrganizationSummary = {
 };
 
 type SidebarOrgSettings = {
+  organizationName?: string;
   logoUrl?: string;
 };
 
@@ -334,17 +335,17 @@ export const Sidebar = memo(({
   mobileOpen = false,
   onMobileClose,
   collapsed: controlledCollapsed,
-  onCollapsedChange
+  onCollapsedChange,
+  orgSettings
 }: SidebarProps) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [orgSettings, setOrgSettings] = useState<SidebarOrgSettings | null>(null);
   const { profile, hasAnyPermission, isSuperAdmin } = useAuth();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const effectiveCollapsed = collapsed && !hoverExpanded;
   const organization = getOrganizationSummary(profile);
-  const brandName = organization.name || "Monitor Suite";
+  const brandName = organization.name || orgSettings?.organizationName || "Monitor Suite";
   const logoUrl = orgSettings?.logoUrl || organization.logoUrl || "";
 
   const setCollapsed = (next: boolean) => {
@@ -360,27 +361,6 @@ export const Sidebar = memo(({
     window.addEventListener("resize", updateMobile);
     return () => window.removeEventListener("resize", updateMobile);
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadOrgBranding = async () => {
-      try {
-        const res = await getApiWithToken("/org-settings", null, {
-          forceRefresh: true
-        });
-        if (!cancelled && res?.success) {
-          setOrgSettings(res.data || null);
-        }
-      } catch {
-        if (!cancelled) setOrgSettings(null);
-      }
-    };
-
-    if (profile) void loadOrgBranding();
-    return () => {
-      cancelled = true;
-    };
-  }, [profile]);
 
   const isEmployeeRole = profile?.activeRole?.slug === "employee";
   const dashboardPath = isEmployeeRole

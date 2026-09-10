@@ -5,6 +5,7 @@ const Holiday = require("../holidays/holiday.model");
 const Leave = require("../leaves/leave.model");
 const Timesheet = require("../timesheets/timesheet.model");
 const Attendance = require("../timesheets/timesheetAttendance.model");
+const TimesheetService = require("../timesheets/timesheet.service");
 const WeekOffService = require("../weekOffs/weekOff.service");
 const Organization = require("../organizations/organization.model");
 const OrgSettings = require("../orgSettings/orgSettings.model");
@@ -14,6 +15,8 @@ const {
   isValidTimeZone,
   toDateKeyInTimeZone,
   addDaysToDateKey,
+  startOfDayInTimeZone,
+  endOfDayInTimeZone,
   getWeekdayForDateKey
 } = require("../../utils/timezone");
 
@@ -432,6 +435,33 @@ exports.getSummary = async (req) => {
   const activeEmployeeObjectIds = activeEmployees
     .map((employee) => employee?._id)
     .filter(Boolean);
+
+  const internalOrgSettings = orgSettings || await withDashboardFallback(
+    "attendanceSettings",
+    () => OrgSettings.findOne({ organizationId: req.user.organizationId })
+      .select("attendanceHoursSource minWorkHoursPerDay")
+      .lean(),
+    null
+  );
+
+  if (
+    canViewAttendance
+    && activeEmployeeObjectIds.length
+    && internalOrgSettings?.attendanceHoursSource === "monitor_agent"
+  ) {
+    await withDashboardFallback(
+      "monitorAttendanceMaterialize",
+      () => TimesheetService.__private__.materializeMonitorAttendance({
+        organizationId: req.user.organizationId,
+        start: startOfDayInTimeZone(start30Key, timeZone),
+        end: endOfDayInTimeZone(todayKey, timeZone),
+        timeZone,
+        employees: activeEmployees,
+        minWorkHoursPerDay: Number(internalOrgSettings?.minWorkHoursPerDay ?? 8)
+      }),
+      null
+    );
+  }
 
   const [attendanceLast30, leaveListRaw, weeklyRaw] = await Promise.all([
     canViewAttendance && activeEmployeeObjectIds.length

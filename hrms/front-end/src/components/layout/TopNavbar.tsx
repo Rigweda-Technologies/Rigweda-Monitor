@@ -34,6 +34,7 @@ interface TopNavbarProps {
   title?: string;
   breadcrumb?: { label: string; href?: string }[];
   onOpenSidebar?: () => void;
+  initialOrgSettings?: OrgSettingsSnapshot | null;
 }
 
 interface NotificationItem {
@@ -80,7 +81,7 @@ type OrgSettingsSnapshot = {
   themeConfig?: OrgThemeConfig;
 };
 
-export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) => {
+export const TopNavbar = ({ title, breadcrumb, onOpenSidebar, initialOrgSettings }: TopNavbarProps) => {
   const navigate = useNavigate();
   const { profile, setProfile, setPermissions, hasAnyPermission } = useAuth();
   const roles = useMemo(() => profile?.roles || [], [profile]);
@@ -92,7 +93,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
-  const [orgSettings, setOrgSettings] = useState<OrgSettingsSnapshot | null>(null);
+  const [orgSettings, setOrgSettings] = useState<OrgSettingsSnapshot | null>(initialOrgSettings || null);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
   const canManageSettings = hasAnyPermission(["ORG_SETTINGS_MANAGE"]);
@@ -127,6 +128,12 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   useEffect(() => {
     loadNotifications(true);
   }, []);
+
+  useEffect(() => {
+    if (!initialOrgSettings) return;
+    setOrgSettings(initialOrgSettings);
+    setCustomTheme(initialOrgSettings.themeConfig || {});
+  }, [initialOrgSettings]);
 
   useEffect(() => {
     let cancelled = false;
