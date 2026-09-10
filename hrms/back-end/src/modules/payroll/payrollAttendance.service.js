@@ -8,6 +8,7 @@ const Holiday = require("../holidays/holiday.model");
 const OrgSettings = require("../orgSettings/orgSettings.model");
 const Organization = require("../organizations/organization.model");
 const { getPayrollPgPool } = require("../../config/payrollDb");
+const { getMonitorPgPool } = require("../../config/monitorDb");
 const { getTenantIdForOrganization } = require("./payrollProvisioning.service");
 const { analyzeLeaveDateKeys } = require("../leaves/leavePolicy.util");
 const {
@@ -18,6 +19,7 @@ const {
 } = require("../../utils/timezone");
 
 const DEFAULT_UNPAID_LEAVE_CODES = new Set(["LOP", "LWP", "LWOP", "ULOP", "UNPAID"]);
+const ATTENDANCE_HOURS_SOURCES = new Set(["monitor_agent", "manual", "biometric", "access_card"]);
 
 const toSafeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -67,6 +69,77 @@ const buildAttendanceMap = (rows, timeZone) => {
     });
   }
   return map;
+};
+
+const getMonitorAttendanceRows = async ({ organizationId, start, end, timeZone, employees }) => {
+  const pool = await getMonitorPgPool();
+  const employeeMap = new Map();
+  for (const employee of employees || []) {
+    const employeeId = String(employee._id);
+    employeeMap.set(employeeId, employeeId);
+    if (employee.employeeCode) employeeMap.set(String(employee.employeeCode), employeeId);
+    if (employee.userId) employeeMap.set(String(employee.userId), employeeId);
+  }
+
+  const { rows } = await pool.query(
+     `WITH activity_daily AS (
+       SELECT employee_id,
+         to_char((observed_at AT TIME ZONE $4)::date, 'YYYY-MM-DD') AS date_key,
+         COALESCE(SUM(active_seconds + idle_seconds), 0)::bigint AS total_seconds,
+         MAX(observed_at) AS last_observed_at
+       FROM monitor_activity_events
+       WHERE organization_id = $1 AND observed_at >= $2 AND observed_at <= $3
+       GROUP BY employee_id, (observed_at AT TIME ZONE $4)::date
+     ),
+     session_daily AS (
+       SELECT employee_id,
+         to_char((started_at AT TIME ZONE $4)::date, 'YYYY-MM-DD') AS date_key,
+         MIN(started_at) AS first_seen_at,
+         MAX(ended_at) AS last_seen_at
+       FROM monitor_app_usage_sessions
+       WHERE organization_id = $1 AND started_at <= $3 AND ended_at >= $2
+       GROUP BY employee_id, (started_at AT TIME ZONE $4)::date
+     )
+     SELECT COALESCE(activity_daily.employee_id, session_daily.employee_id) AS employee_id,
+       COALESCE(activity_daily.date_key, session_daily.date_key) AS date_key,
+       COALESCE(activity_daily.total_seconds, 0)::bigint AS total_seconds,
+       CASE
+         WHEN session_daily.first_seen_at IS NOT NULL
+          AND session_daily.last_seen_at IS NOT NULL
+          AND session_daily.first_seen_at < session_daily.last_seen_at
+         THEN session_daily.first_seen_at
+         WHEN activity_daily.last_observed_at IS NOT NULL AND COALESCE(activity_daily.total_seconds, 0) > 0
+         THEN activity_daily.last_observed_at - (COALESCE(activity_daily.total_seconds, 0)::text || ' seconds')::interval
+         ELSE session_daily.first_seen_at
+       END AS first_seen_at,
+       COALESCE(session_daily.last_seen_at, activity_daily.last_observed_at) AS last_seen_at
+     FROM activity_daily
+     FULL OUTER JOIN session_daily
+       ON activity_daily.employee_id = session_daily.employee_id
+      AND activity_daily.date_key = session_daily.date_key`,
+    [String(organizationId), start, end, timeZone]
+  );
+
+  return rows
+    .map((row) => {
+      const employeeId = employeeMap.get(String(row.employee_id));
+      if (!employeeId) return null;
+      const totalMinutes = Math.max(0, Math.round(Number(row.total_seconds || 0) / 60));
+      return {
+        _id: null,
+        employeeId,
+        date: row.date_key,
+        checkInAt: row.first_seen_at || null,
+        checkOutAt: row.last_seen_at || null,
+        status: "present",
+        totalMinutes,
+        overtimeMinutes: 0,
+        lateByMinutes: 0,
+        earlyCheckoutByMinutes: 0,
+        hoursSource: "monitor_agent"
+      };
+    })
+    .filter(Boolean);
 };
 
 const mergeAttendanceRowsByEmployeeDay = (rows = [], timeZone = "Asia/Kolkata") => {
@@ -480,7 +553,7 @@ exports.generateMonthlyAttendanceSnapshots = async (req) => {
   }
 
   const employees = await Employee.find(employeeQuery)
-    .select("_id employeeCode shiftId status")
+    .select("_id employeeCode userId shiftId status")
     .lean();
 
   if (!employees.length) {
@@ -530,7 +603,7 @@ exports.generateMonthlyAttendanceSnapshots = async (req) => {
         .lean(),
       WeekOff.find({ organizationId }).select("_id shiftId weekOffDays").lean(),
       OrgSettings.findOne({ organizationId })
-        .select("minWorkHoursPerDay minHalfDayHours")
+        .select("minWorkHoursPerDay minHalfDayHours attendanceHoursSource")
         .lean()
     ]);
 
@@ -540,7 +613,19 @@ exports.generateMonthlyAttendanceSnapshots = async (req) => {
     Math.round(toSafeNumber(orgSettings?.minHalfDayHours, 4) * 60)
   );
 
-  const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsRaw, timeZone);
+  const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
+    ? orgSettings.attendanceHoursSource
+    : "manual";
+  const attendanceRowsForSnapshot = attendanceHoursSource === "monitor_agent"
+    ? await getMonitorAttendanceRows({
+        organizationId,
+        start: monthRange.start,
+        end: monthRange.end,
+        timeZone,
+        employees
+      })
+    : attendanceRowsRaw;
+  const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsForSnapshot, timeZone);
   const leaveTypeCodeById = new Map(
     leaveTypes.map((item) => [String(item._id), String(item.code || "").toUpperCase()])
   );
@@ -730,7 +815,7 @@ exports.generateMonthlyAttendanceSnapshots = async (req) => {
           overtimeMinutes,
           lateByMinutes,
           earlyCheckoutMinutes,
-          attendanceId: attendance ? String(attendance._id) : null,
+          attendanceId: attendance?._id ? String(attendance._id) : null,
           leaveId: leave ? String(leave.leaveId) : null,
           holidayId: holiday ? String(holiday._id) : null,
           weekOffApplied: isWeekOff,
@@ -781,7 +866,8 @@ exports.generateMonthlyAttendanceSnapshots = async (req) => {
         sourceHash,
         generationStatus: forceRebuild ? "recomputed" : "generated",
         metadata: {
-          unpaidLeaveTypeCodes: [...unpaidCodes]
+          unpaidLeaveTypeCodes: [...unpaidCodes],
+          attendanceHoursSource
         },
         actorId
       });

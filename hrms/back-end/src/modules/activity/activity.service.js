@@ -15,6 +15,19 @@ const ACTIVE_PRESENCE_WINDOW_SECONDS = 75;
 const AWAY_PRESENCE_WINDOW_SECONDS = 5 * 60;
 const ACTIVE_WINDOW_MS = ACTIVE_PRESENCE_WINDOW_SECONDS * 1000;
 const AWAY_WINDOW_MS = AWAY_PRESENCE_WINDOW_SECONDS * 1000;
+const MONGO_OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+
+const buildEmployeeIdentityQuery = (value) => {
+  const trimmed = String(value || "").trim();
+  const filters = [
+    { employeeCode: trimmed },
+    { userId: trimmed }
+  ];
+  if (MONGO_OBJECT_ID_RE.test(trimmed)) {
+    filters.unshift({ _id: trimmed });
+  }
+  return filters;
+};
 
 const getOrganizationTimeZone = async (organizationId) => {
   const settings = await OrgSettings.findOne({ organizationId }).select("timezone").lean();
@@ -521,11 +534,7 @@ exports.listAppUsage = async ({ organizationId, date, limit = 15, offset = 0, ap
   if (requestedEmployeeId) {
     const employee = await Employee.findOne({
       organizationId,
-      $or: [
-        { _id: requestedEmployeeId },
-        { employeeCode: requestedEmployeeId },
-        { userId: requestedEmployeeId }
-      ]
+      $or: buildEmployeeIdentityQuery(requestedEmployeeId)
     })
       .select("_id employeeCode userId")
       .lean();
@@ -752,11 +761,7 @@ exports.listAppKeyUsage = async ({ organizationId, date, employeeId = "" }) => {
   if (requestedEmployeeId) {
     const matchingEmployees = await Employee.find({
       organizationId,
-      $or: [
-        { _id: requestedEmployeeId },
-        { employeeCode: requestedEmployeeId },
-        { userId: requestedEmployeeId }
-      ]
+      $or: buildEmployeeIdentityQuery(requestedEmployeeId)
     })
       .select("_id employeeCode userId")
       .lean();
@@ -851,10 +856,23 @@ exports.listBrowserHistory = async ({ organizationId, date, limit = 50, offset =
 
   const queryArgs = [String(organizationId), dayStart, dayEnd];
   const filters = [];
+  const requestedEmployeeId = String(employeeId || "").trim();
 
-  if (String(employeeId || "").trim()) {
-    queryArgs.push(String(employeeId).trim());
-    filters.push(`AND employee_id = $${queryArgs.length}`);
+  if (requestedEmployeeId) {
+    const matchingEmployees = await Employee.find({
+      organizationId,
+      $or: buildEmployeeIdentityQuery(requestedEmployeeId)
+    })
+      .select("_id employeeCode userId")
+      .lean();
+    const allowedIds = new Set([requestedEmployeeId]);
+    for (const employee of matchingEmployees) {
+      if (employee?._id) allowedIds.add(String(employee._id));
+      if (employee?.employeeCode) allowedIds.add(String(employee.employeeCode));
+      if (employee?.userId) allowedIds.add(String(employee.userId));
+    }
+    queryArgs.push(Array.from(allowedIds));
+    filters.push(`AND employee_id = ANY($${queryArgs.length}::text[])`);
   }
 
   if (String(browser || "").trim()) {

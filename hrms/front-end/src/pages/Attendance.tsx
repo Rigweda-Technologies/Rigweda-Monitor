@@ -45,6 +45,7 @@ type DayCell = {
   totalMinutes?: number;
   workedMinutes?: number;
   workedDuration?: string;
+  hoursSource?: "monitor_agent" | "manual" | "biometric" | "access_card" | string;
   checkInIp?: string | null;
   checkOutIp?: string | null;
   checkInSelfieProvided?: boolean;
@@ -377,6 +378,8 @@ const Attendance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
   const [pagination, setPagination] = useState<MatrixPagination | null>(null);
+  const [attendanceHoursSource, setAttendanceHoursSource] = useState<string>("manual");
+  const canManualEdit = canEdit && attendanceHoursSource !== "monitor_agent";
   const [lockAttendanceMeta, setLockAttendanceMeta] = useState<LockAttendanceMeta | null>(null);
   const [lockingAttendance, setLockingAttendance] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -502,6 +505,7 @@ const Attendance = () => {
 
       renderRowsProgressively(nextRows, isPaginatedAppend);
       setDaysInMonth(res.data?.daysInMonth || 31);
+      setAttendanceHoursSource(res.data?.attendanceHoursSource || "manual");
       setPagination(res.data?.pagination || null);
       setLockAttendanceMeta((prev) => {
         const nextLockMeta = res.data?.lockAttendance || null;
@@ -710,6 +714,10 @@ const Attendance = () => {
 
   const saveOverride = async () => {
     if (!selectedEmployee || !selectedDay) return;
+    if (!canManualEdit) {
+      toast.info("Manual attendance edits are disabled because attendance is sourced from the Monitor agent.");
+      return;
+    }
     if (isNoOpOverride) {
       toast.info(`Attendance is already marked as ${getAttendanceOverrideLabel(selectedStatus)}`);
       return;
@@ -756,6 +764,9 @@ const Attendance = () => {
     }
     if (cell.payrollReconciledByLeave) {
       parts.push("Payroll inclusion reconciled by approved half-day leave");
+    }
+    if (cell.hoursSource === "monitor_agent") {
+      parts.push("Source: Monitor agent");
     }
     if (cell.missedCheckout) {
       parts.push("Missed checkout flagged");
@@ -889,7 +900,7 @@ const Attendance = () => {
   };
 
   const runLockAttendance = async () => {
-    if (!canEdit || !lockAttendanceMeta?.enabled || lockingAttendance) return;
+    if (!canManualEdit || !lockAttendanceMeta?.enabled || lockingAttendance) return;
     const isRefresh = Boolean(lockAttendanceMeta?.snapshotGenerated);
     const confirmed = window.confirm(
       isRefresh
@@ -945,7 +956,7 @@ const Attendance = () => {
   };
 
   const runBulkUpdate = async () => {
-    if (!canEdit) return;
+    if (!canManualEdit) return;
     const employeeIds = normalizeEmployeeIds(selectedEmployeeIds);
     if (!bulkStartDate || !bulkEndDate || employeeIds.length === 0) {
       toast.error("Select employees and a date range for bulk update");
@@ -1144,7 +1155,7 @@ const Attendance = () => {
           <div className="text-xs text-muted-foreground">
             Tip: Hover any day cell to view check-in/out, shift, late/early, leave, holiday and override details.
                 <p className="text-sm text-slate-600 text-right">
-                  {canEdit ? "Click any day cell to override attendance." : "Read-only view."}
+                  {canManualEdit ? "Click any day cell to override attendance." : "Read-only view."}
                 </p>
           </div>
 
@@ -1382,7 +1393,7 @@ const Attendance = () => {
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                     <div className="w-full lg:w-auto">
-                      {canEdit && (
+                      {canManualEdit && (
                         <Button
                           variant="outline"
                           className="h-12 w-full bg-white/90 sm:w-auto"
@@ -1409,7 +1420,7 @@ const Attendance = () => {
                     <Button variant="outline" className="h-12 bg-white/90" onClick={refreshMatrixLatest}>
                       Refresh
                     </Button>
-                      {canEdit && (
+                      {canManualEdit && (
                         <Button
                           className="h-12 bg-slate-900 text-white hover:bg-slate-800"
                           onClick={runLockAttendance}
@@ -1425,13 +1436,13 @@ const Attendance = () => {
                     </div>
                   </div>
                 </div>
-                {canEdit && lockAttendanceMeta && (
+                {canManualEdit && lockAttendanceMeta && (
                   <div className="mt-3 text-xs text-slate-600">
                     {lockAttendanceHelperText}
                   </div>
                 )}
 
-                {canEdit && (
+                {canManualEdit && (
                   <div
                     className={`mt-4 overflow-hidden transition-all duration-500 ease-out ${
                       showBulkControls ? "max-h-64 opacity-100 translate-y-0" : "max-h-0 opacity-0 -translate-y-1"
@@ -1499,6 +1510,12 @@ const Attendance = () => {
 
               <div className="rounded-2xl border border-slate-200 bg-white/95 shadow-sm overflow-hidden flex flex-col min-h-0 lg:h-[calc(100vh-290px)]">
                 <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700">
+                      <Clock className="h-3.5 w-3.5 text-slate-500" />
+                      Source: {attendanceHoursSource === "monitor_agent" ? "Monitor agent" : attendanceHoursSource.replace(/_/g, " ")}
+                    </div>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1">
                       <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-500" />
@@ -1546,12 +1563,12 @@ const Attendance = () => {
                   <table className="w-full border-collapse min-w-[1100px]">
                   <thead>
                     <tr className="border-b border-slate-200">
-                      {canEdit && (
+                      {canManualEdit && (
                         <th className="sticky left-0 top-0 bg-white/95 backdrop-blur text-left p-3 min-w-[48px] z-30 text-slate-600">
                           Sel
                         </th>
                       )}
-                      <th className={`sticky ${canEdit ? "left-[48px]" : "left-0"} top-0 bg-white/95 backdrop-blur text-left p-3 min-w-[220px] z-30 text-slate-700`}>
+                      <th className={`sticky ${canManualEdit ? "left-[48px]" : "left-0"} top-0 bg-white/95 backdrop-blur text-left p-3 min-w-[220px] z-30 text-slate-700`}>
                         <button
                           type="button"
                           onClick={() => toggleSort("firstName")}
@@ -1601,7 +1618,7 @@ const Attendance = () => {
                   <tbody>
                     {loading && rows.length === 0 && (
                       <tr>
-                        <td colSpan={daysInMonth + summaryColumnCount + (canEdit ? 1 : 0)} className="p-3">
+                        <td colSpan={daysInMonth + summaryColumnCount + (canManualEdit ? 1 : 0)} className="p-3">
                           <div className="space-y-2">
                             {Array.from({ length: loadingRowCount }).map((_, idx) => (
                               <Skeleton key={`attendance-row-skeleton-${idx}`} className="h-10 w-full rounded-md" />
@@ -1612,14 +1629,14 @@ const Attendance = () => {
                     )}
                     {!loading && filteredRows.length === 0 && (
                       <tr>
-                        <td colSpan={daysInMonth + summaryColumnCount + (canEdit ? 1 : 0)} className="p-4 text-muted-foreground">
+                        <td colSpan={daysInMonth + summaryColumnCount + (canManualEdit ? 1 : 0)} className="p-4 text-muted-foreground">
                           No employees found.
                         </td>
                       </tr>
                     )}
                     {visibleRows.map((row) => (
                       <tr key={row.employeeId} className="border-b border-slate-100 hover:bg-slate-50/55 transition-colors">
-                        {canEdit && (
+                        {canManualEdit && (
                           <td className="sticky left-0 bg-white p-2 z-20 text-center">
                             <input
                               type="checkbox"
@@ -1628,7 +1645,7 @@ const Attendance = () => {
                             />
                           </td>
                         )}
-                        <td className={`sticky ${canEdit ? "left-[48px]" : "left-0"} bg-white p-3 z-10`}>
+                        <td className={`sticky ${canManualEdit ? "left-[48px]" : "left-0"} bg-white p-3 z-10`}>
                           <div className="font-medium">
                             {`${row.firstName || ""} ${row.lastName || ""}`.trim() || "-"}
                           </div>
@@ -1727,7 +1744,7 @@ const Attendance = () => {
                       <>
                         {Array.from({ length: 3 }).map((_, idx) => (
                           <tr key={`attendance-loading-more-${idx}`} className="border-b border-slate-100">
-                            <td colSpan={daysInMonth + summaryColumnCount + (canEdit ? 1 : 0)} className="p-3">
+                            <td colSpan={daysInMonth + summaryColumnCount + (canManualEdit ? 1 : 0)} className="p-3">
                               <Skeleton className="h-10 w-full rounded-md" />
                             </td>
                           </tr>
@@ -1931,7 +1948,7 @@ const Attendance = () => {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="flex flex-col gap-0 bg-white p-0">
           <SheetHeader className="border-b bg-white px-6 py-5 text-left">
-            <SheetTitle className="text-2xl font-semibold text-slate-950">{canEdit ? "Update Attendance" : "Attendance Details"}</SheetTitle>
+            <SheetTitle className="text-2xl font-semibold text-slate-950">{canManualEdit ? "Update Attendance" : "Attendance Details"}</SheetTitle>
             <p className="pt-1 text-sm text-muted-foreground">
               {selectedEmployee
                 ? `${selectedEmployee.firstName} ${selectedEmployee.lastName} - ${month}-${String(selectedDay || 1).padStart(2, "0")}`
@@ -1939,7 +1956,7 @@ const Attendance = () => {
             </p>
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-6 py-5">
-            {canEdit && (
+            {canManualEdit && (
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Attendance Status
@@ -2175,6 +2192,11 @@ const Attendance = () => {
                       Total Hours: {selectedCell.workedDuration || `${(Number(selectedCell.totalMinutes || 0) / 60).toFixed(1)}h`}
                     </p>
                   ) : null}
+                  {selectedCell.hoursSource === "monitor_agent" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Source: Monitor agent
+                    </p>
+                  ) : null}
                   {(selectedCell.lateByMinutes || 0) > 0 ? (
                     <p className="text-xs text-muted-foreground">Late by: {selectedCell.lateByMinutes} min</p>
                   ) : null}
@@ -2219,7 +2241,7 @@ const Attendance = () => {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            {canEdit && (
+            {canManualEdit && (
               <Button onClick={saveOverride} disabled={saving || isNoOpOverride}>
                 {saving ? "Saving..." : "Save"}
               </Button>

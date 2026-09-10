@@ -408,18 +408,26 @@ const OrganizationSettings = () => {
               <p className="text-xs text-muted-foreground">
                 Hours below half-day threshold are treated as invalid on timesheet submission.
               </p>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Working Hours Source</label>
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <label className="text-sm font-semibold">Attendance Source</label>
                 <Select value={attendanceHoursSource} onValueChange={setAttendanceHoursSource} disabled={!canManage}>
                   <SelectTrigger><SelectValue placeholder="Select working hours source" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="monitor_agent">Monitor agent</SelectItem>
-                    <SelectItem value="manual">Manual check-in / checkout</SelectItem>
+                    <SelectItem value="manual">Manual attendance</SelectItem>
+                    <SelectItem value="monitor_agent">Rigweda Monitor agent</SelectItem>
                     <SelectItem value="biometric">Biometric device</SelectItem>
                     <SelectItem value="access_card">Access card</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Attendance hours and full-day status use this source. Monitor agent uses productive plus idle activity hours.</p>
+                {attendanceHoursSource === "monitor_agent" ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    Attendance will be calculated from the Monitor agent. Manual check-in, checkout, and attendance overrides are disabled.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Manual attendance owns the attendance module. Agent hours remain available in Rigweda Monitor pages for monitoring reports only.
+                  </div>
+                )}
               </div>
 
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
