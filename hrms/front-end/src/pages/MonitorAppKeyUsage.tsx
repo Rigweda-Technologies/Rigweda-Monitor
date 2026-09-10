@@ -64,7 +64,11 @@ const MonitorAppKeyUsage = () => {
   }, []);
 
   const load = useCallback(async (manual = false) => {
-    manual ? setRefreshing(true) : setLoading(true);
+    if (manual) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const data = await getMonitorAppKeyUsage(date, { employeeId: employeeId === "all" ? undefined : employeeId });
       setRows(data.appKeys || []);

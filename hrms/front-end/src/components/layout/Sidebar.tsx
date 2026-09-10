@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/useAuth";
+import { getApiWithToken } from "@/services/apiWrapper";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -65,6 +66,22 @@ interface SidebarProps {
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
 }
+
+type OrganizationSummary = {
+  name?: string;
+  logoUrl?: string;
+};
+
+type SidebarOrgSettings = {
+  logoUrl?: string;
+};
+
+const getOrganizationSummary = (profile: unknown): OrganizationSummary => {
+  if (!profile || typeof profile !== "object") return {};
+  const organization = (profile as { organization?: unknown }).organization;
+  if (!organization || typeof organization !== "object") return {};
+  return organization as OrganizationSummary;
+};
 
 const NavItem = ({ icon, label, to, collapsed, children, onNavigate }: NavItemProps) => {
   const location = useLocation();
@@ -181,7 +198,7 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
   },
   {
     icon: <Monitor size={20} />,
-    label: "Rigweda Monitor",
+    label: "Monitor",
     to: "/monitor",
     permissions: ["EMP_VIEW", "ATTENDANCE_VIEW_ALL", "ORG_SETTINGS_VIEW"],
     children: [
@@ -310,7 +327,7 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
   //     }
   //   ]
   // },
-  { icon: <FileText size={20} />, label: "Guidelines", to: "/documentation", permissions: ["EMP_VIEW", "EMP_SELF_VIEW", "EMP_CREATE", "EMP_UPDATE"] }
+  { icon: <FileText size={20} />, label: "Documentation", to: "/documentation", permissions: ["EMP_VIEW", "EMP_SELF_VIEW", "EMP_CREATE", "EMP_UPDATE"] }
 ];
 
 export const Sidebar = memo(({
@@ -322,9 +339,13 @@ export const Sidebar = memo(({
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [orgSettings, setOrgSettings] = useState<SidebarOrgSettings | null>(null);
   const { profile, hasAnyPermission, isSuperAdmin } = useAuth();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const effectiveCollapsed = collapsed && !hoverExpanded;
+  const organization = getOrganizationSummary(profile);
+  const brandName = organization.name || "Monitor Suite";
+  const logoUrl = orgSettings?.logoUrl || organization.logoUrl || "";
 
   const setCollapsed = (next: boolean) => {
     if (controlledCollapsed === undefined) {
@@ -339,6 +360,27 @@ export const Sidebar = memo(({
     window.addEventListener("resize", updateMobile);
     return () => window.removeEventListener("resize", updateMobile);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadOrgBranding = async () => {
+      try {
+        const res = await getApiWithToken("/org-settings/theme", null, {
+          forceRefresh: true
+        });
+        if (!cancelled && res?.success) {
+          setOrgSettings(res.data || null);
+        }
+      } catch {
+        if (!cancelled) setOrgSettings(null);
+      }
+    };
+
+    if (profile) void loadOrgBranding();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   const isEmployeeRole = profile?.activeRole?.slug === "employee";
   const dashboardPath = isEmployeeRole
@@ -438,7 +480,11 @@ export const Sidebar = memo(({
               className="flex items-center gap-2 px-1 py-1"
             >
               <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-teal-200/20 bg-teal-300/10">
-                <img src="/hrms-logo.png" alt="Rigweda logo" className="h-6 w-6 object-contain" />
+                {logoUrl ? (
+                  <img src={logoUrl} alt={`${brandName} logo`} className="h-full w-full object-contain" />
+                ) : (
+                  <Building2 size={18} className="text-teal-100" />
+                )}
               </div>
               <AnimatePresence>
                 {!effectiveCollapsed && (
@@ -446,9 +492,9 @@ export const Sidebar = memo(({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="text-base font-bold text-white"
+                    className="max-w-[185px] truncate text-base font-bold text-white"
                   >
-                    Rigweda Monitor
+                    {brandName}
                   </motion.div>
                 )}
               </AnimatePresence>

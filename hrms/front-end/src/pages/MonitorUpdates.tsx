@@ -113,11 +113,11 @@ export default function MonitorUpdates() {
   };
 
   return (
-    <MainLayout title="Monitor Updates" breadcrumb={[{ label: "Home", href: "/" }, { label: "Rigweda Monitor" }, { label: "Updates" }]}> 
+    <MainLayout title="Monitor Updates" breadcrumb={[{ label: "Home", href: "/" }, { label: "Monitor" }, { label: "Updates" }]}>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Rigweda Monitor</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Monitor</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Releases</h1>
             <p className="mt-1 text-sm text-slate-500">Manage desktop builds, rollout status, and monitor updates.</p>
           </div>

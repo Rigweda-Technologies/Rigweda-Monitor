@@ -414,7 +414,7 @@ const OrganizationSettings = () => {
                   <SelectTrigger><SelectValue placeholder="Select working hours source" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="manual">Manual attendance</SelectItem>
-                    <SelectItem value="monitor_agent">Rigweda Monitor agent</SelectItem>
+                    <SelectItem value="monitor_agent">Monitor agent</SelectItem>
                     <SelectItem value="biometric">Biometric device</SelectItem>
                     <SelectItem value="access_card">Access card</SelectItem>
                   </SelectContent>
@@ -425,7 +425,7 @@ const OrganizationSettings = () => {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    Manual attendance owns the attendance module. Agent hours remain available in Rigweda Monitor pages for monitoring reports only.
+                    Manual attendance owns the attendance module. Agent hours remain available in monitor pages for monitoring reports only.
                   </div>
                 )}
               </div>

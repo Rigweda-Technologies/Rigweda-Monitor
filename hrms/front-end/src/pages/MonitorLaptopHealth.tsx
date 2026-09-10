@@ -48,10 +48,10 @@ export default function MonitorLaptopHealth() {
 
   useEffect(() => { void refresh(); }, []);
 
-  return <MainLayout title="Laptop Health" breadcrumb={[{ label: "Home", href: "/" }, { label: "Rigweda Monitor" }, { label: "Laptop Health" }]}>
+  return <MainLayout title="Laptop Health" breadcrumb={[{ label: "Home", href: "/" }, { label: "Monitor" }, { label: "Laptop Health" }]}>
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Rigweda Monitor</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Laptop Health</h1><p className="mt-1 text-sm text-slate-500">Live device capacity, temperature, connectivity, and installed agent versions.</p></div>
+        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Monitor</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Laptop Health</h1><p className="mt-1 text-sm text-slate-500">Live device capacity, temperature, connectivity, and installed agent versions.</p></div>
         <Button variant="outline" className="gap-2" onClick={() => void refresh()} disabled={loading}><RefreshCw size={15} className={loading ? "animate-spin" : ""} />Refresh</Button>
       </div>
       <Card className={smoothCardShadow}><CardHeader><CardTitle>Monitored devices</CardTitle><CardDescription>{items.length} device{items.length === 1 ? "" : "s"} reporting health snapshots.</CardDescription></CardHeader><CardContent className="p-0">
