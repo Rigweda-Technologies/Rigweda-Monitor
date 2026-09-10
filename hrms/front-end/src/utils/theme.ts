@@ -32,9 +32,34 @@ export type OrgThemeConfig = {
 };
 
 export type OrgThemeSettings = {
+  logoUrl?: string;
   themeMode?: OrgThemeMode;
   themePreset?: OrgThemePreset;
   themeConfig?: OrgThemeConfig | null;
+};
+
+export const applyOrganizationFavicon = (logoUrl?: string | null) => {
+  if (typeof document === "undefined") return;
+  const href = String(logoUrl || "").trim() || "/hrms-logo.png";
+  const iconSelectors = [
+    "link[rel='icon']",
+    "link[rel='shortcut icon']",
+    "link[rel='apple-touch-icon']"
+  ];
+
+  iconSelectors.forEach((selector) => {
+    document.querySelectorAll<HTMLLinkElement>(selector).forEach((link) => {
+      link.href = href;
+      if (href.startsWith("data:image/")) {
+        link.type = href.slice(5, href.indexOf(";")) || "image/png";
+      }
+    });
+  });
+
+  const ogImage = document.querySelector<HTMLMetaElement>("meta[property='og:image']");
+  if (ogImage) ogImage.content = href;
+  const twitterImage = document.querySelector<HTMLMetaElement>("meta[name='twitter:image']");
+  if (twitterImage) twitterImage.content = href;
 };
 
 export const THEME_PRESETS: Record<OrgThemePreset, { label: string; config: Required<OrgThemeConfig> }> = {
@@ -123,6 +148,7 @@ export const getResolvedThemeConfig = (settings?: OrgThemeSettings | null) => {
 
 export const applyThemeToDocument = (settings?: OrgThemeSettings | null) => {
   if (typeof document === "undefined") return;
+  applyOrganizationFavicon(settings?.logoUrl);
   const theme = getResolvedThemeConfig(settings);
   const root = document.documentElement;
   Object.entries(theme).forEach(([key, value]) => {

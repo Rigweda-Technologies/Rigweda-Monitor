@@ -1124,7 +1124,7 @@ exports.savePayrollSetup = async (req) => {
         scope
       }));
 
-    const [existingEarningRows, existingDeductionRows, existingEmployerRows] = await Promise.all([
+    let [existingEarningRows, existingDeductionRows, existingEmployerRows] = await Promise.all([
       exports.listSalaryComponents({
         ...req,
         query: { scope: "earning", payGroupId }
@@ -1137,6 +1137,18 @@ exports.savePayrollSetup = async (req) => {
         ...req,
         query: { scope: "employer_contribution", payGroupId }
       })
+    ]);
+    const loadInactiveRows = async (scope, rows) => {
+      if (rows?.length) return rows;
+      return exports.listSalaryComponents({
+        ...req,
+        query: { scope, payGroupId, includeInactive: true }
+      });
+    };
+    [existingEarningRows, existingDeductionRows, existingEmployerRows] = await Promise.all([
+      loadInactiveRows("earning", existingEarningRows),
+      loadInactiveRows("deduction", existingDeductionRows),
+      loadInactiveRows("employer_contribution", existingEmployerRows)
     ]);
     const existingComponentMap = new Map(
       [

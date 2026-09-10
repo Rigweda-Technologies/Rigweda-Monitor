@@ -10,6 +10,7 @@ import PermissionGate from "@/components/PermissionGate";
 import { useAuth } from "@/context/useAuth";
 import { setOrgTimeZone } from "@/utils/timezone";
 import { Clock3, MapPin, Save, ShieldCheck, Sparkles } from "lucide-react";
+import { applyOrganizationFavicon } from "@/utils/theme";
 
 const TIMEZONE_OPTIONS = [
   "Asia/Kolkata",
@@ -63,6 +64,7 @@ const OrganizationSettings = () => {
   const [loading, setLoading] = useState(false);
   const canView = hasAnyPermission(["ORG_SETTINGS_VIEW"]);
   const canManage = hasAnyPermission(["ORG_SETTINGS_MANAGE"]);
+  const manualAttendanceSelected = attendanceHoursSource === "manual";
 
   const fetchSettings = async () => {
     const res = await getApiWithToken("/org-settings", null, {
@@ -134,7 +136,9 @@ const OrganizationSettings = () => {
         typeof res.data?.noticePeriodDays === "number" ? res.data.noticePeriodDays : 30
       );
       setEmployeeIdPrefix(String(res.data?.employeeIdPrefix || ""));
-      setLogoPreviewUrl(String(res.data?.logoUrl || ""));
+      const logoUrl = String(res.data?.logoUrl || "");
+      setLogoPreviewUrl(logoUrl);
+      applyOrganizationFavicon(logoUrl);
       setLogoUpload(null);
     } else {
       toast.error(res?.message || "Failed to load settings");
@@ -164,15 +168,15 @@ const OrganizationSettings = () => {
         minWorkHoursPerDay: Number(minWorkHoursPerDay),
         minHalfDayHours: Number(minHalfDayHours),
         attendanceHoursSource,
-        attendanceIpEnabled,
-        attendanceAllowedIp,
-        attendanceSelfieRequired,
-        attendanceMultiPunchEnabled,
-        attendanceGeoFenceEnabled,
-        attendanceGeoLatitude: attendanceGeoLatitude === "" ? null : Number(attendanceGeoLatitude),
-        attendanceGeoLongitude: attendanceGeoLongitude === "" ? null : Number(attendanceGeoLongitude),
-        attendanceGeoRadiusMeters: Number(attendanceGeoRadiusMeters),
-        attendanceDevBypassEnabled,
+        attendanceIpEnabled: manualAttendanceSelected ? attendanceIpEnabled : false,
+        attendanceAllowedIp: manualAttendanceSelected ? attendanceAllowedIp : "",
+        attendanceSelfieRequired: manualAttendanceSelected ? attendanceSelfieRequired : false,
+        attendanceMultiPunchEnabled: manualAttendanceSelected ? attendanceMultiPunchEnabled : false,
+        attendanceGeoFenceEnabled: manualAttendanceSelected ? attendanceGeoFenceEnabled : false,
+        attendanceGeoLatitude: manualAttendanceSelected && attendanceGeoLatitude !== "" ? Number(attendanceGeoLatitude) : null,
+        attendanceGeoLongitude: manualAttendanceSelected && attendanceGeoLongitude !== "" ? Number(attendanceGeoLongitude) : null,
+        attendanceGeoRadiusMeters: manualAttendanceSelected ? Number(attendanceGeoRadiusMeters) : 200,
+        attendanceDevBypassEnabled: manualAttendanceSelected ? attendanceDevBypassEnabled : false,
         probationPeriodDays: Number(probationPeriodDays),
         noticePeriodDays: Number(noticePeriodDays),
         employeeIdPrefix: employeeIdPrefix.trim().toUpperCase(),
@@ -184,7 +188,9 @@ const OrganizationSettings = () => {
           setOrgTimeZone(timezone);
         }
         if (res.data?.logoUrl) {
-          setLogoPreviewUrl(String(res.data.logoUrl));
+          const nextLogoUrl = String(res.data.logoUrl);
+          setLogoPreviewUrl(nextLogoUrl);
+          applyOrganizationFavicon(nextLogoUrl);
         }
         setLogoUpload(null);
         toast.success("Settings saved");
@@ -264,7 +270,7 @@ const OrganizationSettings = () => {
                 }}
               />
               <p className="text-xs text-slate-500">
-                Upload a PNG, JPG, or WEBP logo. It will appear on employee payslips and PDF downloads.
+                Upload a PNG, JPG, or WEBP logo. It will appear in the app header, browser favicon, payslips, and PDF downloads.
               </p>
             </div>
           </div>
@@ -408,18 +414,30 @@ const OrganizationSettings = () => {
               <p className="text-xs text-muted-foreground">
                 Hours below half-day threshold are treated as invalid on timesheet submission.
               </p>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Working Hours Source</label>
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <label className="text-sm font-semibold">Attendance Source</label>
                 <Select value={attendanceHoursSource} onValueChange={setAttendanceHoursSource} disabled={!canManage}>
                   <SelectTrigger><SelectValue placeholder="Select working hours source" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="manual">Manual attendance</SelectItem>
                     <SelectItem value="monitor_agent">Monitor agent</SelectItem>
-                    <SelectItem value="manual">Manual check-in / checkout</SelectItem>
                     <SelectItem value="biometric">Biometric device</SelectItem>
                     <SelectItem value="access_card">Access card</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Attendance hours and full-day status use this source. Monitor agent uses productive plus idle activity hours.</p>
+                {attendanceHoursSource === "monitor_agent" ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    Attendance will be calculated from the Monitor agent. Manual check-in, checkout, and attendance overrides are disabled.
+                  </div>
+                ) : manualAttendanceSelected ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Manual attendance owns the attendance module. Check-in restrictions can be configured below.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Check-in restrictions are disabled because attendance is owned by the selected external source.
+                  </div>
+                )}
               </div>
 
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
@@ -587,6 +605,7 @@ const OrganizationSettings = () => {
           </section>
         </div>
 
+        {manualAttendanceSelected && (
         <section className="rounded-2xl border border-slate-200 bg-card p-5 card-shadow transition-all duration-300 hover:shadow-lg">
           <div className="mb-4 flex items-center gap-2">
             <MapPin className="h-5 w-5 text-emerald-600" />
@@ -692,6 +711,7 @@ const OrganizationSettings = () => {
             </span>
           </label> */}
         </section>
+        )}
 
         <PermissionGate permissions={["ORG_SETTINGS_MANAGE"]}>
           <div className="sticky bottom-4 z-10 flex justify-end">

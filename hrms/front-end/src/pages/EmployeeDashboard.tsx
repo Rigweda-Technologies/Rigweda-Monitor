@@ -1233,7 +1233,7 @@ const EmployeeDashboard = () => {
             </p>
             {checkInPolicy.attendanceHoursSource === "monitor_agent" && (
               <p className="text-xs text-teal-700 mt-1">
-                Working hours are collected automatically by the Rigweda Monitor agent. Manual check-in and checkout are disabled.
+                Working hours are collected automatically by the monitor agent. Manual check-in and checkout are disabled.
               </p>
             )}
             {!hasCheckedInToday && checkInWindowStartText && shiftStartText && (

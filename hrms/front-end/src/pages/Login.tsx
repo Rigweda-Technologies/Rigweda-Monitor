@@ -14,7 +14,7 @@ const slides = [
   {
     title: "See Work Clearly, Without Guesswork",
     description:
-      "Rigweda Monitor brings employee activity, application usage, browser activity, and screenshots into one focused workspace.",
+      "Monitor employee activity, application usage, browser activity, and screenshots in one focused workspace.",
     metric: "One view for every monitored device"
   },
   {
@@ -336,7 +336,7 @@ const Login = () => {
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-teal-200/30 bg-teal-300/15 text-teal-200"><Monitor className="h-5 w-5" /></div>
-              <p className="text-xs uppercase tracking-[0.24em] text-teal-100/90">Rigweda Monitor</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-teal-100/90">Workforce Monitor</p>
             </div>
             <h1 className="mt-7 text-5xl font-semibold leading-[1.05] max-w-[15ch]">
               Visibility for every workday.
@@ -405,7 +405,7 @@ const Login = () => {
         <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-[0_24px_70px_rgba(15,23,42,0.12)] p-6 sm:p-8">
           <div className="mb-6">
             <div className="flex items-center gap-2 text-teal-700"><Monitor className="h-4 w-4" /><p className="text-xs font-semibold uppercase tracking-[0.22em]">Monitor console</p></div>
-            <h2 className="text-2xl font-semibold mt-3 text-slate-900">Sign in to Rigweda Monitor</h2>
+            <h2 className="text-2xl font-semibold mt-3 text-slate-900">Sign in to your workspace</h2>
             <p className="text-sm text-slate-500 mt-2">Review activity, screenshots, laptop health, and agent releases from one secure workspace.</p>
           </div>
 

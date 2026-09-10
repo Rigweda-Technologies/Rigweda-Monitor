@@ -570,7 +570,7 @@ test("updateSalaryStructure rejects closed historical revision updates", async (
         }),
       (error) => {
         assert.equal(error.code, 409);
-        assert.match(error.message, /Can't switch to older revision/);
+        assert.match(error.message, /view-only after its effective period ends/);
         return true;
       }
     );

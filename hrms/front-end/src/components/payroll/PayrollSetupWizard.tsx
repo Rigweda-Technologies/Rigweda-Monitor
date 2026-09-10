@@ -615,7 +615,7 @@ const evaluateFormulaPreview = (expression: string, context: Record<string, numb
   const expr = normalizeConditionalFormulaExpression(expression);
   if (!expr) return 0;
 
-  if (/['"`;{}\[\]\\]/.test(expr)) {
+  if (/['"`;{}[\]\\]/.test(expr)) {
     throw new Error("Unsupported token in formula expression");
   }
 

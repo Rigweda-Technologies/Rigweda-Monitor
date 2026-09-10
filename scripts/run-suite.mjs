@@ -20,9 +20,9 @@ const commands = {
   hrms: mode === "local"
     ? [
         { label: "hrms backend", cwd: "hrms/back-end", command: "node", args: ["app.js"] },
-        { label: "hrms frontend", cwd: "hrms/front-end", command: "node", args: ["node_modules/vite/bin/vite.js", "--configLoader", "native", "--mode", "development-local"] },
+        { label: "hrms frontend", cwd: "hrms/front-end", command: "node", args: ["node_modules/vite/bin/vite.js", "--mode", "development-local"] },
       ]
-    : [{ label: "hrms frontend", cwd: "hrms/front-end", command: "node", args: ["node_modules/vite/bin/vite.js", "--configLoader", "native", "--mode", "server"] }],
+    : [{ label: "hrms frontend", cwd: "hrms/front-end", command: "node", args: ["node_modules/vite/bin/vite.js", "--mode", "server"] }],
 };
 
 if (!commands[suite] || !["local", "server"].includes(mode)) {

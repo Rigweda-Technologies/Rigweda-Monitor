@@ -128,7 +128,7 @@ exports.upsert = async (req) => {
 
   const existingSettings = await OrgSettings.findOne({
     organizationId: req.user.organizationId
-  }).select("logoUrl");
+  }).select("logoUrl themeMode themePreset themeConfig");
 
   let logoUrl = existingSettings?.logoUrl || "";
   if (logoUpload?.base64Data && logoUpload?.mimeType) {
@@ -162,43 +162,56 @@ exports.upsert = async (req) => {
     };
   }
 
+  const updatePayload = {
+    leaveCreditFrequency,
+    leaveTypeCreditMode,
+    sandwichRuleEnabled,
+    attendanceLockEnabled,
+    attendanceLockAfterDays,
+    attendanceLockMode,
+    attendanceLockDay,
+    timezone,
+    logoUrl,
+    payrollCutoffDay,
+    payrollSalaryPayDay,
+    payrollEnabled,
+    minWorkHoursPerDay,
+    minHalfDayHours,
+    attendanceHoursSource: ["monitor_agent", "manual", "biometric", "access_card"].includes(attendanceHoursSource)
+      ? attendanceHoursSource
+      : "manual",
+    attendanceIpEnabled,
+    attendanceAllowedIp: (attendanceAllowedIp || "").trim(),
+    attendanceSelfieRequired,
+    attendanceMultiPunchEnabled,
+    attendanceGeoFenceEnabled,
+    attendanceGeoLatitude,
+    attendanceGeoLongitude,
+    attendanceGeoRadiusMeters,
+    attendanceDevBypassEnabled,
+    probationPeriodDays,
+    noticePeriodDays,
+    employeeIdPrefix: (employeeIdPrefix || "").trim().toUpperCase(),
+    maxActiveLoginsPerUser
+  };
+
+  const requestHasThemeFields = ["themeMode", "themePreset", "themeConfig"]
+    .some((field) => Object.prototype.hasOwnProperty.call(req.body, field));
+  if (requestHasThemeFields) {
+    updatePayload.themeMode = ["preset", "custom"].includes(themeMode)
+      ? themeMode
+      : existingSettings?.themeMode || DEFAULTS.themeMode;
+    updatePayload.themePreset = ["ocean", "forest", "sunset", "graphite"].includes(themePreset)
+      ? themePreset
+      : existingSettings?.themePreset || DEFAULTS.themePreset;
+    updatePayload.themeConfig = themeConfig && typeof themeConfig === "object"
+      ? themeConfig
+      : existingSettings?.themeConfig || DEFAULTS.themeConfig;
+  }
+
   const settings = await OrgSettings.findOneAndUpdate(
     { organizationId: req.user.organizationId },
-    {
-      leaveCreditFrequency,
-      leaveTypeCreditMode,
-      sandwichRuleEnabled,
-      attendanceLockEnabled,
-      attendanceLockAfterDays,
-      attendanceLockMode,
-      attendanceLockDay,
-      timezone,
-      logoUrl,
-      themeMode: ["preset", "custom"].includes(themeMode) ? themeMode : "preset",
-      themePreset: ["ocean", "forest", "sunset", "graphite"].includes(themePreset) ? themePreset : "ocean",
-      themeConfig: themeConfig && typeof themeConfig === "object" ? themeConfig : {},
-      payrollCutoffDay,
-      payrollSalaryPayDay,
-      payrollEnabled,
-      minWorkHoursPerDay,
-      minHalfDayHours,
-      attendanceHoursSource: ["monitor_agent", "manual", "biometric", "access_card"].includes(attendanceHoursSource)
-        ? attendanceHoursSource
-        : "manual",
-      attendanceIpEnabled,
-      attendanceAllowedIp: (attendanceAllowedIp || "").trim(),
-      attendanceSelfieRequired,
-      attendanceMultiPunchEnabled,
-      attendanceGeoFenceEnabled,
-      attendanceGeoLatitude,
-      attendanceGeoLongitude,
-      attendanceGeoRadiusMeters,
-      attendanceDevBypassEnabled,
-      probationPeriodDays,
-      noticePeriodDays,
-      employeeIdPrefix: (employeeIdPrefix || "").trim().toUpperCase(),
-      maxActiveLoginsPerUser
-    },
+    updatePayload,
     { upsert: true, new: true }
   );
 
@@ -215,7 +228,7 @@ exports.upsert = async (req) => {
   return settings;
 };
 
-const themeProjection = "themeMode themePreset themeConfig -_id";
+const themeProjection = "logoUrl themeMode themePreset themeConfig -_id";
 
 const requireOrganization = (req) => {
   if (!req.user?.organizationId) {
@@ -229,6 +242,7 @@ exports.getTheme = async (req) => {
     organizationId: requireOrganization(req)
   }).select(themeProjection).lean();
   return settings || {
+    logoUrl: DEFAULTS.logoUrl,
     themeMode: DEFAULTS.themeMode,
     themePreset: DEFAULTS.themePreset,
     themeConfig: {}

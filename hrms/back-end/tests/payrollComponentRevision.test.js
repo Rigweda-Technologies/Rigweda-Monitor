@@ -372,7 +372,32 @@ test("updateSalaryComponent reopens existing same-date revision safely", async (
 });
 
 test("savePayrollSetup creates a new component when paygroup-scoped lookup misses", async () => {
+  const restores = [];
   const servicePath = require.resolve("../src/modules/payroll/payrollApi.service");
+
+  const client = {
+    async query(sql) {
+      if (sql.includes("SELECT DISTINCT UPPER(code) AS code")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+    release() {}
+  };
+
+  restores.push(
+    mockModule("../src/config/payrollDb", {
+      getPayrollPgPool: async () => ({
+        connect: async () => client
+      })
+    })
+  );
+  restores.push(
+    mockModule("../src/modules/payroll/payrollProvisioning.service", {
+      getTenantIdForOrganization: async () => "tenant-1"
+    })
+  );
+
   delete require.cache[servicePath];
   const service = require(servicePath);
 
@@ -443,6 +468,8 @@ test("savePayrollSetup creates a new component when paygroup-scoped lookup misse
     service.listSalaryComponents = originalMethods.listSalaryComponents;
     service.updateSalaryComponent = originalMethods.updateSalaryComponent;
     service.createSalaryComponent = originalMethods.createSalaryComponent;
+    delete require.cache[servicePath];
+    for (const restore of restores.reverse()) restore();
   }
 });
 
@@ -526,7 +553,32 @@ test("listSalaryComponents prefers direct pay_group_id over metadata fallback", 
 });
 
 test("savePayrollSetup passes payGroupId through to component updates", async () => {
+  const restores = [];
   const servicePath = require.resolve("../src/modules/payroll/payrollApi.service");
+
+  const client = {
+    async query(sql) {
+      if (sql.includes("SELECT DISTINCT UPPER(code) AS code")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+    release() {}
+  };
+
+  restores.push(
+    mockModule("../src/config/payrollDb", {
+      getPayrollPgPool: async () => ({
+        connect: async () => client
+      })
+    })
+  );
+  restores.push(
+    mockModule("../src/modules/payroll/payrollProvisioning.service", {
+      getTenantIdForOrganization: async () => "tenant-1"
+    })
+  );
+
   delete require.cache[servicePath];
   const service = require(servicePath);
 
@@ -609,5 +661,7 @@ test("savePayrollSetup passes payGroupId through to component updates", async ()
     service.listSalaryComponents = originalMethods.listSalaryComponents;
     service.updateSalaryComponent = originalMethods.updateSalaryComponent;
     service.createSalaryComponent = originalMethods.createSalaryComponent;
+    delete require.cache[servicePath];
+    for (const restore of restores.reverse()) restore();
   }
 });

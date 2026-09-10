@@ -68,12 +68,41 @@ const getMonitorAttendanceHours = async ({ organizationId, start, end, timeZone,
   }
 
   const { rows } = await pool.query(
-    `SELECT employee_id, to_char((observed_at AT TIME ZONE $4)::date, 'YYYY-MM-DD') AS date_key,
-       COALESCE(SUM(active_seconds + idle_seconds), 0)::bigint AS total_seconds,
-       MIN(observed_at) AS first_seen_at, MAX(observed_at) AS last_seen_at
-     FROM monitor_activity_events
-     WHERE organization_id = $1 AND observed_at >= $2 AND observed_at <= $3
-     GROUP BY employee_id, (observed_at AT TIME ZONE $4)::date`,
+     `WITH activity_daily AS (
+       SELECT employee_id,
+         to_char((observed_at AT TIME ZONE $4)::date, 'YYYY-MM-DD') AS date_key,
+         COALESCE(SUM(active_seconds + idle_seconds), 0)::bigint AS total_seconds,
+         MAX(observed_at) AS last_observed_at
+       FROM monitor_activity_events
+       WHERE organization_id = $1 AND observed_at >= $2 AND observed_at <= $3
+       GROUP BY employee_id, (observed_at AT TIME ZONE $4)::date
+     ),
+     session_daily AS (
+       SELECT employee_id,
+         to_char((started_at AT TIME ZONE $4)::date, 'YYYY-MM-DD') AS date_key,
+         MIN(started_at) AS first_seen_at,
+         MAX(ended_at) AS last_seen_at
+       FROM monitor_app_usage_sessions
+       WHERE organization_id = $1 AND started_at <= $3 AND ended_at >= $2
+       GROUP BY employee_id, (started_at AT TIME ZONE $4)::date
+     )
+     SELECT COALESCE(activity_daily.employee_id, session_daily.employee_id) AS employee_id,
+       COALESCE(activity_daily.date_key, session_daily.date_key) AS date_key,
+       COALESCE(activity_daily.total_seconds, 0)::bigint AS total_seconds,
+       CASE
+         WHEN session_daily.first_seen_at IS NOT NULL
+          AND session_daily.last_seen_at IS NOT NULL
+          AND session_daily.first_seen_at < session_daily.last_seen_at
+         THEN session_daily.first_seen_at
+         WHEN activity_daily.last_observed_at IS NOT NULL AND COALESCE(activity_daily.total_seconds, 0) > 0
+         THEN activity_daily.last_observed_at - (COALESCE(activity_daily.total_seconds, 0)::text || ' seconds')::interval
+         ELSE session_daily.first_seen_at
+       END AS first_seen_at,
+       COALESCE(session_daily.last_seen_at, activity_daily.last_observed_at) AS last_seen_at
+     FROM activity_daily
+     FULL OUTER JOIN session_daily
+       ON activity_daily.employee_id = session_daily.employee_id
+      AND activity_daily.date_key = session_daily.date_key`,
     [String(organizationId), start, end, timeZone]
   );
 
@@ -86,6 +115,178 @@ const getMonitorAttendanceHours = async ({ organizationId, start, end, timeZone,
       lastSeenAt: row.last_seen_at
     }];
   }));
+};
+
+const getAttendanceHoursSource = async (organizationId) => {
+  const settings = await OrgSettings.findOne({ organizationId })
+    .select("attendanceHoursSource")
+    .lean();
+  return ATTENDANCE_HOURS_SOURCES.has(settings?.attendanceHoursSource)
+    ? settings.attendanceHoursSource
+    : "manual";
+};
+
+const assertManualAttendanceEnabled = async (organizationId) => {
+  const attendanceHoursSource = await getAttendanceHoursSource(organizationId);
+  if (attendanceHoursSource === "monitor_agent") {
+    throwHttpError(409, "Manual attendance is disabled because attendance is sourced from the Monitor agent.");
+  }
+};
+
+const buildMonitorAttendanceList = async ({ organizationId, start, end, timeZone, employees }) => {
+  const monitorHours = await getMonitorAttendanceHours({
+    organizationId,
+    start,
+    end,
+    timeZone,
+    employees
+  });
+
+  return Array.from(monitorHours.values())
+    .filter((row) => Number(row.totalMinutes || 0) > 0 || row.firstSeenAt || row.lastSeenAt)
+    .map((row) => ({
+      _id: null,
+      organizationId,
+      employeeId: row.employeeId,
+      date: startOfDayInTimeZone(row.dateKey, timeZone),
+      checkInAt: row.firstSeenAt ? new Date(row.firstSeenAt).toISOString() : null,
+      checkOutAt: row.lastSeenAt ? new Date(row.lastSeenAt).toISOString() : null,
+      totalMinutes: row.totalMinutes,
+      status: "present",
+      hoursSource: "monitor_agent",
+      lateByMinutes: 0,
+      earlyLoginByMinutes: 0,
+      earlyCheckoutByMinutes: 0,
+      overtimeMinutes: 0,
+      missedCheckout: false,
+      overriddenBy: null,
+      overriddenAt: null
+    }))
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+};
+
+const buildMonitorDayHistory = ({ firstSeenAt, lastSeenAt }) => {
+  const history = [];
+  if (firstSeenAt) {
+    history.push({
+      action: "check_in",
+      at: new Date(firstSeenAt),
+      ip: null,
+      latitude: null,
+      longitude: null,
+      selfieProvided: false,
+      selfieImage: null,
+      deviceId: null,
+      source: "monitor_agent"
+    });
+  }
+  if (lastSeenAt) {
+    history.push({
+      action: "check_out",
+      at: new Date(lastSeenAt),
+      ip: null,
+      latitude: null,
+      longitude: null,
+      selfieProvided: false,
+      selfieImage: null,
+      deviceId: null,
+      source: "monitor_agent"
+    });
+  }
+  return history;
+};
+
+const materializeMonitorAttendance = async ({
+  organizationId,
+  start,
+  end,
+  timeZone,
+  employees,
+  minWorkHoursPerDay = 8
+}) => {
+  const monitorHours = await getMonitorAttendanceHours({
+    organizationId,
+    start,
+    end,
+    timeZone,
+    employees
+  });
+  const now = new Date();
+  const operations = [];
+
+  monitorHours.forEach((row) => {
+    const employeeId = row.employeeId;
+    const dateKey = row.dateKey;
+    if (!employeeId || !dateKey) return;
+
+    const firstSeenAt = row.firstSeenAt ? new Date(row.firstSeenAt) : null;
+    const lastSeenAt = row.lastSeenAt ? new Date(row.lastSeenAt) : null;
+    if (!firstSeenAt && !lastSeenAt && Number(row.totalMinutes || 0) <= 0) return;
+
+    const totalMinutes = Number(row.totalMinutes || 0);
+    operations.push({
+      updateOne: {
+        filter: {
+          organizationId,
+          employeeId,
+          dateKey
+        },
+        update: {
+          $set: {
+            organizationId,
+            employeeId,
+            date: startOfDayInTimeZone(dateKey, timeZone),
+            dateKey,
+            checkInAt: firstSeenAt,
+            checkInIp: null,
+            checkInLatitude: null,
+            checkInLongitude: null,
+            checkInSelfieProvided: false,
+            checkInSelfieImage: null,
+            checkInDeviceId: null,
+            checkOutAt: lastSeenAt,
+            checkOutIp: null,
+            checkOutSelfieProvided: false,
+            checkOutSelfieImage: null,
+            checkOutDeviceId: null,
+            dayHistory: buildMonitorDayHistory({ firstSeenAt, lastSeenAt }),
+            totalMinutes,
+            attendanceSource: "monitor_agent",
+            status: lastSeenAt ? "checked_out" : "checked_in",
+            lateByMinutes: 0,
+            earlyLoginByMinutes: 0,
+            earlyCheckoutByMinutes: 0,
+            overtimeMinutes: resolveOvertimeMinutes(totalMinutes, Number(minWorkHoursPerDay || 8)),
+            missedCheckout: false,
+            missedCheckoutMarkedAt: null,
+            updatedAt: now
+          },
+          $setOnInsert: {
+            createdAt: now
+          }
+        },
+        upsert: true
+      }
+    });
+  });
+
+  if (operations.length) {
+    await Attendance.bulkWrite(operations, { ordered: false });
+    await Promise.all(
+      Array.from(monitorHours.values())
+        .filter((row) => row.employeeId && row.dateKey && Number(row.totalMinutes || 0) > 0)
+        .map((row) =>
+          upsertTimesheetHours({
+            organizationId,
+            employeeId: row.employeeId,
+            dateValue: startOfDayInTimeZone(row.dateKey, timeZone),
+            hoursWorked: Number((Number(row.totalMinutes || 0) / 60).toFixed(2))
+          })
+        )
+    );
+  }
+
+  return monitorHours;
 };
 
 const parseDateValue = (value) => {
@@ -2151,6 +2352,7 @@ const formatTimeLabel = (dateValue, timeZone) =>
   }).format(dateValue);
 
 exports.checkIn = async (req) => {
+  await assertManualAttendanceEnabled(req.user.organizationId);
   const employee = await getEmployeeFromReq(req);
   const now = new Date();
   const organizationTimeZone = await getOrganizationTimeZone(req.user.organizationId);
@@ -2553,6 +2755,7 @@ exports.getCheckInPolicy = async (req) => {
 };
 
 exports.checkOut = async (req) => {
+  await assertManualAttendanceEnabled(req.user.organizationId);
   const employee = await getEmployeeFromReq(req);
   const now = new Date();
   const checkOutIp = getRequestIp(req, req.body);
@@ -2742,6 +2945,17 @@ exports.getMyAttendance = async (req) => {
   const dayEnd = endOfDayInTimeZone(queryDate, organizationTimeZone);
   const requestedDayKey = toDateKeyInTimeZone(queryDate, organizationTimeZone);
   const todayKey = toDateKeyInTimeZone(new Date(), organizationTimeZone);
+  const attendanceHoursSource = await getAttendanceHoursSource(req.user.organizationId);
+
+  if (attendanceHoursSource === "monitor_agent") {
+    await materializeMonitorAttendance({
+      organizationId: req.user.organizationId,
+      start: dayStart,
+      end: dayEnd,
+      timeZone: organizationTimeZone,
+      employees: [employee]
+    });
+  }
 
   const rows = await Attendance.find(
     buildAttendanceRangeFilter(
@@ -2793,10 +3007,15 @@ exports.getAttendance = async (req) => {
   const startDate = startOfDayInTimeZone(start, organizationTimeZone);
   const endDate = endOfDayInTimeZone(end, organizationTimeZone);
   const employeeFilter = {};
+  let monitorEmployeeQuery = {
+    organizationId: req.user.organizationId,
+    isDeleted: false
+  };
 
   if (requestedEmployeeId) {
     await assertManageAccessForEmployee(req, requestedEmployeeId);
     employeeFilter.employeeId = requestedEmployeeId;
+    monitorEmployeeQuery._id = requestedEmployeeId;
   }
 
   if (req.user.activeRoleId) {
@@ -2821,9 +3040,24 @@ exports.getAttendance = async (req) => {
           if (!allowed) throw new Error("Access denied");
         } else {
           employeeFilter.employeeId = { $in: reportIds };
+          monitorEmployeeQuery._id = { $in: reportIds };
         }
       }
     }
+  }
+
+  const attendanceHoursSource = await getAttendanceHoursSource(req.user.organizationId);
+  if (attendanceHoursSource === "monitor_agent") {
+    const employees = await Employee.find(monitorEmployeeQuery)
+      .select("_id firstName lastName employeeCode userId")
+      .lean();
+    await materializeMonitorAttendance({
+      organizationId: req.user.organizationId,
+      start: startDate,
+      end: endDate,
+      timeZone: organizationTimeZone,
+      employees
+    });
   }
 
   const rows = await Attendance.find(
@@ -2879,12 +3113,18 @@ exports.getAttendanceMatrix = async (req) => {
   }
 
   const employees = await employeeCursor;
+  const orgSettings = await OrgSettings.findOne({ organizationId: req.user.organizationId })
+    .select("minHalfDayHours minWorkHoursPerDay attendanceHoursSource attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay");
+  const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
+    ? orgSettings.attendanceHoursSource
+    : "manual";
 
   if (!employees.length) {
     return {
       year,
       month,
       daysInMonth,
+      attendanceHoursSource,
       employees: [],
       lockAttendance: null,
       pagination: {
@@ -2897,7 +3137,18 @@ exports.getAttendanceMatrix = async (req) => {
   }
 
   const employeeIds = employees.map((e) => e._id);
-  const [attendanceRowsRaw, holidays, approvedLeaves, weekOffMap, orgSettings] = await Promise.all([
+  if (attendanceHoursSource === "monitor_agent") {
+    await materializeMonitorAttendance({
+      organizationId: req.user.organizationId,
+      start,
+      end,
+      timeZone: organizationTimeZone,
+      employees,
+      minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
+    });
+  }
+
+  const [attendanceRowsRaw, holidays, approvedLeaves, weekOffMap] = await Promise.all([
     Attendance.find(
       buildAttendanceRangeFilter(
         req.user.organizationId,
@@ -2907,7 +3158,7 @@ exports.getAttendanceMatrix = async (req) => {
         organizationTimeZone
       )
     )
-      .select("employeeId date checkInAt checkOutAt checkInIp checkOutIp checkInSelfieProvided checkOutSelfieProvided totalMinutes overriddenBy overriddenAt shiftName shiftCode shiftStartTime shiftEndTime lateByMinutes earlyLoginByMinutes earlyCheckoutByMinutes overtimeMinutes missedCheckout missedCheckoutMarkedAt")
+      .select("employeeId date dateKey attendanceSource checkInAt checkOutAt checkInIp checkOutIp checkInSelfieProvided checkOutSelfieProvided totalMinutes overriddenBy overriddenAt shiftName shiftCode shiftStartTime shiftEndTime lateByMinutes earlyLoginByMinutes earlyCheckoutByMinutes overtimeMinutes missedCheckout missedCheckoutMarkedAt")
       .populate("overriddenBy", "firstName lastName"),
     Holiday.find({
       organizationId: req.user.organizationId,
@@ -2925,23 +3176,9 @@ exports.getAttendanceMatrix = async (req) => {
       organizationId: req.user.organizationId,
       employees
     }),
-    OrgSettings.findOne({ organizationId: req.user.organizationId })
-      .select("minHalfDayHours minWorkHoursPerDay attendanceHoursSource attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay")
   ]);
 
   const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsRaw, organizationTimeZone);
-  const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
-    ? orgSettings.attendanceHoursSource
-    : "manual";
-  const monitorHours = attendanceHoursSource === "monitor_agent"
-    ? await getMonitorAttendanceHours({
-        organizationId: req.user.organizationId,
-        start,
-        end,
-        timeZone: organizationTimeZone,
-        employees
-      })
-    : new Map();
   const pendingCheckoutCount = await countPendingCheckoutForMonth({
     organizationId: req.user.organizationId,
     start,
@@ -2991,6 +3228,7 @@ exports.getAttendanceMatrix = async (req) => {
       checkInSelfieProvided: canViewSelfie ? Boolean(row.checkInSelfieProvided) : false,
       checkOutSelfieProvided: canViewSelfie ? Boolean(row.checkOutSelfieProvided) : false,
       totalMinutes: Number(row.totalMinutes || 0),
+      hoursSource: row.attendanceSource || "manual",
       isOpenSession,
       excludeFromPayroll: isOpenSession,
       payrollReconciledByLeave: false,
@@ -3023,46 +3261,6 @@ exports.getAttendanceMatrix = async (req) => {
       }
     }
   });
-
-  if (attendanceHoursSource === "monitor_agent") {
-    monitorHours.forEach((monitorRow, key) => {
-      const [employeeId, dateKey] = key.split("|");
-      const day = getDayInTimeZone(startOfDayInTimeZone(dateKey, organizationTimeZone), organizationTimeZone);
-      const totalMinutes = monitorRow.totalMinutes;
-      const firstSeenAt = monitorRow.firstSeenAt ? new Date(monitorRow.firstSeenAt).toISOString() : null;
-      const lastSeenAt = monitorRow.lastSeenAt ? new Date(monitorRow.lastSeenAt).toISOString() : null;
-      attendanceMap.set(`${employeeId}-${day}`, {
-        status: resolveAttendanceMatrixStatus({ checkInAt: firstSeenAt, checkOutAt: lastSeenAt, totalMinutes }, {
-          minHalfDayHours: Number(orgSettings?.minHalfDayHours ?? 4),
-          minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
-        }),
-        checkInAt: firstSeenAt,
-        checkOutAt: lastSeenAt,
-        checkInIp: null,
-        checkOutIp: null,
-        checkInSelfieProvided: false,
-        checkOutSelfieProvided: false,
-        totalMinutes,
-        hoursSource: "monitor_agent",
-        isOpenSession: false,
-        excludeFromPayroll: false,
-        payrollReconciledByLeave: false,
-        missedCheckout: false,
-        missedCheckoutMarkedAt: null,
-        overriddenBy: null,
-        overriddenAt: null,
-        shiftName: null,
-        shiftCode: null,
-        shiftStartTime: null,
-        shiftEndTime: null,
-        lateByMinutes: 0,
-        earlyLoginByMinutes: 0,
-        earlyCheckoutByMinutes: 0,
-        overtimeMinutes: resolveOvertimeMinutes(totalMinutes, Number(orgSettings?.minWorkHoursPerDay ?? 8)),
-        workFromHomePortion: null
-      });
-    });
-  }
 
   const leaveMap = new Map();
   approvedLeaves.forEach((leave) => {
@@ -3192,7 +3390,7 @@ exports.getMyAttendanceMatrix = async (req) => {
   );
   const employee = await getEmployeeFromReq(req);
 
-  const [attendanceRowsRaw, holidays, approvedLeaves, weekOffDays, orgSettings] = await Promise.all([
+  const [attendanceRowsRawInitial, holidays, approvedLeaves, weekOffDays, orgSettings] = await Promise.all([
     Attendance.find(
       buildAttendanceRangeFilter(
         req.user.organizationId,
@@ -3202,7 +3400,7 @@ exports.getMyAttendanceMatrix = async (req) => {
         organizationTimeZone
       )
     )
-      .select("employeeId date checkInAt checkOutAt checkInIp checkOutIp checkInSelfieProvided checkOutSelfieProvided totalMinutes overriddenBy overriddenAt shiftName shiftCode shiftStartTime shiftEndTime lateByMinutes earlyLoginByMinutes earlyCheckoutByMinutes overtimeMinutes missedCheckout missedCheckoutMarkedAt")
+      .select("employeeId date dateKey attendanceSource checkInAt checkOutAt checkInIp checkOutIp checkInSelfieProvided checkOutSelfieProvided totalMinutes overriddenBy overriddenAt shiftName shiftCode shiftStartTime shiftEndTime lateByMinutes earlyLoginByMinutes earlyCheckoutByMinutes overtimeMinutes missedCheckout missedCheckoutMarkedAt")
       .populate("overriddenBy", "firstName lastName"),
     Holiday.find({
       organizationId: req.user.organizationId,
@@ -3224,19 +3422,32 @@ exports.getMyAttendanceMatrix = async (req) => {
       .select("minHalfDayHours minWorkHoursPerDay attendanceHoursSource attendanceLockEnabled attendanceLockAfterDays attendanceLockMode payrollCutoffDay")
   ]);
 
-  const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsRaw, organizationTimeZone);
+  let attendanceRowsRaw = attendanceRowsRawInitial;
   const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
     ? orgSettings.attendanceHoursSource
     : "manual";
-  const monitorHours = attendanceHoursSource === "monitor_agent"
-    ? await getMonitorAttendanceHours({
-        organizationId: req.user.organizationId,
+  if (attendanceHoursSource === "monitor_agent") {
+    await materializeMonitorAttendance({
+      organizationId: req.user.organizationId,
+      start,
+      end,
+      timeZone: organizationTimeZone,
+      employees: [employee],
+      minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
+    });
+    attendanceRowsRaw = await Attendance.find(
+      buildAttendanceRangeFilter(
+        req.user.organizationId,
+        { employeeId: employee._id },
         start,
         end,
-        timeZone: organizationTimeZone,
-        employees: [employee]
-      })
-    : new Map();
+        organizationTimeZone
+      )
+    )
+      .select("employeeId date dateKey attendanceSource checkInAt checkOutAt checkInIp checkOutIp checkInSelfieProvided checkOutSelfieProvided totalMinutes overriddenBy overriddenAt shiftName shiftCode shiftStartTime shiftEndTime lateByMinutes earlyLoginByMinutes earlyCheckoutByMinutes overtimeMinutes missedCheckout missedCheckoutMarkedAt")
+      .populate("overriddenBy", "firstName lastName");
+  }
+  const attendanceRows = mergeAttendanceRowsByEmployeeDay(attendanceRowsRaw, organizationTimeZone);
   const pendingCheckoutCount = await countPendingCheckoutForMonth({
     organizationId: req.user.organizationId,
     start,
@@ -3321,6 +3532,7 @@ exports.getMyAttendanceMatrix = async (req) => {
       checkInSelfieProvided: canViewSelfie ? Boolean(row.checkInSelfieProvided) : false,
       checkOutSelfieProvided: canViewSelfie ? Boolean(row.checkOutSelfieProvided) : false,
       totalMinutes: Number(row.totalMinutes || 0),
+      hoursSource: row.attendanceSource || "manual",
       isOpenSession,
       excludeFromPayroll: isOpenSession,
       payrollReconciledByLeave: false,
@@ -3353,30 +3565,6 @@ exports.getMyAttendanceMatrix = async (req) => {
       }
     }
   });
-
-  if (attendanceHoursSource === "monitor_agent") {
-    monitorHours.forEach((monitorRow, key) => {
-      const [, dateKey] = key.split("|");
-      const day = getDayInTimeZone(startOfDayInTimeZone(dateKey, organizationTimeZone), organizationTimeZone);
-      const totalMinutes = monitorRow.totalMinutes;
-      const firstSeenAt = monitorRow.firstSeenAt ? new Date(monitorRow.firstSeenAt).toISOString() : null;
-      const lastSeenAt = monitorRow.lastSeenAt ? new Date(monitorRow.lastSeenAt).toISOString() : null;
-      days[day] = {
-        ...days[day],
-        status: resolveAttendanceMatrixStatus({ checkInAt: firstSeenAt, checkOutAt: lastSeenAt, totalMinutes }, {
-          minHalfDayHours: Number(orgSettings?.minHalfDayHours ?? 4),
-          minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
-        }),
-        checkInAt: firstSeenAt,
-        checkOutAt: lastSeenAt,
-        totalMinutes,
-        hoursSource: "monitor_agent",
-        isOpenSession: false,
-        excludeFromPayroll: false,
-        overtimeMinutes: resolveOvertimeMinutes(totalMinutes, Number(orgSettings?.minWorkHoursPerDay ?? 8))
-      };
-    });
-  }
 
   approvedLeaves.forEach((leave) => {
     getLeaveDateKeysForDisplay({
@@ -3449,7 +3637,7 @@ exports.getAttendanceCellHistory = async (req) => {
   const requestedDayKey = normalizeAttendanceRequestDateKey(date, organizationTimeZone);
   const dayStart = startOfDayInTimeZone(requestedDayKey, organizationTimeZone);
   const dayEnd = endOfDayInTimeZone(requestedDayKey, organizationTimeZone);
-  const attendanceRows = await Attendance.find(
+  let attendanceRows = await Attendance.find(
     buildAttendanceRangeFilter(
       req.user.organizationId,
       { employeeId },
@@ -3460,8 +3648,42 @@ exports.getAttendanceCellHistory = async (req) => {
   )
     .populate("overriddenBy", "firstName lastName employeeCode")
     .sort({ date: -1, checkInAt: -1 });
-  const attendance = mergeAttendanceRowsByEmployeeDay(attendanceRows, organizationTimeZone)
+  let attendance = mergeAttendanceRowsByEmployeeDay(attendanceRows, organizationTimeZone)
     .find((row) => getAttendanceRowDayKey(row, organizationTimeZone) === requestedDayKey) || null;
+  const orgSettings = await OrgSettings.findOne({ organizationId: req.user.organizationId })
+    .select("attendanceHoursSource minHalfDayHours minWorkHoursPerDay")
+    .lean();
+  const attendanceHoursSource = ATTENDANCE_HOURS_SOURCES.has(orgSettings?.attendanceHoursSource)
+    ? orgSettings.attendanceHoursSource
+    : "manual";
+  const employeeForMonitor = attendanceHoursSource === "monitor_agent"
+    ? await Employee.findOne({ _id: employeeId, organizationId: req.user.organizationId })
+        .select("_id employeeCode userId")
+        .lean()
+    : null;
+  if (employeeForMonitor) {
+    await materializeMonitorAttendance({
+      organizationId: req.user.organizationId,
+      start: dayStart,
+      end: dayEnd,
+      timeZone: organizationTimeZone,
+      employees: [employeeForMonitor],
+      minWorkHoursPerDay: Number(orgSettings?.minWorkHoursPerDay ?? 8)
+    });
+    attendanceRows = await Attendance.find(
+      buildAttendanceRangeFilter(
+        req.user.organizationId,
+        { employeeId },
+        dayStart,
+        dayEnd,
+        organizationTimeZone
+      )
+    )
+      .populate("overriddenBy", "firstName lastName employeeCode")
+      .sort({ date: -1, checkInAt: -1 });
+    attendance = mergeAttendanceRowsByEmployeeDay(attendanceRows, organizationTimeZone)
+      .find((row) => getAttendanceRowDayKey(row, organizationTimeZone) === requestedDayKey) || null;
+  }
 
   const approvedLeave = await Leave.findOne({
     organizationId: req.user.organizationId,
@@ -4271,6 +4493,7 @@ exports.actionAttendanceRequest = async (req) => {
 };
 
 exports.overrideAttendance = async (req) => {
+  await assertManualAttendanceEnabled(req.user.organizationId);
   const actorEmployee = await Employee.findOne({
     userId: req.user.userId,
     organizationId: req.user.organizationId
@@ -4481,6 +4704,7 @@ const processAttendanceOverrideBatch = async ({
   requestedUpdates,
   includeNonWorkingDays
 }) => {
+  await assertManualAttendanceEnabled(req.user.organizationId);
   const organizationId = req.user.organizationId;
   const organizationTimeZone = await getOrganizationTimeZone(organizationId);
   const deduplicated = new Map();
