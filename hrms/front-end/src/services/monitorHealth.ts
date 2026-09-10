@@ -17,6 +17,7 @@ export type MonitorLaptopHealth = {
   platformVersion?: string | null;
   agentVersion?: string | null;
   cpuModel?: string | null;
+  cpuCoreCount?: number | null;
   cpuPercent?: number | null;
   memoryTotalBytes?: number | null;
   memoryUsedBytes?: number | null;

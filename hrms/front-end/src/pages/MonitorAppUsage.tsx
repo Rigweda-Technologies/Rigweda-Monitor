@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getApiWithToken } from "@/services/apiWrapper";
 import { getMonitorAppUsage, MonitorAppUsageEmployee, MonitorAppUsageSession } from "@/services/monitorActivity";
 import { formatDateTimeInOrgTimeZone, getOrgTimeZone, setOrgTimeZone, subscribeToOrgTimeZone, toDateKeyInOrgTimeZone } from "@/utils/timezone";
 import { toast } from "sonner";
@@ -16,6 +18,7 @@ import { toast } from "sonner";
 const today = () => toDateKeyInOrgTimeZone(new Date());
 const INITIAL_SESSION_LIMIT = 100;
 const APP_DETAIL_LIMIT = 1000;
+const smoothCardShadow = "shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition-shadow hover:shadow-[0_14px_36px_rgba(15,23,42,0.12)]";
 
 type AppUsageGroup = {
   appName: string;
@@ -24,6 +27,18 @@ type AppUsageGroup = {
   keyPressCount: number;
   sessionCount: number;
 };
+
+type EmployeeOption = {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  employeeCode?: string;
+};
+
+const getEmployeeName = (employee: EmployeeOption) =>
+  [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() ||
+  employee.employeeCode ||
+  "Employee";
 
 const formatDuration = (seconds: number) => {
   const total = Math.max(Number(seconds || 0), 0);
@@ -93,6 +108,8 @@ const MonitorAppUsage = () => {
   const dateParam = searchParams.get("date")?.trim() || "";
   const [date, setDate] = useState(today);
   const [employees, setEmployees] = useState<MonitorAppUsageEmployee[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeOption[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("all");
   const [sessions, setSessions] = useState<MonitorAppUsageSession[]>([]);
   const [sessionTotal, setSessionTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -102,6 +119,17 @@ const MonitorAppUsage = () => {
   const [detailSessions, setDetailSessions] = useState<MonitorAppUsageSession[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const detailRequestSeqRef = useRef(0);
+  const showEmployeeDropdown = !employeeIdParam;
+  const effectiveEmployeeId = employeeIdParam || (selectedEmployeeId === "all" ? "" : selectedEmployeeId);
+
+  const loadEmployeeOptions = useCallback(async () => {
+    const response = await getApiWithToken("/employees?employeeState=active&limit=500", null, {
+      requiredPermissions: ["EMP_VIEW"]
+    });
+    if (response?.success) {
+      setEmployeeOptions(response.data?.items || []);
+    }
+  }, []);
 
   const loadSessions = useCallback(async (manual = false) => {
     if (manual) {
@@ -114,14 +142,14 @@ const MonitorAppUsage = () => {
       const data = await getMonitorAppUsage(date, {
         limit: INITIAL_SESSION_LIMIT,
         offset: 0,
-        employeeId: employeeIdParam || undefined
+        employeeId: effectiveEmployeeId || undefined
       });
       if (data.timezone) {
         setTimeZone(data.timezone);
         setOrgTimeZone(data.timezone);
       }
-      const nextEmployees = (data.employees || []).filter((employee) => matchesRequestedEmployee(employee, employeeIdParam));
-      const nextSessions = (data.sessions || []).filter((session) => matchesRequestedEmployee(session, employeeIdParam));
+      const nextEmployees = (data.employees || []).filter((employee) => matchesRequestedEmployee(employee, effectiveEmployeeId));
+      const nextSessions = (data.sessions || []).filter((session) => matchesRequestedEmployee(session, effectiveEmployeeId));
       setEmployees(nextEmployees);
       setSessions(nextSessions);
       setSessionTotal(Number(data.sessionPage?.total || nextSessions.length || 0));
@@ -132,7 +160,7 @@ const MonitorAppUsage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [date, employeeIdParam]);
+  }, [date, effectiveEmployeeId]);
 
   const loadAppDetails = useCallback(async (group: AppUsageGroup) => {
     const requestSeq = ++detailRequestSeqRef.current;
@@ -146,11 +174,11 @@ const MonitorAppUsage = () => {
         processName: group.processName,
         limit: APP_DETAIL_LIMIT,
         offset: 0,
-        employeeId: employeeIdParam || undefined
+        employeeId: effectiveEmployeeId || undefined
       });
 
       if (requestSeq !== detailRequestSeqRef.current) return;
-      setDetailSessions((data.sessions || []).filter((session) => matchesRequestedEmployee(session, employeeIdParam)));
+      setDetailSessions((data.sessions || []).filter((session) => matchesRequestedEmployee(session, effectiveEmployeeId)));
     } catch (error) {
       if (requestSeq === detailRequestSeqRef.current) {
         toast.error("Could not load app details.");
@@ -161,11 +189,17 @@ const MonitorAppUsage = () => {
         setDetailLoading(false);
       }
     }
-  }, [date, employeeIdParam]);
+  }, [date, effectiveEmployeeId]);
 
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    if (showEmployeeDropdown) {
+      void loadEmployeeOptions();
+    }
+  }, [loadEmployeeOptions, showEmployeeDropdown]);
 
   useEffect(() => subscribeToOrgTimeZone(setTimeZone), []);
 
@@ -179,7 +213,7 @@ const MonitorAppUsage = () => {
     setSelectedGroup(null);
     setDetailSessions([]);
     setDetailLoading(false);
-  }, [date]);
+  }, [date, effectiveEmployeeId]);
 
   const employeeCount = employees.length;
   const sessionCount = sessionTotal || sessions.length;
@@ -187,7 +221,12 @@ const MonitorAppUsage = () => {
   const totalKeyPresses = employees.reduce((sum, employee) => sum + Number(employee.totalKeyPresses || 0), 0);
   const topEmployee = useMemo(() => employees[0] || null, [employees]);
   const groupedApps = useMemo(() => groupAppSessions(sessions), [sessions]);
-  const pageTitle = employeeIdParam ? "Employee app usage" : "Employee app usage";
+  const selectedEmployeeName = useMemo(() => {
+    if (!effectiveEmployeeId) return "All employees";
+    const employee = employeeOptions.find((item) => item._id === effectiveEmployeeId);
+    return employee ? getEmployeeName(employee) : topEmployee?.employeeName || topEmployee?.employeeCode || "Selected employee";
+  }, [effectiveEmployeeId, employeeOptions, topEmployee]);
+  const pageTitle = effectiveEmployeeId ? "Employee app usage" : "Employee app usage";
 
   const closeDetails = () => {
     setSelectedGroup(null);
@@ -199,36 +238,51 @@ const MonitorAppUsage = () => {
     <MainLayout title="App Usage" breadcrumb={[{ label: "Home", href: "/" }, { label: "Employee Monitor" }, { label: "App Usage" }]}>
       <TooltipProvider>
         <div className="space-y-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4">
             <div>
               <h2 className="text-2xl font-semibold">{pageTitle}</h2>
               <p className="text-sm text-muted-foreground">
-                {employeeIdParam
+                {effectiveEmployeeId
                   ? "Tracks the selected employee's active applications and focus time."
                   : "Tracks which application was active and how long it stayed in focus."}
               </p>
               <p className="text-xs text-muted-foreground">Displayed in {timeZone} time.</p>
-              {employeeIdParam && (
-                <p className="text-xs text-muted-foreground">Filtered by employee ID: {employeeIdParam}</p>
+              {effectiveEmployeeId && (
+                <p className="text-xs text-muted-foreground">Filtered by employee: {selectedEmployeeName}</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-[155px]" />
-              <Button variant="outline" onClick={() => void loadSessions(true)} disabled={refreshing}>
+            <div className={showEmployeeDropdown ? "grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_minmax(160px,200px)_minmax(150px,200px)] xl:max-w-[660px]" : "grid w-full gap-2 sm:grid-cols-[minmax(160px,200px)_minmax(150px,200px)] sm:self-end"}>
+              {showEmployeeDropdown && (
+                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                  <SelectTrigger className="w-full min-w-0">
+                    <SelectValue placeholder="Employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All employees</SelectItem>
+                    {employeeOptions.map((employee) => (
+                      <SelectItem key={employee._id} value={employee._id}>
+                        {getEmployeeName(employee)}{employee.employeeCode ? ` (${employee.employeeCode})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full min-w-0" />
+              <Button variant="outline" className="w-full" onClick={() => void loadSessions(true)} disabled={refreshing}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
               </Button>
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-5">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tracked employees</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{employeeCount}</CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">App sessions</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{sessionCount}</CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Focused time</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatDuration(totalSeconds)}</CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Key presses</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalKeyPresses}</CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Top employee</CardTitle></CardHeader><CardContent className="truncate text-lg font-bold">{topEmployee?.employeeName || topEmployee?.employeeCode || "None"}</CardContent></Card>
+            <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tracked employees</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{employeeCount}</CardContent></Card>
+            <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">App sessions</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{sessionCount}</CardContent></Card>
+            <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Focused time</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatDuration(totalSeconds)}</CardContent></Card>
+            <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Key presses</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalKeyPresses}</CardContent></Card>
+            <Card className={smoothCardShadow}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Top employee</CardTitle></CardHeader><CardContent className="truncate text-lg font-bold">{topEmployee?.employeeName || topEmployee?.employeeCode || "None"}</CardContent></Card>
           </div>
 
-          <Card>
+          <Card className={smoothCardShadow}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Monitor className="h-5 w-5" />
@@ -277,7 +331,7 @@ const MonitorAppUsage = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={smoothCardShadow}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5" /> App timeline</CardTitle>
             </CardHeader>

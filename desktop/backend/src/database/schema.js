@@ -321,6 +321,7 @@ export const initializeDatabase = async () => {
       platform_version TEXT,
       agent_version TEXT,
       cpu_model TEXT,
+      cpu_core_count INTEGER,
       cpu_percent NUMERIC,
       memory_total_bytes BIGINT,
       memory_used_bytes BIGINT,
@@ -341,6 +342,11 @@ export const initializeDatabase = async () => {
   await pool.query(`
     ALTER TABLE monitor_device_health
     ADD COLUMN IF NOT EXISTS employee_code TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE monitor_device_health
+    ADD COLUMN IF NOT EXISTS cpu_core_count INTEGER
   `);
 
   await pool.query(`

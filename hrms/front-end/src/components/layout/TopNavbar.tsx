@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, ChevronDown, Menu, Paintbrush, Save, SlidersHorizontal, FileText, Newspaper, WalletCards, BarChart3 } from "lucide-react";
+import { Bell, ChevronDown, Menu, Paintbrush, Save, SlidersHorizontal } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
@@ -304,13 +304,6 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
     setCustomTheme((prev) => ({ ...prev, [key]: value }));
   };
 
-  const quickLinks = [
-    { label: "Documents", icon: FileText, path: "/organization/documents" },
-    { label: "News", icon: Newspaper, path: "/documentation" },
-    { label: "Payslip", icon: WalletCards, path: "/employee-dashboard/payslips" },
-    { label: "Report", icon: BarChart3, path: "/performance" },
-  ];
-
   return (
     <header className="sticky top-0 z-40 flex h-[76px] items-center justify-between border-b border-slate-100 bg-[#f8f8f6]/95 px-3 backdrop-blur sm:px-5 lg:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -322,33 +315,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="relative hidden w-full max-w-[270px] sm:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Search anything..."
-            className="h-11 rounded-xl border-0 bg-white pl-10 pr-12 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-emerald-400"
-          />
-          <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-500 md:block">
-            Cmd F
-          </kbd>
-        </div>
-        <nav className="hidden items-center gap-1 xl:flex">
-          {quickLinks.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                type="button"
-                onClick={() => navigate(item.path)}
-                className="flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-950"
-              >
-                <Icon className="h-4 w-4 text-slate-400" />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-        {title && <h1 className="truncate text-sm font-semibold text-slate-400 xl:hidden">{title}</h1>}
+        {title && <h1 className="truncate text-sm font-semibold text-slate-500">{title}</h1>}
       </div>
 
       <div className="flex items-center gap-2">
