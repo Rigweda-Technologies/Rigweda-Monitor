@@ -162,6 +162,7 @@ export const TopNavbar = ({ title, breadcrumb, onOpenSidebar }: TopNavbarProps) 
   }, [profile?.organizationId, savingTheme, themeEditorOpen]);
 
   useEffect(() => {
+    if (!orgSettings) return;
     applyThemeToDocument(orgSettings);
   }, [orgSettings]);
 
