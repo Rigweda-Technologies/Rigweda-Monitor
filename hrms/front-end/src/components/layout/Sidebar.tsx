@@ -158,9 +158,9 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
     children: [
       { icon: <Users size={18} />, label: "Employee", to: "/employees", permissions: ["EMP_VIEW"] },
       { icon: <ClipboardCheck size={18} />, label: "Attendance", to: "/attendance", permissions: ["ATTENDANCE_VIEW_ALL", "ATTENDANCE_VIEW_SELF"] },
-      { icon: <FileText size={18} />, label: "Timesheets", to: "/timesheets", permissions: ["TIMESHEET_VIEW_SELF", "TIMESHEET_VIEW_ALL"] },
+      // { icon: <FileText size={18} />, label: "Timesheets", to: "/timesheets", permissions: ["TIMESHEET_VIEW_SELF", "TIMESHEET_VIEW_ALL"] },
       { icon: <CalendarOff size={18} />, label: "Leave", to: "/leave", permissions: ["LEAVE_VIEW_SELF", "LEAVE_VIEW_ALL", "LEAVE_APPLY"] },
-      { icon: <FileText size={18} />, label: "Payslips", to: "/employee-dashboard/payslips", permissions: ["EMP_SELF_VIEW"] },
+      // { icon: <FileText size={18} />, label: "Payslips", to: "/employee-dashboard/payslips", permissions: ["EMP_SELF_VIEW"] },
       { icon: <Shield size={18} />, label: "Approvals", to: "/approvals", permissions: ["LEAVE_ACTION", "ATTENDANCE_MANAGE"] },
       { icon: <CalendarDays size={20} />, label: "Holidays", to: "/holidays", permissions: ["HOLIDAY_VIEW"] },
       { icon: <Network size={18} />, label: "Organization Tree", to: "/employee-tree", permissions: ["EMP_VIEW", "EMP_ORG_TREE_VIEW"] }
@@ -197,7 +197,7 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
       { icon: <CalendarOff size={18} />, label: "Week Offs", to: "/week-offs", permissions: ["WEEK_OFF_VIEW"] },
       { icon: <FileText size={18} />, label: "Leave Types", to: "/leave-types", permissions: ["LEAVE_TYPE_VIEW"] },
       { icon: <ClipboardCheck size={18} />, label: "Approval Flows", to: "/approval-flows", permissions: ["APPROVAL_FLOW_VIEW"] },
-      { icon: <DollarSign size={18} />, label: "Expenses", to: "/expenses", permissions: ["EXPENSE_VIEW", "EXPENSE_MANAGE"] },
+      // { icon: <DollarSign size={18} />, label: "Expenses", to: "/expenses", permissions: ["EXPENSE_VIEW", "EXPENSE_MANAGE"] },
       { icon: <FileText size={18} />, label: "Documents", to: "/organization/documents", permissions: ["ORG_DOCUMENT_VIEW", "ORG_SETTINGS_VIEW", "PAYROLL_REPORT_VIEW"] },
     ]
   },
@@ -207,96 +207,96 @@ const menuItems = (dashboardPath: string): MenuItem[] => [
     to: "/organization/settings",
     permissions: ["ORG_SETTINGS_VIEW"]
   },
-  {
-    icon: <DollarSign size={20} />,
-    label: "Payroll",
-    to: "/payroll",
-    permissions: [
-      "PAYROLL_CONFIG_MANAGE",
-      "PAYROLL_RUN_CREATE",
-      "PAYROLL_RUN_APPROVE",
-      "PAYROLL_RUN_LOCK",
-      "PAYROLL_REPORT_VIEW",
-      "PAYROLL_PAYSLIP_VIEW",
-      "PAYROLL_RUN_VIEW"
-    ],
-    children: [
-      {
-        icon: <DollarSign size={18} />,
-        label: "Setup",
-        to: "/payroll/setup",
-        permissions: [
-          "PAYROLL_CONFIG_MANAGE",
-          "PAYROLL_RUN_CREATE",
-          "PAYROLL_RUN_APPROVE",
-          "PAYROLL_RUN_LOCK",
-          "PAYROLL_REPORT_VIEW",
-          "PAYROLL_PAYSLIP_VIEW",
-          "PAYROLL_RUN_VIEW"
-        ]
-      },
-      {
-        icon: <Users size={18} />,
-        label: "Employees",
-        to: "/payroll/employees",
-        permissions: [
-          "PAYROLL_CONFIG_MANAGE",
-          "PAYROLL_RUN_CREATE",
-          "PAYROLL_RUN_APPROVE",
-          "PAYROLL_RUN_LOCK",
-          "PAYROLL_REPORT_VIEW",
-          "PAYROLL_PAYSLIP_VIEW",
-          "PAYROLL_RUN_VIEW"
-        ]
-      },
-      {
-        icon: <DollarSign size={18} />,
-        label: "Runs",
-        to: "/payroll/runs",
-        permissions: [
-          "PAYROLL_CONFIG_MANAGE",
-          "PAYROLL_RUN_CREATE",
-          "PAYROLL_RUN_APPROVE",
-          "PAYROLL_RUN_LOCK",
-          "PAYROLL_REPORT_VIEW",
-          "PAYROLL_PAYSLIP_VIEW",
-          "PAYROLL_RUN_VIEW"
-        ]
-      },
-      {
-        icon: <Users size={18} />,
-        label: "Breakdown",
-        to: "/payroll/employee-breakdown",
-        permissions: [
-          "PAYROLL_RUN_VIEW",
-          "PAYROLL_REPORT_VIEW",
-          "PAYROLL_RUN_CREATE",
-          "PAYROLL_RUN_APPROVE",
-          "PAYROLL_RUN_LOCK"
-        ]
-      }
-    ]
-  },
-  {
-    icon: <DollarSign size={20} />,
-    label: "Business",
-    to: "/business-development",
-    permissions: ["PROJECT_VIEW", "PROJECT_MANAGE", "HIRING_VIEW", "HIRING_MANAGE"],
-    children: [
-      {
-        icon: <Briefcase size={18} />,
-        label: "Projects",
-        to: "/business-development",
-        permissions: ["PROJECT_VIEW", "PROJECT_MANAGE"]
-      },
-      {
-        icon: <Users size={18} />,
-        label: "Hiring",
-        to: "/hiring",
-        permissions: ["HIRING_VIEW", "HIRING_MANAGE"]
-      }
-    ]
-  },
+  // {
+  //   icon: <DollarSign size={20} />,
+  //   label: "Payroll",
+  //   to: "/payroll",
+  //   permissions: [
+  //     "PAYROLL_CONFIG_MANAGE",
+  //     "PAYROLL_RUN_CREATE",
+  //     "PAYROLL_RUN_APPROVE",
+  //     "PAYROLL_RUN_LOCK",
+  //     "PAYROLL_REPORT_VIEW",
+  //     "PAYROLL_PAYSLIP_VIEW",
+  //     "PAYROLL_RUN_VIEW"
+  //   ],
+  //   children: [
+  //     {
+  //       icon: <DollarSign size={18} />,
+  //       label: "Setup",
+  //       to: "/payroll/setup",
+  //       permissions: [
+  //         "PAYROLL_CONFIG_MANAGE",
+  //         "PAYROLL_RUN_CREATE",
+  //         "PAYROLL_RUN_APPROVE",
+  //         "PAYROLL_RUN_LOCK",
+  //         "PAYROLL_REPORT_VIEW",
+  //         "PAYROLL_PAYSLIP_VIEW",
+  //         "PAYROLL_RUN_VIEW"
+  //       ]
+  //     },
+  //     {
+  //       icon: <Users size={18} />,
+  //       label: "Employees",
+  //       to: "/payroll/employees",
+  //       permissions: [
+  //         "PAYROLL_CONFIG_MANAGE",
+  //         "PAYROLL_RUN_CREATE",
+  //         "PAYROLL_RUN_APPROVE",
+  //         "PAYROLL_RUN_LOCK",
+  //         "PAYROLL_REPORT_VIEW",
+  //         "PAYROLL_PAYSLIP_VIEW",
+  //         "PAYROLL_RUN_VIEW"
+  //       ]
+  //     },
+  //     {
+  //       icon: <DollarSign size={18} />,
+  //       label: "Runs",
+  //       to: "/payroll/runs",
+  //       permissions: [
+  //         "PAYROLL_CONFIG_MANAGE",
+  //         "PAYROLL_RUN_CREATE",
+  //         "PAYROLL_RUN_APPROVE",
+  //         "PAYROLL_RUN_LOCK",
+  //         "PAYROLL_REPORT_VIEW",
+  //         "PAYROLL_PAYSLIP_VIEW",
+  //         "PAYROLL_RUN_VIEW"
+  //       ]
+  //     },
+  //     {
+  //       icon: <Users size={18} />,
+  //       label: "Breakdown",
+  //       to: "/payroll/employee-breakdown",
+  //       permissions: [
+  //         "PAYROLL_RUN_VIEW",
+  //         "PAYROLL_REPORT_VIEW",
+  //         "PAYROLL_RUN_CREATE",
+  //         "PAYROLL_RUN_APPROVE",
+  //         "PAYROLL_RUN_LOCK"
+  //       ]
+  //     }
+  //   ]
+  // },
+  // {
+  //   icon: <DollarSign size={20} />,
+  //   label: "Business",
+  //   to: "/business-development",
+  //   permissions: ["PROJECT_VIEW", "PROJECT_MANAGE", "HIRING_VIEW", "HIRING_MANAGE"],
+  //   children: [
+  //     {
+  //       icon: <Briefcase size={18} />,
+  //       label: "Projects",
+  //       to: "/business-development",
+  //       permissions: ["PROJECT_VIEW", "PROJECT_MANAGE"]
+  //     },
+  //     {
+  //       icon: <Users size={18} />,
+  //       label: "Hiring",
+  //       to: "/hiring",
+  //       permissions: ["HIRING_VIEW", "HIRING_MANAGE"]
+  //     }
+  //   ]
+  // },
   { icon: <FileText size={20} />, label: "Guidelines", to: "/documentation", permissions: ["EMP_VIEW", "EMP_SELF_VIEW", "EMP_CREATE", "EMP_UPDATE"] }
 ];
 
