@@ -119,6 +119,22 @@ def _normalize_positive_minutes(value: Any, fallback: int = 1) -> int:
     return max(parsed, 1)
 
 
+def _normalize_bool(value: Any, fallback: bool = True) -> bool:
+    """Normalize JSON, numeric, and string boolean values consistently."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return fallback
+    if isinstance(value, (int, float)):
+        return value != 0
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "disabled", ""}:
+        return False
+    return fallback
+
+
 def _load_cached_flags() -> dict[str, bool | int] | None:
     for flags_path in dict.fromkeys([FEATURE_FLAGS_FILE, ALT_FEATURE_FLAGS_FILE]):
         try:
@@ -133,11 +149,11 @@ def _load_cached_flags() -> dict[str, bool | int] | None:
         return None
 
     return {
-        "screenshotsEnabled": bool(payload.get("screenshotsEnabled", True)),
-        "mouseEnabled": bool(payload.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(payload.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
-        "appUsageEnabled": bool(payload.get("appUsageEnabled", True)),
-        "browserHistoryEnabled": bool(payload.get("browserHistoryEnabled", True)),
+        "screenshotsEnabled": _normalize_bool(payload.get("screenshotsEnabled", True)),
+        "mouseEnabled": _normalize_bool(payload.get("mouseEnabled", True)),
+        "keyboardEnabled": _normalize_bool(payload.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "appUsageEnabled": _normalize_bool(payload.get("appUsageEnabled", True)),
+        "browserHistoryEnabled": _normalize_bool(payload.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(payload.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(payload.get("mouseHeartbeatMinutes", 1), 1),
         "mouseIdleThresholdMinutes": _normalize_positive_minutes(payload.get("mouseIdleThresholdMinutes", 1), 1),
@@ -170,11 +186,11 @@ def _normalize_flags(payload: Any) -> dict[str, bool | int] | None:
         return None
 
     return {
-        "screenshotsEnabled": bool(settings.get("screenshotsEnabled", True)),
-        "mouseEnabled": bool(settings.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(settings.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
-        "appUsageEnabled": bool(settings.get("appUsageEnabled", True)),
-        "browserHistoryEnabled": bool(settings.get("browserHistoryEnabled", True)),
+        "screenshotsEnabled": _normalize_bool(settings.get("screenshotsEnabled", True)),
+        "mouseEnabled": _normalize_bool(settings.get("mouseEnabled", True)),
+        "keyboardEnabled": _normalize_bool(settings.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "appUsageEnabled": _normalize_bool(settings.get("appUsageEnabled", True)),
+        "browserHistoryEnabled": _normalize_bool(settings.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(settings.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(settings.get("mouseHeartbeatMinutes", 1), 1),
         "mouseIdleThresholdMinutes": _normalize_positive_minutes(settings.get("mouseIdleThresholdMinutes", 1), 1),
@@ -212,11 +228,11 @@ def _notify_callbacks(flags: dict[str, bool | int]) -> None:
 def _set_current_flags(flags: dict[str, bool | int]) -> bool:
     global _current_flags
     normalized = {
-        "screenshotsEnabled": bool(flags.get("screenshotsEnabled", True)),
-        "mouseEnabled": bool(flags.get("mouseEnabled", True)),
-        "keyboardEnabled": bool(flags.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
-        "appUsageEnabled": bool(flags.get("appUsageEnabled", True)),
-        "browserHistoryEnabled": bool(flags.get("browserHistoryEnabled", True)),
+        "screenshotsEnabled": _normalize_bool(flags.get("screenshotsEnabled", True)),
+        "mouseEnabled": _normalize_bool(flags.get("mouseEnabled", True)),
+        "keyboardEnabled": _normalize_bool(flags.get("keyboardEnabled", True)) or _force_keyboard_enabled(),
+        "appUsageEnabled": _normalize_bool(flags.get("appUsageEnabled", True)),
+        "browserHistoryEnabled": _normalize_bool(flags.get("browserHistoryEnabled", True)),
         "screenshotIntervalMinutes": _normalize_positive_minutes(flags.get("screenshotIntervalMinutes", 1), 1),
         "mouseHeartbeatMinutes": _normalize_positive_minutes(flags.get("mouseHeartbeatMinutes", 1), 1),
         "mouseIdleThresholdMinutes": _normalize_positive_minutes(flags.get("mouseIdleThresholdMinutes", 1), 1),
