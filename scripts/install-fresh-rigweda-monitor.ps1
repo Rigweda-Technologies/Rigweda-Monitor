@@ -143,6 +143,20 @@ function Remove-StartupEntry {
     }
 }
 
+function Remove-PrivilegedStartupTask {
+    $taskName = 'RigwedaMonitor'
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Info "Removed scheduled startup task: $taskName"
+    } catch {
+        Write-Info "  Scheduled startup task was not removed cleanly: $($_.Exception.Message)"
+    }
+}
+
+function Test-PrivilegedStartupTask {
+    return $null -ne (Get-ScheduledTask -TaskName 'RigwedaMonitor' -ErrorAction SilentlyContinue)
+}
+
 function Remove-LegacyService {
     $legacyServiceName = 'RigwedaMonitorService'
     $service = Get-Service -Name $legacyServiceName -ErrorAction SilentlyContinue
@@ -264,10 +278,15 @@ function Register-Startup {
         throw "Installed exe not found: $exePath"
     }
 
-    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-    $command = "`"$exePath`" --background-start"
-    Set-ItemProperty -Path $runKey -Name 'RigwedaMonitor' -Value $command
-    Write-Info "Registered startup command: $command"
+    $taskName = 'RigwedaMonitor'
+    $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $action = New-ScheduledTaskAction -Execute $exePath -Argument '--background-start' -WorkingDirectory $InstallDir
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+    $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Write-Info "Registered elevated scheduled startup task: $taskName for $userId"
 }
 
 function Start-InstalledApp {
@@ -306,7 +325,7 @@ if ($installedVersion) {
     Write-Info "Installed version: $installedVersion"
 }
 
-if ($installedVersion -and $sourceVersion -and $installedVersion -eq $sourceVersion) {
+if ($installedVersion -and $sourceVersion -and $installedVersion -eq $sourceVersion -and (Test-PrivilegedStartupTask)) {
     $alreadyInstalledMessage = "Rigweda Monitor is already installed.`nVersion: $(if ($installedVersion) { $installedVersion } else { 'unknown' })"
     Write-Info "Already installed: version $installedVersion"
     Show-Dialog $alreadyInstalledMessage "Rigweda Monitor"
@@ -323,6 +342,7 @@ if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVers
 
 Stop-RigwedaMonitorProcesses
 Remove-StartupEntry
+Remove-PrivilegedStartupTask
 Remove-LegacyService
 Remove-LocalData
 Remove-InstallDir
