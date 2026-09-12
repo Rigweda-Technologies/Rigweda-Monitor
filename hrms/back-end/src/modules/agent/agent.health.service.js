@@ -160,9 +160,24 @@ exports.listHealth = async ({ organizationId }) => {
   await ensureHealthTable();
   const pool = await getMonitorPgPool();
   const { rows } = await pool.query(
-    `SELECT * FROM monitor_device_health
-     WHERE ($1::text IS NULL OR organization_id = $1)
-     ORDER BY last_seen_at DESC`,
+    `WITH ranked_health AS (
+       SELECT
+         monitor_device_health.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY COALESCE(
+             NULLIF(employee_id, ''),
+             NULLIF(employee_code, ''),
+             NULLIF(device_id, '')
+           )
+           ORDER BY last_seen_at DESC, updated_at DESC, id DESC
+         ) AS snapshot_rank
+       FROM monitor_device_health
+       WHERE ($1::text IS NULL OR organization_id = $1)
+     )
+     SELECT *
+     FROM ranked_health
+     WHERE snapshot_rank = 1
+     ORDER BY last_seen_at DESC, updated_at DESC, id DESC`,
     [organizationId || null]
   );
   return rows.map(mapHealthRow);
