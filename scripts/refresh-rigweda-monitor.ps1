@@ -124,6 +124,16 @@ function Remove-StartupEntry {
     }
 }
 
+function Remove-PrivilegedStartupTask {
+    $taskName = 'RigwedaMonitor'
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Info "Removed scheduled startup task: $taskName"
+    } catch {
+        Write-Info "  Scheduled startup task was not removed cleanly: $($_.Exception.Message)"
+    }
+}
+
 function Remove-LocalData {
     $legacyDataRoot = 'C:\Rigweda_monitor'
 
@@ -213,18 +223,21 @@ function Register-Startup {
         throw "Installed exe not found: $exePath"
     }
 
-    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-    $command = "`"$exePath`" --background-start"
-    Set-ItemProperty -Path $runKey -Name 'RigwedaMonitor' -Value $command
-    Write-Info "Registered startup command: $command"
+    $taskName = 'RigwedaMonitor'
+    $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $action = New-ScheduledTaskAction -Execute $exePath -Argument '--background-start' -WorkingDirectory $InstallDir
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+    $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Write-Info "Registered elevated scheduled startup task: $taskName for $userId"
 }
 
 function Start-InstalledApp {
-    $exePath = Join-Path $InstallDir 'RigwedaMonitor.exe'
-    if (Test-Path $exePath) {
-        Write-Info "Starting installed app..."
-        Start-Process -FilePath $exePath -ArgumentList '--background-start' -WorkingDirectory $InstallDir | Out-Null
-    }
+    $taskName = 'RigwedaMonitor'
+    Write-Info "Starting installed app through elevated scheduled task..."
+    Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
 }
 
 Write-Info "Rigweda Monitor refresh starting..."
@@ -257,6 +270,7 @@ if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVers
 
 Stop-RigwedaMonitorProcesses
 Remove-StartupEntry
+Remove-PrivilegedStartupTask
 if ($PurgeLegacyData) {
     Remove-LocalData
 }

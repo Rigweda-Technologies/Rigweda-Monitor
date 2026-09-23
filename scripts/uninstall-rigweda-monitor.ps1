@@ -127,6 +127,17 @@ function Remove-StartupEntry {
     }
 }
 
+function Remove-PrivilegedStartupTask {
+    $taskName = 'RigwedaMonitor'
+
+    Write-Info "Removing scheduled startup task..."
+    try {
+        & schtasks.exe /Delete /TN $taskName /F | Out-Null
+    } catch {
+        Write-Info "  Scheduled startup task was not removed cleanly: $($_.Exception.Message)"
+    }
+}
+
 function Remove-Shortcuts {
     Write-Info "Removing shortcuts..."
     $shortcutRoots = @(
@@ -188,6 +199,7 @@ Stop-RigwedaMonitorProcesses
 Remove-RigwedaMonitorService
 Remove-LegacyRigwedaMonitorService
 Remove-StartupEntry
+Remove-PrivilegedStartupTask
 Remove-Shortcuts
 Remove-InstallDir
 Remove-LocalData

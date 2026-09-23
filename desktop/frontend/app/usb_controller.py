@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 import customtkinter as ctk
 
-from app.auth import load_auth_session
+from app.auth import _log_startup, load_auth_session
 from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -282,6 +282,17 @@ def _run_required_windows_command(args: list[str]) -> subprocess.CompletedProces
     return result
 
 
+def _enable_usb_device(instance_id: str) -> None:
+    result = _run_windows_command(["pnputil", "/enable-device", instance_id])
+    combined_output = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+    if result.returncode == 0 or "device is already enabled" in combined_output:
+        return
+    if result.returncode == 5 or "access is denied" in combined_output:
+        _log_message(f"Access Denied (Error 5) from Windows command: pnputil /enable-device {instance_id}")
+        raise PermissionError(5, "Access is denied", "pnputil")
+    raise UsbCommandError(f"Command failed with exit code {result.returncode}: pnputil /enable-device {instance_id}")
+
+
 def _refresh_windows_shell() -> None:
     try:
         ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)
@@ -316,7 +327,7 @@ def _apply_usb_policy_as_admin(usb_blocked: bool) -> tuple[list[str], list[str]]
         enable_errors = []
         for instance_id in persisted_device_ids:
             try:
-                _run_required_windows_command(["pnputil", "/enable-device", instance_id])
+                _enable_usb_device(instance_id)
             except Exception as error:
                 enable_errors.append(error)
                 _log_message(f"Persisted USB device enable failed: id={instance_id}: {type(error).__name__}: {error}")
@@ -326,7 +337,7 @@ def _apply_usb_policy_as_admin(usb_blocked: bool) -> tuple[list[str], list[str]]
             if instance_id in persisted_device_ids:
                 continue
             try:
-                _run_required_windows_command(["pnputil", "/enable-device", instance_id])
+                _enable_usb_device(instance_id)
             except Exception as error:
                 enable_errors.append(error)
                 _log_message(f"Discovered USB device enable failed: id={instance_id}: {type(error).__name__}: {error}")
@@ -641,10 +652,12 @@ def apply_usb_control_policy(
     try:
         if not _is_windows_admin():
             _last_apply_failed = True
-            _log_message(
-                "USB policy was not applied because the desktop process is not elevated; "
-                "startup elevation is required."
+            warning = (
+                "USB policy enforcement skipped because the desktop process is not running as Administrator. "
+                "Register and launch the RigwedaMonitor Scheduled Task to enforce USB policy."
             )
+            _log_message(warning)
+            _log_startup(warning)
             return {
                 "supported": True,
                 "applied": False,

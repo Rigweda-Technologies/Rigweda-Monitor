@@ -20,7 +20,11 @@ set "APP_DIST_DIR=%BUILD_DIST_DIR%\%APP_NAME%"
 set "BUNDLE_NAME=%APP_NAME%FreshInstall"
 set "BUNDLE_DIR=%DIST_DIR%\%BUNDLE_NAME%"
 set "BUNDLE_ZIP=%DIST_DIR%\%BUNDLE_NAME%.zip"
+set "SETUP_EXE=%DIST_DIR%\%APP_NAME%Setup.exe"
 set "BUNDLE_STAGE=%TEMP%\%BUNDLE_NAME%Stage"
+set "SETUP_BUILD_DIR=%TEMP%\%APP_NAME%SetupBuild-%BUILD_TOKEN%"
+set "SETUP_WORK_DIR=%TEMP%\%APP_NAME%SetupWork-%BUILD_TOKEN%"
+set "SETUP_BOOTSTRAP=installer\setup_bootstrap.py"
 set "INSTALL_SCRIPT_PS1=..\..\scripts\install-fresh-rigweda-monitor.ps1"
 set "INSTALL_SCRIPT_BAT=..\..\scripts\install-fresh-rigweda-monitor.bat"
 set "UNINSTALL_SCRIPT_PS1=..\..\scripts\uninstall-rigweda-monitor.ps1"
@@ -37,7 +41,10 @@ mkdir "%DIST_DIR%" >nul 2>nul
 
 if exist "%BUNDLE_DIR%" rmdir /s /q "%BUNDLE_DIR%"
 if exist "%BUNDLE_ZIP%" del /q "%BUNDLE_ZIP%"
+if exist "%SETUP_EXE%" del /q "%SETUP_EXE%"
 if exist "%BUNDLE_STAGE%" rmdir /s /q "%BUNDLE_STAGE%"
+if exist "%SETUP_BUILD_DIR%" rmdir /s /q "%SETUP_BUILD_DIR%"
+if exist "%SETUP_WORK_DIR%" rmdir /s /q "%SETUP_WORK_DIR%"
 
 (
   echo HRMS_BACKEND_URL=https://rigweda-hrms-backend.onrender.com/api
@@ -88,13 +95,21 @@ if %ROBOCOPY_BUNDLE_DIR_EXIT% GEQ 8 exit /b %ROBOCOPY_BUNDLE_DIR_EXIT%
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%BUNDLE_STAGE%\*' -DestinationPath '%BUNDLE_ZIP%' -Force"
 if not "%errorlevel%"=="0" exit /b %errorlevel%
 
+".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --uac-admin --name "%APP_NAME%Setup" --distpath "%SETUP_BUILD_DIR%" --workpath "%SETUP_WORK_DIR%" --add-data "%BUNDLE_ZIP%;." "%SETUP_BOOTSTRAP%"
+if not "%errorlevel%"=="0" exit /b %errorlevel%
+copy /Y "%SETUP_BUILD_DIR%\%APP_NAME%Setup.exe" "%SETUP_EXE%" >nul
+if not "%errorlevel%"=="0" exit /b %errorlevel%
+
 rmdir /s /q "%BUNDLE_STAGE%"
+if exist "%SETUP_BUILD_DIR%" rmdir /s /q "%SETUP_BUILD_DIR%"
+if exist "%SETUP_WORK_DIR%" rmdir /s /q "%SETUP_WORK_DIR%"
 if exist "%APP_DIST_DIR%" rmdir /s /q "%APP_DIST_DIR%"
 
 echo.
 echo Build complete.
 echo Fresh install folder: %BUNDLE_DIR%
 echo Fresh install zip: %BUNDLE_ZIP%
+echo Employee setup exe: %SETUP_EXE%
 echo Run installer: %BUNDLE_DIR%\install-fresh-rigweda-monitor.bat
 echo Run uninstaller: %BUNDLE_DIR%\uninstall-rigweda-monitor.bat
 echo Or run app directly: %BUNDLE_DIR%\%APP_NAME%\RigwedaMonitor.exe
