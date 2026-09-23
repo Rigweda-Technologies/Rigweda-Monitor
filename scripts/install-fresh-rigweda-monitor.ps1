@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Source = "",
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\RigwedaMonitor'),
     [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'rigweda-monitor\data'),
@@ -11,8 +11,70 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Resolve-ScriptDirectory {
+    if ($PSScriptRoot) {
+        return $PSScriptRoot
+    }
+
+    if ($PSCommandPath) {
+        return Split-Path -Parent $PSCommandPath
+    }
+
+    if ($MyInvocation.MyCommand.Path) {
+        return Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+
+    return ""
+}
+
+$ScriptDirectory = Resolve-ScriptDirectory
+
+function Test-Administrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function ConvertTo-InstallerArgument([string]$Value) {
+    return '"' + ($Value -replace '"', '\"') + '"'
+}
+
+if (-not (Test-Administrator)) {
+    if (-not $PSCommandPath) {
+        throw "This installer must be run from its .ps1 or .bat file so it can request Administrator permission. Save the script to disk, then run install-fresh-rigweda-monitor.bat or powershell -NoProfile -ExecutionPolicy Bypass -File .\install-fresh-rigweda-monitor.ps1."
+    }
+
+    $argumentList = @(
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        (ConvertTo-InstallerArgument $PSCommandPath),
+        '-Source',
+        (ConvertTo-InstallerArgument $Source),
+        '-InstallDir',
+        (ConvertTo-InstallerArgument $InstallDir),
+        '-DataRoot',
+        (ConvertTo-InstallerArgument $DataRoot),
+        '-LogRoot',
+        (ConvertTo-InstallerArgument $LogRoot),
+        '-RuntimeRoot',
+        (ConvertTo-InstallerArgument $RuntimeRoot),
+        '-HrmsBackendUrl',
+        (ConvertTo-InstallerArgument $HrmsBackendUrl),
+        '-ExpectedPublisher',
+        (ConvertTo-InstallerArgument $ExpectedPublisher),
+        '-AllowUnsignedUpdates',
+        $AllowUnsignedUpdates.ToString()
+    )
+
+    [Console]::WriteLine("Requesting Administrator permission to install Rigweda Monitor...")
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentList -Verb RunAs -Wait -PassThru
+    exit $process.ExitCode
+}
+
 function Write-Info([string]$Message) {
-    Write-Host $Message
+    [Console]::WriteLine($Message)
 }
 
 function Show-Dialog([string]$Message, [string]$Title = "Rigweda Monitor") {
@@ -92,7 +154,11 @@ function Get-InstalledVersion {
 }
 
 function Get-DefaultSource {
-    $scriptDir = $PSScriptRoot
+    $scriptDir = $ScriptDirectory
+    if (-not $scriptDir) {
+        throw "Source not found because the installer was run from pasted text. Run install-fresh-rigweda-monitor.bat from the release folder, or pass -Source with the full path to RigwedaMonitor.exe or the RigwedaMonitor folder."
+    }
+
     $candidateFolder = Join-Path $scriptDir "RigwedaMonitor"
     $candidateExe = Join-Path $scriptDir "RigwedaMonitor.exe"
 
@@ -141,6 +207,20 @@ function Remove-StartupEntry {
     } catch {
         Write-Info "  Startup entry was not removed cleanly: $($_.Exception.Message)"
     }
+}
+
+function Remove-PrivilegedStartupTask {
+    $taskName = 'RigwedaMonitor'
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Info "Removed scheduled startup task: $taskName"
+    } catch {
+        Write-Info "  Scheduled startup task was not removed cleanly: $($_.Exception.Message)"
+    }
+}
+
+function Test-PrivilegedStartupTask {
+    return $null -ne (Get-ScheduledTask -TaskName 'RigwedaMonitor' -ErrorAction SilentlyContinue)
 }
 
 function Remove-LegacyService {
@@ -235,7 +315,12 @@ function Copy-InstallHelpers {
     )
 
     foreach ($helperFile in $helperFiles) {
-        $sourcePath = Join-Path $PSScriptRoot $helperFile
+        if (-not $ScriptDirectory) {
+            Write-Info "Skipping helper copy because the installer was not run from a script file: $helperFile"
+            continue
+        }
+
+        $sourcePath = Join-Path $ScriptDirectory $helperFile
         if (Test-Path $sourcePath) {
             Copy-Item -LiteralPath $sourcePath -Destination $InstallDir -Force
         }
@@ -264,17 +349,22 @@ function Register-Startup {
         throw "Installed exe not found: $exePath"
     }
 
-    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-    $command = "`"$exePath`" --background-start"
-    Set-ItemProperty -Path $runKey -Name 'RigwedaMonitor' -Value $command
-    Write-Info "Registered startup command: $command"
+    $taskName = 'RigwedaMonitor'
+    $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $action = New-ScheduledTaskAction -Execute $exePath -Argument '--background-start' -WorkingDirectory $InstallDir
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+    $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Write-Info "Registered elevated scheduled startup task: $taskName for $userId"
 }
 
 function Start-InstalledApp {
     $exePath = Join-Path $InstallDir 'RigwedaMonitor.exe'
     if (Test-Path $exePath) {
-        Write-Info "Starting installed app..."
-        Start-Process -FilePath $exePath -ArgumentList '--background-start' -WorkingDirectory $InstallDir | Out-Null
+        Write-Info "Opening Rigweda Monitor login..."
+        Start-Process -FilePath $exePath -WorkingDirectory $InstallDir | Out-Null
     }
 }
 
@@ -306,9 +396,10 @@ if ($installedVersion) {
     Write-Info "Installed version: $installedVersion"
 }
 
-if ($installedVersion -and $sourceVersion -and $installedVersion -eq $sourceVersion) {
+if ($installedVersion -and $sourceVersion -and $installedVersion -eq $sourceVersion -and (Test-PrivilegedStartupTask)) {
     $alreadyInstalledMessage = "Rigweda Monitor is already installed.`nVersion: $(if ($installedVersion) { $installedVersion } else { 'unknown' })"
     Write-Info "Already installed: version $installedVersion"
+    Start-InstalledApp
     Show-Dialog $alreadyInstalledMessage "Rigweda Monitor"
     exit 0
 }
@@ -323,6 +414,7 @@ if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVers
 
 Stop-RigwedaMonitorProcesses
 Remove-StartupEntry
+Remove-PrivilegedStartupTask
 Remove-LegacyService
 Remove-LocalData
 Remove-InstallDir
@@ -342,3 +434,4 @@ if ($installedVersion -and $sourceVersion -and $installedVersion -lt $sourceVers
     Show-Dialog "Rigweda Monitor has been installed.`nVersion: $(if ($sourceVersion) { $sourceVersion } else { 'unknown' })" "Rigweda Monitor"
 }
 Write-Info "Launch the app from: $(Join-Path $InstallDir 'RigwedaMonitor.exe')"
+

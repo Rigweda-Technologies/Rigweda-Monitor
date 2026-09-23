@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import getpass
 import json
 import os
 import subprocess
@@ -11,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 import base64
+import xml.etree.ElementTree as ET
 from ctypes import wintypes
 from pathlib import Path
 
@@ -26,17 +28,40 @@ AUTH_FILE = DATA_ROOT / "auth.json"
 ALT_AUTH_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\rigweda-monitor\data\auth.json"))
 SERVICE_NAME = "RigwedaMonitorService"
 STARTUP_APP_NAME = "RigwedaMonitor"
+REGISTER_STARTUP_TASK_ARG = "--register-startup-task"
 PROFILE_SCHEMA_VERSION = 4
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 SW_HIDE = 0
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 CREATE_NO_WINDOW = 0x08000000
+LOG_DIR = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_LOG_ROOT", str(DATA_ROOT.parent / "logs")), "logs")
+STARTUP_LOG_FILE = LOG_DIR / "startup.log"
+
+
+def _log_startup(message: str) -> None:
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with STARTUP_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(f"{timestamp} {message}\n")
+    except OSError:
+        pass
 
 
 def _run_sc_command(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["sc", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+
+
+def _run_schtasks_command(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["schtasks", *args],
         capture_output=True,
         text=True,
         check=False,
@@ -76,6 +101,15 @@ def _requires_local_windows_service() -> bool:
     development the API is commonly started directly with Node/Python.
     """
     return str(os.getenv("DESKTOP_START_WINDOWS_SERVICE", "false")).strip().lower() in {"1", "true", "yes"}
+
+
+def _is_windows_admin() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
 
 
 def _start_service_as_admin() -> tuple[bool, str]:
@@ -411,45 +445,239 @@ def load_saved_auth_email() -> str | None:
     return None
 
 
-def register_startup() -> tuple[bool, str]:
-    """Start this app automatically for the current Windows user after sign-in."""
+def _startup_task_action() -> str:
+    if getattr(sys, "frozen", False):
+        executable = Path(sys.executable).resolve()
+        return subprocess.list2cmdline([str(executable), "--background-start"])
+
+    python_executable = Path(sys.executable).resolve()
+    python_windowed = python_executable.with_name("pythonw.exe")
+    launcher = python_windowed if python_windowed.exists() else python_executable
+    main_script = Path(__file__).resolve().with_name("main.py")
+    # pythonw prevents a visible terminal at every Windows sign-in.
+    return subprocess.list2cmdline([str(launcher), str(main_script), "--background-start"])
+
+
+def _startup_task_expected_parts() -> tuple[str, str]:
+    if getattr(sys, "frozen", False):
+        return str(Path(sys.executable).resolve()), "--background-start"
+
+    python_executable = Path(sys.executable).resolve()
+    python_windowed = python_executable.with_name("pythonw.exe")
+    launcher = python_windowed if python_windowed.exists() else python_executable
+    main_script = Path(__file__).resolve().with_name("main.py")
+    return str(launcher), subprocess.list2cmdline([str(main_script), "--background-start"])
+
+
+def _current_interactive_user() -> str:
+    username = os.getenv("USERNAME") or getpass.getuser()
+    domain = os.getenv("USERDOMAIN", "").strip()
+    if domain and username and "\\" not in username and "@" not in username:
+        return f"{domain}\\{username}"
+    return username
+
+
+def _powershell_single_quoted(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _normalize_windows_path(value: str) -> str:
+    try:
+        return str(Path(value.strip('"')).resolve()).casefold()
+    except OSError:
+        return value.strip().strip('"').casefold()
+
+
+def _scheduled_task_exec_from_xml(xml_text: str) -> tuple[str, str] | None:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return None
+
+    namespace = {"task": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    exec_node = root.find(".//task:Actions/task:Exec", namespace)
+    if exec_node is None:
+        exec_node = root.find(".//Actions/Exec")
+    if exec_node is None:
+        return None
+
+    command_node = exec_node.find("task:Command", namespace)
+    if command_node is None:
+        command_node = exec_node.find("Command")
+    arguments_node = exec_node.find("task:Arguments", namespace)
+    if arguments_node is None:
+        arguments_node = exec_node.find("Arguments")
+    command = (command_node.text or "").strip() if command_node is not None else ""
+    arguments = (arguments_node.text or "").strip() if arguments_node is not None else ""
+    if not command:
+        return None
+    return command, arguments
+
+
+def _scheduled_task_allows_battery(xml_text: str) -> bool:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return False
+
+    namespace = {"task": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    disallow_node = root.find(".//task:Settings/task:DisallowStartIfOnBatteries", namespace)
+    if disallow_node is None:
+        disallow_node = root.find(".//Settings/DisallowStartIfOnBatteries")
+    stop_node = root.find(".//task:Settings/task:StopIfGoingOnBatteries", namespace)
+    if stop_node is None:
+        stop_node = root.find(".//Settings/StopIfGoingOnBatteries")
+
+    disallow = (disallow_node.text or "").strip().lower() if disallow_node is not None else "false"
+    stop = (stop_node.text or "").strip().lower() if stop_node is not None else "false"
+    return disallow != "true" and stop != "true"
+
+
+def startup_task_matches_current_action() -> bool:
+    """Return True when the existing Scheduled Task points at this app."""
+    if os.name != "nt":
+        return False
+
+    result = _run_schtasks_command("/Query", "/TN", STARTUP_APP_NAME, "/XML")
+    if result.returncode != 0:
+        return False
+
+    task_exec = _scheduled_task_exec_from_xml(result.stdout or "")
+    if task_exec is None:
+        return False
+
+    expected_command, expected_arguments = _startup_task_expected_parts()
+    actual_command, actual_arguments = task_exec
+    actual_action_text = f"{actual_command} {actual_arguments}".casefold()
+    expected_command_text = _normalize_windows_path(expected_command)
+    return (
+        _scheduled_task_allows_battery(result.stdout or "")
+        and
+        (
+            _normalize_windows_path(actual_command) == expected_command_text
+            or expected_command_text in actual_action_text.replace("/", "\\")
+        )
+        and "--background-start" in actual_action_text
+    )
+
+
+def register_startup_task() -> tuple[bool, str]:
+    """Register the elevated interactive Scheduled Task used at Windows logon."""
     if os.name != "nt":
         return False, "Windows startup registration is only available on Windows."
 
+    if startup_task_matches_current_action():
+        message = "Scheduled Task registration skipped because the existing task already matches this app."
+        _log_startup(message)
+        return True, message
+
+    if not _is_windows_admin():
+        message = "Scheduled Task registration skipped because the current process is not elevated."
+        _log_startup(message)
+        return False, message
+
+    command, arguments = _startup_task_expected_parts()
+    working_directory = str(Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1])
+    user = _current_interactive_user()
+    script = "\n".join(
+        [
+            f"$action = New-ScheduledTaskAction -Execute {_powershell_single_quoted(command)} -Argument {_powershell_single_quoted(arguments)} -WorkingDirectory {_powershell_single_quoted(working_directory)}",
+            f"$trigger = New-ScheduledTaskTrigger -AtLogOn -User {_powershell_single_quoted(user)}",
+            f"$principal = New-ScheduledTaskPrincipal -UserId {_powershell_single_quoted(user)} -LogonType Interactive -RunLevel Highest",
+            "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
+            f"Register-ScheduledTask -TaskName {_powershell_single_quoted(STARTUP_APP_NAME)} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null",
+        ]
+    )
+
     try:
-        import winreg
-    except ImportError:
-        return False, "Windows registry access is unavailable."
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    except OSError as error:
+        message = f"Scheduled Task registration failed: {error}"
+        _log_startup(message)
+        return False, message
+
+    output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part and part.strip())
+    if result.returncode != 0:
+        message = f"Scheduled Task registration failed with exit code {result.returncode}: {output or '<no output>'}"
+        _log_startup(message)
+        return False, message
+
+    message = f"Scheduled Task registered: task={STARTUP_APP_NAME} user={user} command={command} arguments={arguments}"
+    _log_startup(message)
+    return True, "Windows startup Scheduled Task registered."
+
+
+def register_startup() -> tuple[bool, str]:
+    """Backward-compatible wrapper for startup registration."""
+    return register_startup_task()
+
+
+def request_startup_task_registration_elevation() -> tuple[bool, str]:
+    """Request one scoped UAC launch to register the startup task, if needed."""
+    if os.name != "nt":
+        return False, "Windows startup task registration is only available on Windows."
+
+    if startup_task_matches_current_action():
+        message = "Scheduled Task already exists for this app; no elevation is needed."
+        _log_startup(message)
+        return True, message
+
+    if _is_windows_admin():
+        return register_startup_task()
 
     if getattr(sys, "frozen", False):
-        executable = Path(sys.executable).resolve()
-        command = f'"{executable}" --background-start'
+        executable = str(Path(sys.executable).resolve())
+        parameters = REGISTER_STARTUP_TASK_ARG
     else:
-        python_executable = Path(sys.executable).resolve()
-        python_windowed = python_executable.with_name("pythonw.exe")
-        launcher = python_windowed if python_windowed.exists() else python_executable
-        main_script = Path(__file__).resolve().with_name("main.py")
-        # pythonw prevents a visible terminal at every Windows sign-in.
-        command = f'"{launcher}" "{main_script}" --background-start'
+        executable = str(Path(sys.executable).resolve())
+        main_script = str(Path(__file__).resolve().with_name("main.py"))
+        parameters = subprocess.list2cmdline([main_script, REGISTER_STARTUP_TASK_ARG])
 
     try:
-        with winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Run",
-            0,
-            winreg.KEY_SET_VALUE,
-        ) as key:
-            winreg.SetValueEx(key, STARTUP_APP_NAME, 0, winreg.REG_SZ, command)
-    except OSError as error:
-        return False, f"Could not register Windows startup: {error}"
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            executable,
+            parameters,
+            str(Path(__file__).resolve().parents[1]),
+            SW_HIDE,
+        )
+    except (AttributeError, OSError) as error:
+        message = f"Scheduled Task registration elevation failed: {type(error).__name__}: {error}"
+        _log_startup(message)
+        return False, message
 
-    return True, "Windows startup registered."
+    if result <= 32:
+        message = f"Scheduled Task registration elevation was cancelled or failed: Windows error={result}."
+        _log_startup(message)
+        return False, message
+
+    message = f"Scheduled Task registration elevation requested with {REGISTER_STARTUP_TASK_ARG}."
+    _log_startup(message)
+    return True, message
 
 
 def launch_background_monitor_process() -> tuple[bool, str]:
     """Start a detached background host for the long-running desktop monitors."""
     if os.name != "nt":
         return False, "Background monitor launching is only supported on Windows."
+
+    if startup_task_matches_current_action():
+        result = _run_schtasks_command("/Run", "/TN", STARTUP_APP_NAME)
+        output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part and part.strip())
+        if result.returncode == 0:
+            _log_startup(f"Background monitor host launched through Scheduled Task: {STARTUP_APP_NAME}")
+            return True, "Background monitor host launched through the elevated Scheduled Task."
+        _log_startup(
+            "Scheduled Task background launch failed; falling back to direct launch: "
+            f"exit={result.returncode} output={output or '<no output>'}"
+        )
 
     if getattr(sys, "frozen", False):
         executable = str(Path(sys.executable).resolve())

@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 import customtkinter as ctk
 
-from app.auth import load_auth_session
+from app.auth import _log_startup, load_auth_session
 from app.env import HOSTED_HRMS_BACKEND_URL, prefer_hosted_backend_url, writable_runtime_path
 
 DATA_ROOT = writable_runtime_path(os.getenv("RIGWEDA_MONITOR_DATA_ROOT", r"%LOCALAPPDATA%\rigweda-monitor\data"), "data")
@@ -37,6 +37,7 @@ _callbacks: list[Callable[[dict[str, bool]], None]] = []
 _current_policy: dict[str, bool] | None = None
 _windows_policy_applied = False
 _last_applied_policy: dict[str, bool] | None = None
+_last_apply_failed = False
 _apply_lock = threading.Lock()
 _usb_policy_touched = False
 _enforcement_disabled = False
@@ -281,6 +282,17 @@ def _run_required_windows_command(args: list[str]) -> subprocess.CompletedProces
     return result
 
 
+def _enable_usb_device(instance_id: str) -> None:
+    result = _run_windows_command(["pnputil", "/enable-device", instance_id])
+    combined_output = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+    if result.returncode == 0 or "device is already enabled" in combined_output:
+        return
+    if result.returncode == 5 or "access is denied" in combined_output:
+        _log_message(f"Access Denied (Error 5) from Windows command: pnputil /enable-device {instance_id}")
+        raise PermissionError(5, "Access is denied", "pnputil")
+    raise UsbCommandError(f"Command failed with exit code {result.returncode}: pnputil /enable-device {instance_id}")
+
+
 def _refresh_windows_shell() -> None:
     try:
         ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)
@@ -315,7 +327,7 @@ def _apply_usb_policy_as_admin(usb_blocked: bool) -> tuple[list[str], list[str]]
         enable_errors = []
         for instance_id in persisted_device_ids:
             try:
-                _run_required_windows_command(["pnputil", "/enable-device", instance_id])
+                _enable_usb_device(instance_id)
             except Exception as error:
                 enable_errors.append(error)
                 _log_message(f"Persisted USB device enable failed: id={instance_id}: {type(error).__name__}: {error}")
@@ -325,7 +337,7 @@ def _apply_usb_policy_as_admin(usb_blocked: bool) -> tuple[list[str], list[str]]
             if instance_id in persisted_device_ids:
                 continue
             try:
-                _run_required_windows_command(["pnputil", "/enable-device", instance_id])
+                _enable_usb_device(instance_id)
             except Exception as error:
                 enable_errors.append(error)
                 _log_message(f"Discovered USB device enable failed: id={instance_id}: {type(error).__name__}: {error}")
@@ -452,9 +464,18 @@ def _get_connected_usb_device_ids() -> list[str]:
     if os.name != "nt":
         return []
 
+    # Target removable storage and portable/MTP devices, but never USB host
+    # controllers or hubs that would also disable the employee's input devices.
     powershell_script = r"""
-Get-PnpDevice |
-  Where-Object { $_.InstanceId -like 'USBSTOR*' } |
+$allowedClasses = @('WPD', 'Portable Devices', 'DiskDrive')
+Get-PnpDevice -PresentOnly |
+  Where-Object {
+    ($_.InstanceId -like 'USBSTOR*') -or
+    ($_.InstanceId -like 'USB*' -and $_.Class -in $allowedClasses)
+  } |
+  Where-Object {
+    $_.FriendlyName -notmatch 'Host Controller|Root Hub|Generic Hub|USB Hub'
+  } |
   Select-Object -ExpandProperty InstanceId
 """
 
@@ -469,7 +490,11 @@ Get-PnpDevice |
     device_ids: list[str] = []
     for line in (result.stdout or "").splitlines():
         device_id = line.strip()
-        if device_id.upper().startswith("USBSTOR\\") and device_id not in device_ids:
+        normalized_id = device_id.upper()
+        if (
+            (normalized_id.startswith("USBSTOR\\") or normalized_id.startswith("USB\\"))
+            and device_id not in device_ids
+        ):
             device_ids.append(device_id)
     _log_message(
         f"USB storage instance discovery exitCode={result.returncode} "
@@ -577,8 +602,12 @@ def _disconnect_active_usb_devices() -> list[str]:
     return removed_devices
 
 
-def apply_usb_control_policy(policy: dict[str, bool] | None = None) -> dict[str, Any]:
-    global _windows_policy_applied, _last_applied_policy, _usb_policy_touched
+def apply_usb_control_policy(
+    policy: dict[str, bool] | None = None,
+    *,
+    force_device_rescan: bool = False,
+) -> dict[str, Any]:
+    global _windows_policy_applied, _last_applied_policy, _last_apply_failed, _usb_policy_touched
     if _enforcement_disabled:
         return {"applied": False, "error": "enforcement disabled"}
     policy = dict(policy or get_usb_control_policy())
@@ -605,7 +634,7 @@ def apply_usb_control_policy(policy: dict[str, bool] | None = None) -> dict[str,
         }
 
     with _apply_lock:
-        changed = normalized != _last_applied_policy
+        changed = normalized != _last_applied_policy or _last_apply_failed or force_device_rescan
     if not changed:
         _save_cached_policy(normalized)
         _log_message("USB policy already applied; no Windows changes required.")
@@ -622,10 +651,13 @@ def apply_usb_control_policy(policy: dict[str, bool] | None = None) -> dict[str,
 
     try:
         if not _is_windows_admin():
-            _log_message(
-                "USB policy was not applied because the desktop process is not elevated; "
-                "startup elevation is required."
+            _last_apply_failed = True
+            warning = (
+                "USB policy enforcement skipped because the desktop process is not running as Administrator. "
+                "Register and launch the RigwedaMonitor Scheduled Task to enforce USB policy."
             )
+            _log_message(warning)
+            _log_startup(warning)
             return {
                 "supported": True,
                 "applied": False,
@@ -643,7 +675,7 @@ def apply_usb_control_policy(policy: dict[str, bool] | None = None) -> dict[str,
 
         with _apply_lock:
             # Re-check after acquiring the lock so a socket callback and poll cannot duplicate hardware work.
-            if normalized == _last_applied_policy:
+            if normalized == _last_applied_policy and not _last_apply_failed and not force_device_rescan:
                 return {
                     "supported": True,
                     "applied": False,
@@ -658,6 +690,7 @@ def apply_usb_control_policy(policy: dict[str, bool] | None = None) -> dict[str,
             _usb_policy_touched = True
             disconnected_volumes, disconnected_devices = _apply_usb_policy_as_admin(usb_blocked)
             _last_applied_policy = dict(normalized)
+            _last_apply_failed = False
 
         _set_current_policy(normalized)
         _windows_policy_applied = True
@@ -681,6 +714,7 @@ def apply_usb_control_policy(policy: dict[str, bool] | None = None) -> dict[str,
         }
     except Exception as error:
         _windows_policy_applied = False
+        _last_apply_failed = True
         _log_message(f"USB policy apply failed: {type(error).__name__}: {error}")
         return {
             "supported": True,
@@ -717,8 +751,11 @@ def _listener_worker(token: str) -> None:
                 _listener_stop_event.wait(USB_POLL_SECONDS)
                 continue
             current_policy = get_usb_control_policy()
-            if has_successful_fetch and policy.get("usbEnabled") == current_policy.get("usbEnabled"):
-                _log_message(f"USB policy poll skipped; policy unchanged: usbEnabled={policy.get('usbEnabled')}")
+            if has_successful_fetch and not _last_apply_failed and policy.get("usbEnabled") == current_policy.get("usbEnabled"):
+                _log_message(
+                    f"USB policy poll rescanning connected devices: usbEnabled={policy.get('usbEnabled')}"
+                )
+                apply_usb_control_policy(policy, force_device_rescan=True)
             else:
                 apply_usb_control_policy(policy)
             has_successful_fetch = True
