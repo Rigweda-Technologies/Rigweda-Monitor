@@ -14,11 +14,11 @@ import urllib.request
 import customtkinter as ctk
 from PIL import Image
 
-from app.auth import ensure_service_running, launch_background_monitor_process, login_to_hrms, register_startup
+from app.auth import ensure_service_running, launch_background_monitor_process, login_to_hrms, request_startup_task_registration_elevation
 from app.monitor_settings import apply_monitor_feature_flags, get_monitor_feature_flags, start_monitor_settings_listener
 from app.device_health import start_health_reporter
-from app.usb_control import _log_message as log_usb_message
-from app.usb_control import apply_usb_control_policy, refresh_usb_control_policy, start_usb_control_listener
+from app.usb_controller import _log_message as log_usb_message
+from app.usb_controller import apply_usb_control_policy, refresh_usb_control_policy, start_usb_control_listener
 
 COLORS = {
     "window_bg": "#f7f7f5",
@@ -160,7 +160,7 @@ class LoginApp:
 
         self.subtitle_label = ctk.CTkLabel(
             content,
-            text="Welcome back Mahesh. Enter your credentials to continue.",
+            text="Enter your credentials to continue.",
             text_color=COLORS["text_muted"],
             font=FONTS["subtitle"],
         )
@@ -601,7 +601,7 @@ class LoginApp:
             return False
 
         if register_windows_startup:
-            register_startup()
+            request_startup_task_registration_elevation()
 
         self._show_employee_details(session)
         start_health_reporter(session)

@@ -437,7 +437,7 @@ def _listener_worker(token: str) -> None:
         usb_enabled = _extract_usb_enabled(payload)
         if usb_enabled is not None:
             try:
-                from app.usb_control import apply_usb_control_policy
+                from app.usb_controller import apply_usb_control_policy
 
                 apply_usb_control_policy({"usbEnabled": usb_enabled})
             except Exception:
